@@ -61,7 +61,7 @@ test('constraint pruning remains safe when a set bonus is required to become leg
   assert.equal(output.results[0].activeSets[0].count, 2);
 });
 
-test('huge six-Dofus combination space is not materialized and dominance keeps the exact optimum', () => {
+test('huge six-Dofus space materializes only its exact Pareto frontier and keeps the optimum', () => {
   const items = Array.from({ length: 320 }, (_, index) => ({
     id: `d-${index}`,
     slot: 'dofus',
@@ -81,6 +81,7 @@ test('huge six-Dofus combination space is not materialized and dominance keeps t
   assert.deepEqual(output.results[0].items.map((entry) => entry.id), ['d-0', 'd-1', 'd-2', 'd-3', 'd-4', 'd-5']);
   const group = output.diagnostics.groups[0];
   assert.equal(group.theoreticalChoicesBefore, '1422630723360');
-  assert.equal(group.materializedChoices, 0);
+  assert.equal(group.materializedChoices, 1);
   assert.equal(group.candidates, 6);
+  assert.ok(BigInt(group.materializedChoices) < BigInt(group.theoreticalChoicesBefore));
 });
