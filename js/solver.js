@@ -18,6 +18,11 @@ import {
   theoreticalChoiceCount
 } from './search-space.js';
 import { buildParetoChoices } from './pareto-choices.js';
+import {
+  buildConstraintBundles,
+  buildFutureConstraintBundleCaps,
+  canMeetJointConstraintBundles
+} from './constraint-bounds.js';
 
 function candidateHeuristic(item, constraints, selections, turnMode) {
   const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
@@ -120,7 +125,6 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       .map((entry) => entry.item);
 
     if (candidates.length < rule.count) {
-      impossible = true;
       groups.push({
         ...rule,
         candidates,
@@ -135,12 +139,11 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
         impossible: true,
         pareto: null
       });
+      impossible = true;
       continue;
     }
 
-    // Six Dofus/trophy slots are the combinatorial hotspot. Their exact Pareto
-    // frontier depends on the conditions of the already-selected normal gear,
-    // so building one giant all-condition frontier here is wasted work.
+    // Six Dofus/trophy slots are built lazily once the normal gear is known.
     if (rule.id === 'dofus' && rule.count > 1) {
       const staticCaps = capsForCandidates(candidates, rule.count, keys, false);
       const objectiveCaps = capsForCandidates(candidates, rule.count, keys, true);
@@ -171,7 +174,6 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
 
     const pareto = buildParetoChoices(candidates, rule.count, keys, { shouldAbort });
     if (pareto.diagnostics.aborted) {
-      aborted = true;
       groups.push({
         ...rule,
         candidates,
@@ -186,6 +188,7 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
         impossible: false,
         pareto: pareto.diagnostics
       });
+      aborted = true;
       break;
     }
 
@@ -194,7 +197,6 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       .sort((a, b) => b.heuristic - a.heuristic || String(a.choice.items[0]?.id || '').localeCompare(String(b.choice.items[0]?.id || '')))
       .map((entry) => entry.choice);
 
-    if (!choices.length) impossible = true;
     groups.push({
       ...rule,
       dynamic: false,
@@ -214,6 +216,7 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       impossible: !choices.length,
       pareto: pareto.diagnostics
     });
+    if (!choices.length) impossible = true;
   }
 
   if (!aborted) {
@@ -232,9 +235,9 @@ function buildFutureCaps(groups, keys, field) {
   const suffix = new Array(groups.length + 1);
   suffix[groups.length] = Object.fromEntries(keys.map((key) => [key, 0]));
   for (let index = groups.length - 1; index >= 0; index--) {
-    const current = {};
-    for (const key of keys) current[key] = Number(suffix[index + 1][key] || 0) + Number(groups[index]?.[field]?.[key] || 0);
-    suffix[index] = current;
+    const row = {};
+    for (const key of keys) row[key] = Number(suffix[index + 1][key] || 0) + Number(groups[index]?.[field]?.[key] || 0);
+    suffix[index] = row;
   }
   return suffix;
 }
@@ -352,6 +355,13 @@ function diagnosticsForGroups(groups) {
   }));
 }
 
+function setCountsSignature(setCounts) {
+  return [...setCounts.entries()]
+    .sort(([a], [b]) => String(a).localeCompare(String(b)))
+    .map(([setId, count]) => `${setId}:${count}`)
+    .join('|');
+}
+
 function applyChoice(choice, selectedItems, selectedIds, rawStats, selectedPassiveUpper, setCounts) {
   for (const item of choice.items) {
     selectedItems.push(item);
@@ -433,6 +443,8 @@ export function optimizeBuild({
   const futureObjectiveCaps = buildFutureCaps(groups, relevant.keys, 'maxObjective');
   const futurePicks = buildFuturePicks(groups);
   const futureSetCapacity = buildFutureSetCapacity(groups);
+  const constraintBundles = buildConstraintBundles(constraints);
+  const futureConstraintBundleCaps = buildFutureConstraintBundleCaps(groups, constraintBundles);
   const charUpper = characterUpperStats(character);
   const fmUpper = fmUpperStats(groups, fmPolicy);
   const results = [];
@@ -444,6 +456,7 @@ export function optimizeBuild({
   addStats(rawStats, character.baseStats || {});
 
   const elementValues = estimateElementValues(selections, {});
+  const setUpperCache = new Map();
   let nodes = 0;
   let visited = 0;
   let prunedConstraints = 0;
@@ -480,12 +493,37 @@ export function optimizeBuild({
     return false;
   }
 
+  function setUpperFor(groupIndex) {
+    const cacheKey = `${groupIndex}|${setCountsSignature(setCounts)}`;
+    const cached = setUpperCache.get(cacheKey);
+    if (cached) return cached;
+    const value = setBonusUpperStats(
+      setCounts,
+      futureSetCapacity[groupIndex] || new Map(),
+      setsById,
+      relevant.keys,
+      Number(futurePicks[groupIndex] || 0)
+    );
+    setUpperCache.set(cacheKey, value);
+    return value;
+  }
+
   function boundState(groupIndex) {
-    const remainingPicks = Number(futurePicks[groupIndex] || 0);
-    const remainingSets = futureSetCapacity[groupIndex] || new Map();
-    const setUpper = setBonusUpperStats(setCounts, remainingSets, setsById, relevant.keys, remainingPicks);
+    const setUpper = setUpperFor(groupIndex);
 
     if (!canStillMeetConstraints(rawStats, constraints, futureStaticCaps[groupIndex], setUpper, charUpper, fmUpper)) {
+      prunedConstraints++;
+      return false;
+    }
+
+    if (!canMeetJointConstraintBundles({
+      rawStats,
+      bundles: constraintBundles,
+      futureCaps: futureConstraintBundleCaps[groupIndex] || {},
+      setUpper,
+      charUpper,
+      fmUpper
+    })) {
       prunedConstraints++;
       return false;
     }
@@ -654,6 +692,8 @@ export function optimizeBuild({
       rejectedUnresolvedPassives,
       impossible: false,
       aborted,
+      setBoundCacheEntries: setUpperCache.size,
+      jointConstraintBundles: constraintBundles.map((bundle) => bundle.id),
       groups: diagnosticsForGroups(groups),
       searchOrder: groups.map((group) => group.id)
     }
