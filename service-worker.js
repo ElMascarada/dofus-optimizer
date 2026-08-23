@@ -1,12 +1,12 @@
-const CACHE = 'dofus-optimizer-v0.7.3';
+const CACHE = 'dofus-optimizer-v0.7.4';
 const APP_SHELL = [
   './', './index.html', './styles.css', './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './js/config.js', './js/stats.js', './js/characteristics.js', './js/spells.js',
   './js/fm.js', './js/sets.js', './js/passives.js', './js/build-legality.js',
   './js/search-space.js', './js/pareto-choices.js', './js/constraint-bounds.js',
-  './js/hard-constraint-choices.js', './js/offensive-scope.js', './js/seed-search.js',
-  './js/solver.js', './js/solver-worker.js', './js/sample-data.js', './js/app.js'
+  './js/hard-constraint-choices.js', './js/offensive-scope.js', './js/dofus-seed-priors.js',
+  './js/seed-search.js', './js/solver.js', './js/solver-worker.js', './js/sample-data.js', './js/app.js'
 ];
 
 self.addEventListener('install', (event) => {
