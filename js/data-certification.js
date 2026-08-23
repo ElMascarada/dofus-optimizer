@@ -3,8 +3,13 @@ export function isSolverSafeSet(set) {
   return (set.certification.coverage || []).every((entry) => Number(entry.active || 0) === 0);
 }
 
+function isNonPlayerEquipment(item) {
+  const typeName = String(item?.typeName || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return typeName.includes('percepteur');
+}
+
 export function equipmentForCoverage(items = []) {
-  return items.filter((item) => Number(item?.level) === 200 || item?.slot === 'dofus' || item?.slot === 'companion');
+  return items.filter((item) => !isNonPlayerEquipment(item) && (Number(item?.level) === 200 || item?.slot === 'dofus' || item?.slot === 'companion'));
 }
 
 export function collectUnknownSlotTypes(items = []) {
