@@ -16,7 +16,7 @@
 
   <main>
     <section class="panel intro">
-      <div><strong>Base de jeu certifiée</strong><p id="data-status">Chargement de la base certifiée…</p></div>
+      <div><strong>Base de jeu certifiée</strong><p id="data-status">Chargement des bases certifiées…</p></div>
       <span class="status">Calcul local</span>
     </section>
 
@@ -24,8 +24,9 @@
       <aside class="controls">
         <section class="panel">
           <h2>1. Sorts à optimiser</h2>
-          <div id="spell-list"></div>
-          <p class="hint">Les sorts sont encore le jeu de test actuel ; l’équipement et les panoplies viennent désormais de la base Dofus certifiée.</p>
+          <label class="field">Classe<select id="breed-select" disabled></select></label>
+          <div id="spell-list"><div class="empty">Chargement du catalogue de sorts…</div></div>
+          <p class="hint">Catalogue Dofus réel : dégâts directs immédiats à élément fixe uniquement. Les poisons, dégâts conditionnels et « meilleur élément » restent exclus tant qu’ils ne sont pas simulés exactement.</p>
         </section>
 
         <section class="panel">
@@ -73,7 +74,7 @@
 
       <section class="output">
         <div class="section-title"><div><span class="eyebrow">RÉSULTATS</span><h2>Top builds</h2></div><span class="pill">Top 10</span></div>
-        <div id="results"><div class="empty">Chargement de la base certifiée…</div></div>
+        <div id="results"><div class="empty">Chargement des bases certifiées…</div></div>
       </section>
     </div>
   </main>

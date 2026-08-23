@@ -1,0 +1,11 @@
+{
+  "breedCount": 19,
+  "classSpellRefs": 418,
+  "offensiveCandidates": 239,
+  "certified": 222,
+  "skipped": {
+    "best-element-damage": 11,
+    "no-fixed-direct-damage": 179,
+    "conditional-or-delayed-damage": 6
+  }
+}

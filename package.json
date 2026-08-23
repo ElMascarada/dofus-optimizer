@@ -1,13 +1,15 @@
 {
   "name": "dofus-optimizer",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
     "check": "node --check js/*.js && node --check scripts/*.mjs",
     "sync:data": "node scripts/sync-dofusdude.mjs",
+    "sync:spells": "node scripts/sync-spells.mjs",
     "normalize:data": "node scripts/normalize-dofusdude.mjs",
-    "sync:normalize": "npm run sync:data && npm run normalize:data"
+    "normalize:spells": "node scripts/normalize-spells.mjs",
+    "sync:normalize": "npm run sync:data && npm run sync:spells && npm run normalize:data && npm run normalize:spells"
   }
 }

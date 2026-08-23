@@ -1,13 +1,15 @@
-const CACHE = 'dofus-optimizer-v0.9.0';
+const CACHE = 'dofus-optimizer-v0.10.0';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
+  './data/normalized/spell-data.json',
   './js/app.js',
   './js/config.js',
   './js/data-loader.js',
+  './js/spell-selection.js',
   './js/optimizer-worker.js',
   './js/solver.js',
   './js/search-space.js',
@@ -17,8 +19,7 @@ const APP_SHELL = [
   './js/spells.js',
   './js/passives.js',
   './js/fm.js',
-  './js/sets.js',
-  './js/sample-data.js'
+  './js/sets.js'
 ];
 
 self.addEventListener('install', (event) => {
