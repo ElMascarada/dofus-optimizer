@@ -4,6 +4,7 @@ import { applySetBonuses } from './sets.js';
 import { estimateElementValues } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { optimizeFm } from './fm.js';
+import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
 
 function combinations(items, count, start = 0, chosen = [], out = []) {
   if (chosen.length === count) {
@@ -97,6 +98,7 @@ export function optimizeBuild({
       });
 
       if (!meetsConstraints(charResult.stats, constraints)) return;
+      if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) return;
 
       const fm = optimizeFm({
         baseStats: charResult.stats,
@@ -126,6 +128,7 @@ export function optimizeBuild({
     for (const choice of group.choices) {
       const ids = new Set(selectedItems.map((item) => item.id));
       if (choice.some((item) => ids.has(item.id))) continue;
+      if (!specialSlotRulesAreValid([...selectedItems, ...choice])) continue;
       const nextStats = { ...rawStats };
       for (const item of choice) addStats(nextStats, item.stats);
       visit(groupIndex + 1, [...selectedItems, ...choice], nextStats);
