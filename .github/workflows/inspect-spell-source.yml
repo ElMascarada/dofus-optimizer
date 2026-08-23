@@ -11,11 +11,17 @@ on:
       - 'tests/dofus-spell-normalizer.test.mjs'
       - 'package.json'
 
+permissions:
+  contents: write
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -31,3 +37,19 @@ jobs:
         run: node --test tests/dofus-spell-normalizer.test.mjs
       - name: Show spell coverage
         run: cat data/normalized/spell-coverage-report.md
+      - name: Commit normalized spell snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            data/normalized/spell-data.json \
+            data/normalized/spell-coverage-report.json \
+            data/normalized/spell-coverage-report.md
+          if git diff --cached --quiet; then
+            echo "Spell snapshot is already current."
+            exit 0
+          fi
+          VERSION=$(node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync('./data/normalized/spell-data.json','utf8')); console.log(d.gameVersion?.version || 'unknown')")
+          git commit -m "data: sync Dofus spells ${VERSION}"
+          git push origin HEAD:${{ github.head_ref }}
