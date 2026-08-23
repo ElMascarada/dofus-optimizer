@@ -11,25 +11,60 @@
 <body>
   <header class="topbar">
     <div><span class="eyebrow">BUILD SOLVER</span><h1>Dofus Optimizer</h1><p>Trouver le meilleur stuff sous contraintes, pas simplement additionner des stats.</p></div>
-    <span id="version" class="pill"></span>
+    <span id="version" class="pill">Chargement…</span>
   </header>
 
   <main>
     <section class="panel intro">
-      <div><strong>Prototype moteur</strong><p>Le dataset actuel est volontairement réduit. L'architecture de calcul est déjà celle du futur outil complet.</p></div>
-      <span class="status">Calcul local</span>
+      <div><strong>Données Dofus réelles</strong><p id="dataset-summary">Chargement du snapshot certifié…</p></div>
+      <span id="dataset-status" class="status">Initialisation</span>
     </section>
 
     <div class="layout">
       <aside class="controls">
         <section class="panel">
           <h2>1. Sorts à optimiser</h2>
+          <p class="hint top-hint">Les équipements sont réels. Les sorts restent ceux du banc de test jusqu'au branchement du catalogue de sorts Dofus.</p>
           <div id="spell-list"></div>
         </section>
 
         <section class="panel">
-          <h2>2. Temporalité</h2>
+          <h2>2. Tours & passifs</h2>
           <label class="field">Objectif de tours<select id="turn-mode"></select></label>
+          <p class="hint">Les hypothèses ci-dessous pilotent explicitement Vulbis, Ocre, Abyssal, Pourpre, Turquoise, Trompe-la-Mort et les futurs passifs contextuels.</p>
+          <div class="scenario-table">
+            <div class="scenario-head"><span>Contexte</span><b>T1</b><b>T2</b><b>T3</b></div>
+            <div class="scenario-row">
+              <span>Attaqué depuis le tour précédent</span>
+              <select id="attacked-t1"><option value="false">Non</option><option value="true">Oui</option></select>
+              <select id="attacked-t2"><option value="false">Non</option><option value="true">Oui</option></select>
+              <select id="attacked-t3"><option value="false">Non</option><option value="true">Oui</option></select>
+            </div>
+            <div class="scenario-row">
+              <span>Ennemi au contact</span>
+              <select id="adjacent-t1"><option value="false">Non</option><option value="true">Oui</option></select>
+              <select id="adjacent-t2"><option value="false">Non</option><option value="true">Oui</option></select>
+              <select id="adjacent-t3"><option value="false">Non</option><option value="true">Oui</option></select>
+            </div>
+            <div class="scenario-row">
+              <span>PV actuels %</span>
+              <input id="hp-t1" type="number" min="0" max="100" value="100">
+              <input id="hp-t2" type="number" min="0" max="100" value="100">
+              <input id="hp-t3" type="number" min="0" max="100" value="100">
+            </div>
+            <div class="scenario-row">
+              <span>Stacks Pourpre</span>
+              <input id="pourpre-t1" type="number" min="0" max="10" value="0">
+              <input id="pourpre-t2" type="number" min="0" max="10" value="0">
+              <input id="pourpre-t3" type="number" min="0" max="10" value="0">
+            </div>
+            <div class="scenario-row">
+              <span>Stacks Turquoise</span>
+              <input id="turquoise-t1" type="number" min="0" max="10" value="0">
+              <input id="turquoise-t2" type="number" min="0" max="10" value="0">
+              <input id="turquoise-t3" type="number" min="0" max="10" value="0">
+            </div>
+          </div>
         </section>
 
         <section class="panel">
@@ -52,16 +87,16 @@
             <select id="fm-spell"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
           </label>
           <label class="toggle"><input id="fm-crit" type="checkbox"><span>Autoriser +8 Do Crit si l'item n'en possède pas</span></label>
-          <p class="hint">Le moteur compare lui-même les deux options selon les sorts sélectionnés.</p>
+          <p class="hint">Le moteur compare lui-même +8 Do Crit et le % Do sorts choisi, uniquement sur les équipements forgeables.</p>
         </section>
 
-        <button id="optimize" class="primary">Optimiser le stuff</button>
+        <button id="optimize" class="primary" disabled>Chargement des données…</button>
         <p id="diagnostics" class="diagnostics"></p>
       </aside>
 
       <section class="output">
         <div class="section-title"><div><span class="eyebrow">RÉSULTATS</span><h2>Top builds</h2></div><span class="pill">Top 10</span></div>
-        <div id="results"></div>
+        <div id="results"><div class="empty">Le moteur se prépare.</div></div>
       </section>
     </div>
   </main>
