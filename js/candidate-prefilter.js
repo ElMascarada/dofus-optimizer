@@ -15,9 +15,6 @@ const GENERIC_OFFENSE_KEYS = [
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
-// The exact solver is still responsible for the final ranking. These limits only
-// define the high-quality shortlist it receives. Multi-pick slots are deliberately
-// tighter because they dominate the combinatorial cost (especially 6 Dofus).
 const SLOT_LIMITS = Object.freeze({
   dofus: 22,
   ring: 20,
@@ -167,9 +164,6 @@ function chooseSetMembers(profiles, count, capacities) {
   return selected;
 }
 
-// Score each useful set at the tier where item stats + the exact tier bonus form
-// the strongest coherent block. This catches both mono-element sets and Do Crit
-// sets where the payoff lives partly in the set bonus.
 function buildRelevantSetPlans(sets, items, context, slotRules) {
   const profilesBySet = new Map();
   for (const item of items || []) {
@@ -200,8 +194,6 @@ function buildRelevantSetPlans(sets, items, context, slotRules) {
       const bonusProfile = statsProfile(bonus, context);
       if (!combinedProfile.relevant && !bonusProfile.relevant) continue;
 
-      // Per-slot quality prevents a large set from winning only because it uses
-      // more slots; the extra bonus term rewards actual set synergy.
       const score = (combinedProfile.score / count) + (bonusProfile.score * 0.8);
       if (!best || score > best.score) {
         best = {
@@ -242,13 +234,13 @@ function itemProfile(item, context) {
   };
 }
 
-function reserveConstraintSpecialists(profiles, constraints, selectedIds) {
+function reserveConstraintSpecialists(profiles, constraints, selectedIds, reservePerStat) {
   for (const [key, minimumRaw] of Object.entries(constraints || {})) {
     if (!(Number(minimumRaw || 0) > 0)) continue;
     const specialists = profiles
       .filter((profile) => number(profile.optimistic, key) > 0)
       .sort((a, b) => number(b.optimistic, key) - number(a.optimistic, key) || b.score - a.score)
-      .slice(0, CONSTRAINT_RESERVE_PER_STAT);
+      .slice(0, reservePerStat);
     for (const profile of specialists) selectedIds.add(profile.item.id);
   }
 }
@@ -296,7 +288,7 @@ function shortlistSlot(items, rule, context) {
   }
 
   const selectedIds = new Set();
-  reserveConstraintSpecialists(eligible, context.constraints, selectedIds);
+  reserveConstraintSpecialists(eligible, context.constraints, selectedIds, context.constraintReservePerStat);
   reserveRelevantSetPieces(eligible, context.relevantSetPlans, selectedIds, context.maxRelevantSets);
 
   for (const profile of eligible) {
@@ -322,7 +314,8 @@ export function prefilterItems({
   scenario = {},
   slotRules = SLOT_RULES,
   slotLimits = SLOT_LIMITS,
-  maxRelevantSets = MAX_RELEVANT_SETS
+  maxRelevantSets = MAX_RELEVANT_SETS,
+  constraintReservePerStat = CONSTRAINT_RESERVE_PER_STAT
 } = {}) {
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
@@ -336,7 +329,8 @@ export function prefilterItems({
     baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
     relevantSetPlans: null,
     slotLimits: { ...SLOT_LIMITS, ...(slotLimits || {}) },
-    maxRelevantSets: Math.max(1, Number(maxRelevantSets || MAX_RELEVANT_SETS))
+    maxRelevantSets: Math.max(1, Number(maxRelevantSets || MAX_RELEVANT_SETS)),
+    constraintReservePerStat: Math.max(1, Number(constraintReservePerStat || CONSTRAINT_RESERVE_PER_STAT))
   };
   context.relevantSetPlans = buildRelevantSetPlans(sets, items, context, slotRules);
 
