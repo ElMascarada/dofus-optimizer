@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateObjective, spellExpectedDamage } from '../js/spells.js';
+import { evaluateObjective, evaluateObjectiveUpperBound, spellExpectedDamage } from '../js/spells.js';
 
 const spell = { baseCritPct: 0, distance: 'melee', hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }] };
 
@@ -52,4 +52,15 @@ test('objective reports unresolved conditional passive context', () => {
   const item = { passives: [{ id: 'abyssal', rules: [{ trigger: { type: 'context_equals', key: 'enemyAdjacent', value: false }, stats: { mp: 1 } }] }] };
   const result = evaluateObjective({ stats: {}, items: [item], selections: [{ enabled: true, weight: 1, spell }], turnMode: 't1' });
   assert.deepEqual(result.unresolvedPassiveContexts, ['enemyAdjacent']);
+});
+
+test('branch-and-bound objective upper bound never falls below an achievable mixed-crit objective', () => {
+  const mixedSpell = { baseCritPct: 35, distance: 'ranged', hits: [{ element: 'fire', normal: [80, 90], crit: [105, 115] }] };
+  const selection = { enabled: true, weight: 1.4, spell: mixedSpell, casts: { 1: 2, 2: 1, 3: 3 } };
+  const stats = { fire: 420, power: 180, crit: 28, critDamage: 35, spellDamagePct: 12, rangedDamagePct: 8, finalDamagePct: 7 };
+  for (const mode of ['t1', 't2', 't3', 'sum', 'average', 'min']) {
+    const actual = evaluateObjective({ stats, selections: [selection], turnMode: mode }).score;
+    const upper = evaluateObjectiveUpperBound({ stats, selections: [selection], turnMode: mode }).score;
+    assert.ok(upper >= actual, `${mode}: ${upper} should be >= ${actual}`);
+  }
 });

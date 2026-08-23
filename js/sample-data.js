@@ -63,7 +63,9 @@ export const SAMPLE_ITEMS = [
   { ...common, id: 'dofus-a', name: 'Dofus PA (démo)', slot: 'dofus', stats: { power: 45, ap: 1 }, turnBonuses: { 1: { finalDamagePctT1: 6 } } },
   { ...common, id: 'dofus-b', name: 'Dofus PM T2 (démo)', slot: 'dofus', stats: { power: 45, mp: 1 }, turnBonuses: { 2: { finalDamagePctT2: 8 } } },
   { ...common, id: 'dofus-c', name: 'Trophée Résistant', slot: 'dofus', stats: { resEarth: 6, resFire: 6, resWater: 6, resAir: 6, vit: 200 } },
-  { ...common, id: 'dofus-d', name: 'Trophée Puissance', slot: 'dofus', stats: { power: 80 } }
+  { ...common, id: 'dofus-d', name: 'Trophée Puissance', slot: 'dofus', stats: { power: 80 } },
+  { ...common, id: 'dofus-e', name: 'Trophée Tellurique', slot: 'dofus', stats: { earth: 80, damageEarth: 8 } },
+  { ...common, id: 'dofus-f', name: 'Trophée Polyvalent', slot: 'dofus', stats: { power: 45, resEarth: 3, resFire: 3, resWater: 3, resAir: 3 } }
 ];
 
 export const SAMPLE_SETS = [
