@@ -7,75 +7,61 @@
   },
   "elements": 273,
   "items": {
-    "total": 898,
-    "certified": 813,
+    "total": 1110,
+    "certified": 1025,
     "unknownSlot": 0,
     "unmappedEffects": 31,
-    "activeEffects": 248,
-    "metaEffects": 76,
+    "activeEffects": 348,
+    "metaEffects": 71,
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
-      "cape": 48,
+      "cape": 72,
       "companion": 145,
-      "weapon": 94,
-      "hat": 62,
-      "ring": 51,
-      "boots": 56,
-      "amulet": 52,
-      "belt": 41,
-      "shield": 29
+      "weapon": 131,
+      "boots": 83,
+      "ring": 82,
+      "belt": 65,
+      "hat": 93,
+      "amulet": 73,
+      "shield": 46
     },
     "unknownEffectNames": {
       "Exchangeable:": 30,
       "Add a temporary spell": 1
     },
     "unknownConditionNames": {},
-    "certifiedPct": 90.53,
+    "certifiedPct": 92.34,
     "unknownSlotTypes": {},
-    "snapshotCertified": 807,
+    "snapshotCertified": 1019,
     "excludedByUncertifiedSet": 6,
-    "ignoredEffects": 47,
+    "ignoredEffects": 50,
     "activeEffectNames": {
-      "Water steal (Active)": 27,
+      "Water steal (Active)": 38,
       "Steals MP (Active)": 4,
-      "Fire damage (Active)": 27,
-      "Fire steal (Active)": 19,
-      "Air Damage (Active)": 21,
-      "Water damage (Active)": 25,
-      "Neutral damage (Active)": 21,
-      "Earth damage (Active)": 18,
-      "Earth steal (Active)": 11,
-      "Air steal (Active)": 18,
+      "Fire damage (Active)": 36,
+      "Fire steal (Active)": 25,
+      "Air Damage (Active)": 30,
+      "Water damage (Active)": 36,
+      "Neutral damage (Active)": 46,
+      "Earth damage (Active)": 27,
+      "Earth steal (Active)": 13,
+      "AP (Active)": 16,
+      "Neutral steal (Active)": 21,
+      "Air steal (Active)": 20,
       "Fire heals (Active)": 5,
-      "AP (Active)": 11,
-      "Neutral steal (Active)": 14,
-      "Pushes back cell (Active)": 8,
+      "Pushes back cell (Active)": 10,
       "best-element damage (Active)": 6,
       "best-element steal (Active)": 2,
       "MP (Active)": 7,
-      "Attracts by cell (Active)": 3,
+      "Attracts by cell (Active)": 5,
       "Advances by cell (Active)": 1
     },
     "metaEffectNames": {
-      "-special spell-": 75,
-      "Title:": 1
+      "-special spell-": 68,
+      "Title:": 3
     },
     "temporalPending": [
-      {
-        "name": "Dofus Pourpre",
-        "ankamaId": 694,
-        "typeName": "Dofus",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Pourpre Profond :\n• Lorsque le porteur est attaqué, il gagne 1% de dommages finaux pendant 2 tours (cumulable 10 fois).",
-            "reason": "meta-effect"
-          }
-        ]
-      },
       {
         "name": "Dofus Émeraude",
         "ankamaId": 737,
@@ -91,34 +77,6 @@
         ]
       },
       {
-        "name": "Dofus Turquoise",
-        "ankamaId": 739,
-        "typeName": "Dofus",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Bleu Turquoise :\n• Lorsque le porteur effectue un coup critique, il gagne 1% de dommages finaux pendant 3 tours (cumulable 10 fois).",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Dofusteuse",
-        "ankamaId": 958,
-        "typeName": "Cape",
-        "slot": "cape",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Bénédiction des Dofus :\n• Augmente une caractéristique élémentaire du porteur par tour de jeu :\n • <sprite name=\"eau\"> 400 Chance > <sprite name=\"terre\"> 400 Force > <sprite name=\"air\"> 400 Agilité > <sprite name=\"feu\"> 400 Intelligence",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
         "name": "Dofus Cawotte",
         "ankamaId": 972,
         "typeName": "Dofus",
@@ -128,20 +86,6 @@
             "status": "meta",
             "name": "-special spell-",
             "formatted": "Sagesse Wabbit :\n• Lorsque le porteur subit une tentative de retrait de PA ou de PM, il gagne 25 Esquive PA ou 25 Esquive PM pendant 1 tour (cumulable 1 fois, partagé entre les effets).",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Dofus Vulbis",
-        "ankamaId": 6980,
-        "typeName": "Dofus",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Rouge Vermeil :\n• À chaque début de tour, le porteur gagne 10% de dommages finaux s'il n'a subi aucune attaque ennemie depuis son précédent tour de jeu. Sinon, il gagne 20 de Tacle.",
             "reason": "meta-effect"
           }
         ]
@@ -189,20 +133,6 @@
         ]
       },
       {
-        "name": "Dofus Ocre",
-        "ankamaId": 7754,
-        "typeName": "Dofus",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Jaune Ocre :\n• À chaque début de tour, le porteur gagne 1 PA s'il n'a subi aucune attaque ennemie depuis son précédent tour de jeu. Sinon, il gagne 20 de Fuite.",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
         "name": "Chercheur d'Ogrines",
         "ankamaId": 10657,
         "typeName": "Familier",
@@ -212,6 +142,34 @@
             "status": "meta",
             "name": "Title:",
             "formatted": "Titre : Farfouilleur d'Otomaï",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Chapeau Potin",
+        "ankamaId": 13194,
+        "typeName": "Chapeau",
+        "slot": "hat",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "Title:",
+            "formatted": "Titre : Commère des Miches",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Cape Reski",
+        "ankamaId": 13197,
+        "typeName": "Cape",
+        "slot": "cape",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "Title:",
+            "formatted": "Titre : Trouffion des Neiges",
             "reason": "meta-effect"
           }
         ]
@@ -240,20 +198,6 @@
             "status": "meta",
             "name": "-special spell-",
             "formatted": "Le Singe et la Lune :\n• Tous les 3 tours à partir du tour 3, le porteur est soigné de 10% de sa vie.",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Dofus Abyssal",
-        "ankamaId": 18043,
-        "typeName": "Dofus",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Descente aux Abysses :\n• À chaque début de tour, le porteur gagne 1 PM si aucun ennemi n'est à son contact. Sinon, il gagne 1 PA.",
             "reason": "meta-effect"
           }
         ]
@@ -310,20 +254,6 @@
             "status": "meta",
             "name": "-special spell-",
             "formatted": "Droiture de Fallanster :\n• Lorsque le porteur termine son tour en ligne de vue d'un ennemi, il pose un glyphe-aura dans un carré de taille 1 qui réduit les dommages subis par les alliés de 10% jusqu'au début de son prochain tour. Le glyphe est dissipé au prochain tour ou s'il est déplacé.",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Trompe-la-Mort",
-        "ankamaId": 20358,
-        "typeName": "Bouclier",
-        "slot": "shield",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Trompe-la-Mort :\n• Lorsque le porteur a plus de 50% de sa vie, ses dommages finaux sont augmentés de 7%, mais il perd 10% de sa vie à chaque début de tour.\n• Lorsqu'il a moins de 50% de sa vie, les dommages qu'il subit sont réduits de 20%.",
             "reason": "meta-effect"
           }
         ]
@@ -2075,32 +2005,81 @@
     ],
     "recognizedPassives": [
       {
+        "name": "Dofus Pourpre",
+        "ankamaId": 694,
+        "passives": [
+          "deep-purple"
+        ]
+      },
+      {
+        "name": "Dofus Turquoise",
+        "ankamaId": 739,
+        "passives": [
+          "turquoise-blue"
+        ]
+      },
+      {
+        "name": "Dofusteuse",
+        "ankamaId": 958,
+        "passives": [
+          "dofusteuse-blessing"
+        ]
+      },
+      {
+        "name": "Dofus Vulbis",
+        "ankamaId": 6980,
+        "passives": [
+          "vermilion-red"
+        ]
+      },
+      {
+        "name": "Dofus Ocre",
+        "ankamaId": 7754,
+        "passives": [
+          "yellow-ochre"
+        ]
+      },
+      {
         "name": "Dofus Nébuleux",
         "ankamaId": 8698,
         "passives": [
           "nebulous-dream"
         ]
+      },
+      {
+        "name": "Dofus Abyssal",
+        "ankamaId": 18043,
+        "passives": [
+          "descent-to-abyss"
+        ]
+      },
+      {
+        "name": "Trompe-la-Mort",
+        "ankamaId": 20358,
+        "passives": [
+          "cheat-death"
+        ]
       }
     ],
     "snapshotBySlot": {
+      "cape": 67,
       "companion": 142,
       "dofus": 266,
-      "weapon": 84,
-      "hat": 58,
-      "ring": 48,
-      "boots": 52,
-      "amulet": 50,
-      "belt": 38,
-      "cape": 43,
-      "shield": 26
+      "weapon": 121,
+      "boots": 79,
+      "ring": 79,
+      "belt": 62,
+      "hat": 88,
+      "amulet": 71,
+      "shield": 44
     }
   },
   "sets": {
-    "total": 107,
-    "certified": 106,
-    "uncertified": 1,
+    "total": 161,
+    "certified": 160,
     "uncertifiedNames": [
       "Malédiction de Cire Momore"
-    ]
+    ],
+    "uncertified": 1
   }
 }

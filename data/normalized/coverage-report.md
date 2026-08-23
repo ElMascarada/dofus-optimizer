@@ -2,31 +2,31 @@
 
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
-- Included items: 898
-- Self-certified items in coverage scope: 813 (90.53%)
-- Snapshot-certified items: 807
+- Included items: 1110
+- Self-certified items in coverage scope: 1025 (92.34%)
+- Snapshot-certified items: 1019
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 31
-- Active effects intentionally excluded from stats: 248
-- Meta effects: 76
-- Explicitly ignored non-combat metadata: 47
+- Active effects intentionally excluded from stats: 348
+- Meta effects: 71
+- Explicitly ignored non-combat metadata: 50
 - Items with unmapped conditions: 0
 - Explicitly excluded internal/non-player items: 214
-- Sets: 106/107 certified
+- Sets: 160/161 certified
 
 ## Slots
 
-- amulet: 52
-- belt: 41
-- boots: 56
-- cape: 48
+- amulet: 73
+- belt: 65
+- boots: 83
+- cape: 72
 - companion: 145
 - dofus: 320
-- hat: 62
-- ring: 51
-- shield: 29
-- weapon: 94
+- hat: 93
+- ring: 82
+- shield: 46
+- weapon: 131
 
 ## Unknown slot types
 
@@ -43,56 +43,58 @@
 
 ## Meta effect names
 
-- -special spell-: 75
-- Title:: 1
+- -special spell-: 68
+- Title:: 3
 
 ## Active effect names
 
-- Water steal (Active): 27
-- Fire damage (Active): 27
-- Water damage (Active): 25
-- Air Damage (Active): 21
-- Neutral damage (Active): 21
-- Fire steal (Active): 19
-- Earth damage (Active): 18
-- Air steal (Active): 18
-- Neutral steal (Active): 14
-- Earth steal (Active): 11
-- AP (Active): 11
-- Pushes back cell (Active): 8
+- Neutral damage (Active): 46
+- Water steal (Active): 38
+- Fire damage (Active): 36
+- Water damage (Active): 36
+- Air Damage (Active): 30
+- Earth damage (Active): 27
+- Fire steal (Active): 25
+- Neutral steal (Active): 21
+- Air steal (Active): 20
+- AP (Active): 16
+- Earth steal (Active): 13
+- Pushes back cell (Active): 10
 - MP (Active): 7
 - best-element damage (Active): 6
 - Fire heals (Active): 5
+- Attracts by cell (Active): 5
 - Steals MP (Active): 4
-- Attracts by cell (Active): 3
 - best-element steal (Active): 2
 - Advances by cell (Active): 1
 
 ## Recognized temporal passives
 
+- Dofus Pourpre (#694): deep-purple
+- Dofus Turquoise (#739): turquoise-blue
+- Dofusteuse (#958): dofusteuse-blessing
+- Dofus Vulbis (#6980): vermilion-red
+- Dofus Ocre (#7754): yellow-ochre
 - Dofus Nébuleux (#8698): nebulous-dream
+- Dofus Abyssal (#18043): descent-to-abyss
+- Trompe-la-Mort (#20358): cheat-death
 
 ## Temporal items pending
 
-- Dofus Pourpre (#694; Dofus): meta:-special spell-
 - Dofus Émeraude (#737; Dofus): meta:-special spell-
-- Dofus Turquoise (#739; Dofus): meta:-special spell-
-- Dofusteuse (#958; Cape): meta:-special spell-
 - Dofus Cawotte (#972; Dofus): meta:-special spell-
-- Dofus Vulbis (#6980; Dofus): meta:-special spell-
 - Dofus Tacheté (#7112; Dofus): meta:-special spell-
 - Dofus Ébène (#7114; Dofus): meta:-special spell-
 - Dofus Ivoire (#7115; Dofus): meta:-special spell-
-- Dofus Ocre (#7754; Dofus): meta:-special spell-
 - Chercheur d'Ogrines (#10657; Familier): meta:Title:
+- Chapeau Potin (#13194; Chapeau): meta:Title:
+- Cape Reski (#13197; Cape): meta:Title:
 - Dofus des Veilleurs (#16061; Dofus): meta:-special spell-
 - Dokoko (#17078; Dofus): meta:-special spell-
-- Dofus Abyssal (#18043; Dofus): meta:-special spell-
 - Dofus Forgelave (#19398; Dofus): meta:-special spell-
 - Dofus Argenté (#19629; Dofus): meta:-special spell-
 - Dofus Argenté Scintillant (#20286; Dofus): meta:-special spell-
 - Droiture de Fallanster (#20357; Bouclier): meta:-special spell-
-- Trompe-la-Mort (#20358; Bouclier): meta:-special spell-
 - Couronne de Brâm Barbe-Monde (#20359; Chapeau): meta:-special spell-
 - Diadème de Ganymède (#20360; Chapeau): meta:-special spell-
 - Bravoure de Rykke Errel (#20361; Cape): meta:-special spell-
