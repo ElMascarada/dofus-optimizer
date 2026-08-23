@@ -34,6 +34,17 @@ test('final damage is applied after spell/melee percentage modifiers', () => {
   assert.equal(damage, 144);
 });
 
+test('spell damage applies to spells but weapon damage does not', () => {
+  const damage = spellExpectedDamage(spell, { spellDamagePct: 6, weaponDamagePct: 50 }, 1);
+  assert.equal(damage, 106);
+});
+
+test('weapon damage applies to weapon attacks but spell damage does not', () => {
+  const weaponAttack = { ...spell, damageSource: 'weapon' };
+  const damage = spellExpectedDamage(weaponAttack, { spellDamagePct: 50, weaponDamagePct: 6 }, 1);
+  assert.equal(damage, 106);
+});
+
 test('scenario can vary passive context independently on T1 T2 T3', () => {
   const item = { passives: [{ id: 'vulbis', rules: [{ trigger: { type: 'context_equals', key: 'attackedSinceLastTurn', value: false }, stats: { finalDamagePct: 10 } }] }] };
   const selection = { enabled: true, weight: 1, spell, casts: { 1: 1, 2: 1, 3: 1 } };
