@@ -18,6 +18,8 @@ jobs:
           node-version: 22
       - name: Syntax check
         run: npm run check
+      - name: Synthetic six-Dofus diagnostic
+        run: node scripts/debug-six-solver.mjs
       - name: Tests
         run: npm test
       - name: Search-space profile
