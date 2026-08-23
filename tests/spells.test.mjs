@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateObjective, evaluateObjectiveUpperBound, evaluateTurnConstraints, spellExpectedDamage } from '../js/spells.js';
+import { evaluateObjective, evaluateObjectiveUpperBound, evaluateTurnConstraints, requiredApForTurn, spellExpectedDamage } from '../js/spells.js';
 
 const spell = { baseCritPct: 0, distance: 'melee', hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }] };
 
@@ -108,6 +108,29 @@ test('negative temporal stats are enforced by hard constraints', () => {
   const result = evaluateTurnConstraints({ stats: { resEarth: 40 }, items: [item], constraints: { resEarth: 40 }, turnMode: 't1' });
   assert.equal(result.meets, false);
   assert.deepEqual(result.deficitsByTurn, { 1: { resEarth: 10 } });
+});
+
+test('spell casts compute and enforce their real AP requirement per turn', () => {
+  const fourApSpell = { ...spell, apCost: 4 };
+  const selections = [{ enabled: true, spell: fourApSpell, casts: { 1: 3, 2: 2, 3: 1 } }];
+  assert.equal(requiredApForTurn(selections, 1), 12);
+  assert.equal(requiredApForTurn(selections, 2), 8);
+
+  const hiddenWorkerConstraint = evaluateTurnConstraints({
+    stats: { ap: 11 },
+    constraints: { ap: 0, __requiredApByTurn: { 1: 12 } },
+    turnMode: 't1'
+  });
+  assert.equal(hiddenWorkerConstraint.meets, false);
+  assert.deepEqual(hiddenWorkerConstraint.deficitsByTurn, { 1: { ap: 1 } });
+
+  const withTemporaryAp = evaluateTurnConstraints({
+    stats: { ap: 11 },
+    items: [{ passives: [{ id: 'temp-ap', rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 1 } }] }] }],
+    constraints: { ap: 0, __requiredApByTurn: { 1: 12 } },
+    turnMode: 't1'
+  });
+  assert.equal(withTemporaryAp.meets, true);
 });
 
 test('branch-and-bound objective upper bound never falls below an achievable mixed-crit objective', () => {
