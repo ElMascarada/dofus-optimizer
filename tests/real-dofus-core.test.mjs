@@ -19,27 +19,28 @@ const EXPECTED = [
 test('real snapshot keeps curated offensive/flex Dofus available to the offensive solver', () => {
   const scope = buildCandidateClassifications(data.items, data.sets, selections, 'sum', constraints);
   const pool = offensiveDofusPool(data.items, scope.byId);
-  const poolIds = new Set(pool.map((item) => Number(item.id)));
+  const poolRuntimeIds = new Set(pool.map((item) => String(item.id)));
 
-  const audit = EXPECTED.map(([id, expectedName]) => {
-    const item = data.items.find((candidate) => Number(candidate.id) === id);
+  const audit = EXPECTED.map(([ankamaId, expectedName]) => {
+    const item = data.items.find((candidate) => Number(candidate.ankamaId) === ankamaId);
     const classification = item ? scope.byId.get(item.id) : null;
     return {
-      id,
+      ankamaId,
       expectedName,
+      runtimeId: item?.id ?? null,
       present: Boolean(item),
       actualName: item?.name || null,
       role: classification?.role || null,
       offensiveDelta: classification?.offensiveDelta ?? null,
       priority: classification?.priority ?? null,
       passives: (item?.passives || []).map((passive) => passive.id || passive.name || 'passive'),
-      inPool: poolIds.has(id)
+      inPool: item ? poolRuntimeIds.has(String(item.id)) : false
     };
   });
 
   console.log('REAL_DOFUS_CORE_AUDIT', JSON.stringify(audit));
   for (const row of audit) {
-    assert.equal(row.present, true, `${row.expectedName} (#${row.id}) missing from normalized snapshot`);
-    assert.equal(row.inPool, true, `${row.expectedName} (#${row.id}) was removed from offensive solver pool; role=${row.role}`);
+    assert.equal(row.present, true, `${row.expectedName} (#${row.ankamaId}) missing from normalized snapshot`);
+    assert.equal(row.inPool, true, `${row.expectedName} (#${row.ankamaId}) was removed from offensive solver pool; role=${row.role}`);
   }
 });
