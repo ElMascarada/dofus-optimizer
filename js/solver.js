@@ -211,7 +211,17 @@ function canStillMeetConstraints(rawStats, constraints, remainingOptimistic, set
   return true;
 }
 
+function resultKey(result) {
+  return (result?.items || []).map((item) => String(item.id)).sort().join('|');
+}
+
 function insertTop(results, result, limit) {
+  const key = resultKey(result);
+  const duplicateIndex = results.findIndex((entry) => resultKey(entry) === key);
+  if (duplicateIndex >= 0) {
+    if (results[duplicateIndex].score >= result.score) return;
+    results.splice(duplicateIndex, 1);
+  }
   results.push(result);
   results.sort((a, b) => b.score - a.score);
   if (results.length > limit) results.length = limit;
@@ -243,6 +253,7 @@ export function optimizeBuild({
   slotRules = SLOT_RULES,
   character = BASE_CHARACTER,
   scenario = {},
+  initialResults = [],
   onProgress = null,
   shouldAbort = null
 }) {
@@ -273,6 +284,7 @@ export function optimizeBuild({
         prunedSpecial: 0,
         impossible: true,
         aborted: false,
+        seeded: 0,
         groups: groupDiagnostics
       }
     };
@@ -285,6 +297,10 @@ export function optimizeBuild({
   const charUpper = characterUpperStats(character);
   const fmUpper = fmUpperStats(groups, fmPolicy);
   const results = [];
+  for (const seed of initialResults || []) {
+    if (seed?.items?.length) insertTop(results, seed, limit);
+  }
+  const seededCount = results.length;
   const selectedItems = [];
   const selectedIds = new Set();
   const setCounts = new Map();
@@ -315,7 +331,8 @@ export function optimizeBuild({
       visited,
       pruned: prunedConstraints + prunedScore + prunedSpecial,
       best: results[0]?.score || 0,
-      threshold: results.length >= limit ? results[results.length - 1].score : null
+      threshold: results.length >= limit ? results[results.length - 1].score : null,
+      partialResults: nodes % 25000 === 0 && results.length ? [...results] : null
     });
   }
 
@@ -373,9 +390,6 @@ export function optimizeBuild({
       baseVitality: 0
     });
 
-    // Equipment conditions must remain static: a temporary combat passive can
-    // satisfy a requested turn constraint, but it must never make an otherwise
-    // illegal item equipable.
     if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) {
       rejectedConditions++;
       return;
@@ -398,6 +412,7 @@ export function optimizeBuild({
       stats: fm.stats,
       items: selectedItems,
       constraints,
+      selections,
       turnMode,
       scenario
     });
@@ -490,6 +505,7 @@ export function optimizeBuild({
       rejectedUnresolvedPassives,
       impossible: false,
       aborted,
+      seeded: seededCount,
       groups: groupDiagnostics,
       searchOrder: groups.map((group) => group.id)
     }
