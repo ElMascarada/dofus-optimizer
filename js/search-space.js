@@ -45,8 +45,6 @@ export function relevantStatKeys({ items = [], selections = [], constraints = {}
   for (const selection of selections || []) {
     if (!selection?.enabled) continue;
     const spell = selection.spell || {};
-    if (spell.distance === 'melee') keys.add('meleeDamagePct');
-    if (spell.distance === 'ranged') keys.add('rangedDamagePct');
     for (const hit of spell.hits || []) {
       const element = hit.element || 'earth';
       keys.add(element === 'neutral' ? 'earth' : element);
@@ -185,116 +183,87 @@ function dominates(a, b, keys) {
   return strictlyBetter;
 }
 
-function maxSelectableForItem(item, groupCount) {
-  return item?.slotSubtype === 'prysmaradite' ? 1 : Math.max(1, Number(groupCount || 1));
-}
-
-export function pruneDominatedCandidates(candidates = [], {
-  keys = [],
-  nonMonotoneKeys = new Set(),
-  groupCount = 1
-} = {}) {
-  const partitions = new Map();
-  for (const item of candidates) {
+export function pruneDominatedCandidates(items = [], { keys = [], nonMonotoneKeys = new Set(), groupCount = 1 } = {}) {
+  const structuralGroups = new Map();
+  for (const item of items) {
     const signature = structuralSignature(item, nonMonotoneKeys);
-    if (!partitions.has(signature)) partitions.set(signature, []);
-    partitions.get(signature).push(item);
+    if (!structuralGroups.has(signature)) structuralGroups.set(signature, []);
+    structuralGroups.get(signature).push(item);
   }
 
-  const kept = [];
+  const keep = new Set();
   let equivalentRemoved = 0;
   let dominatedRemoved = 0;
-
-  for (const partition of partitions.values()) {
+  for (const group of structuralGroups.values()) {
     const byVector = new Map();
-    for (const item of partition) {
+    for (const item of group) {
       const signature = vectorSignature(item, keys);
       if (!byVector.has(signature)) byVector.set(signature, []);
       byVector.get(signature).push(item);
     }
 
-    const collapsed = [];
-    for (const equivalent of byVector.values()) {
-      const limit = Math.min(equivalent.length, maxSelectableForItem(equivalent[0], groupCount));
-      collapsed.push(...equivalent.slice(0, limit));
-      equivalentRemoved += equivalent.length - limit;
+    const representatives = [];
+    for (const same of byVector.values()) {
+      const sorted = [...same].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+      const amount = Math.min(groupCount, sorted.length);
+      representatives.push(...sorted.slice(0, amount));
+      equivalentRemoved += Math.max(0, sorted.length - amount);
     }
 
-    for (const candidate of collapsed) {
-      const requiredDominators = maxSelectableForItem(candidate, groupCount);
-      let dominators = 0;
-      for (const other of collapsed) {
-        if (other === candidate) continue;
-        if (dominates(other, candidate, keys)) {
-          dominators++;
-          if (dominators >= requiredDominators) break;
+    for (let i = 0; i < representatives.length; i++) {
+      const candidate = representatives[i];
+      let dominated = false;
+      for (let j = 0; j < representatives.length; j++) {
+        if (i === j) continue;
+        if (dominates(representatives[j], candidate, keys)) {
+          dominated = true;
+          break;
         }
       }
-      if (dominators >= requiredDominators) dominatedRemoved++;
-      else kept.push(candidate);
+      if (dominated) dominatedRemoved++;
+      else keep.add(candidate.id);
     }
   }
 
+  const candidates = items.filter((item) => keep.has(item.id));
   return {
-    candidates: kept,
-    removed: candidates.length - kept.length,
+    candidates,
+    removed: items.length - candidates.length,
     equivalentRemoved,
     dominatedRemoved
   };
 }
 
-function insertTop(values, value, limit) {
-  if (!(value > 0)) return values;
-  const next = values.slice();
-  let index = next.findIndex((entry) => value > entry);
-  if (index < 0) index = next.length;
-  next.splice(index, 0, value);
-  if (next.length > limit) next.length = limit;
-  return next;
+function positiveStats(item, keys, options) {
+  const source = optimisticItemStats(item, options).stats;
+  const result = {};
+  for (const key of keys) result[key] = Math.max(0, stat(source, key));
+  return result;
 }
 
-function topSums(values, limit) {
-  const sums = new Array(limit + 1).fill(0);
-  for (let count = 1; count <= limit; count++) sums[count] = sums[count - 1] + Number(values[count - 1] || 0);
-  return sums;
-}
-
-export function buildSuffixCaps(candidates = [], count = 1, keys = [], {
-  includePassives = false,
-  turnMode = null,
-  scenario = null
-} = {}) {
-  const n = candidates.length;
-  const caps = Object.fromEntries(keys.map((key) => [key, new Array(n + 1)]));
-  const tops = Object.fromEntries(keys.map((key) => [key, []]));
-  let bounded = true;
-
-  for (const key of keys) caps[key][n] = new Array(count + 1).fill(0);
-  for (let index = n - 1; index >= 0; index--) {
-    const optimistic = optimisticItemStats(candidates[index], { includePassives, turnMode, scenario });
-    bounded = bounded && optimistic.bounded;
-    for (const key of keys) {
-      tops[key] = insertTop(tops[key], Number(optimistic.stats[key] || 0), count);
-      caps[key][index] = topSums(tops[key], count);
-    }
-  }
-
+export function buildSuffixCaps(candidates, maxPicks, keys, options = {}) {
+  const stats = candidates.map((item) => positiveStats(item, keys, options));
+  const bounded = candidates.every((item) => optimisticItemStats(item, options).bounded);
   return {
     bounded,
-    cap(key, start = 0, picks = count) {
-      const table = caps[key];
-      if (!table) return 0;
-      const row = table[Math.max(0, Math.min(n, start))] || [];
-      return Number(row[Math.max(0, Math.min(count, picks))] || 0);
+    cap(key, start, picksLeft) {
+      const values = [];
+      for (let index = Math.max(0, start); index < stats.length; index++) {
+        const value = Number(stats[index]?.[key] || 0);
+        if (value > 0) values.push(value);
+      }
+      values.sort((a, b) => b - a);
+      return values.slice(0, Math.min(maxPicks, Math.max(0, picksLeft))).reduce((sum, value) => sum + value, 0);
     }
   };
 }
 
 export function theoreticalChoiceCount(candidateCount, pickCount) {
-  let n = BigInt(Math.max(0, candidateCount));
-  let k = BigInt(Math.max(0, Math.min(candidateCount, pickCount)));
+  const n = BigInt(Math.max(0, Number(candidateCount || 0)));
+  let k = BigInt(Math.max(0, Number(pickCount || 0)));
+  if (k > n) return 0n;
   if (k > n - k) k = n - k;
-  let value = 1n;
-  for (let i = 1n; i <= k; i++) value = (value * (n - k + i)) / i;
-  return value;
+  let result = 1n;
+  for (let i = 1n; i <= k; i++) result = (result * (n - k + i)) / i;
+  return result;
 }
