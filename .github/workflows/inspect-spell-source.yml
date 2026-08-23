@@ -1,77 +1,33 @@
-name: Inspect spell source
+name: Validate spell source
 
 on:
   pull_request:
     branches: [main]
     paths:
       - '.github/workflows/inspect-spell-source.yml'
+      - 'js/dofus-spell-normalizer.js'
+      - 'scripts/sync-spells.mjs'
+      - 'scripts/normalize-spells.mjs'
+      - 'tests/dofus-spell-normalizer.test.mjs'
+      - 'package.json'
 
 jobs:
-  inspect:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Download current Dofusdude release assets
+      - name: Prepare current game version
         run: |
-          VERSION=3.6.10.10
-          BASE="https://github.com/dofusdude/dofus3-main/releases/download/${VERSION}"
-          for FILE in spells spell_levels breeds effects fr; do
-            curl -LfsS "$BASE/${FILE}.json" -o "/tmp/${FILE}.json"
-          done
-      - name: Certify direct damage effect families
+          mkdir -p data/raw
+          curl -LfsS 'https://api.dofusdu.de/dofus3/v1/meta/version' -o data/raw/version.json
+      - name: Sync and normalize spell source
         run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const read = (name) => JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8'));
-          const fr = read('fr').entries || {};
-          const effectRefs = read('effects').references?.RefIds || [];
-          const effects = effectRefs.map((entry) => entry.data).filter(Boolean);
-          const direct = effects.filter((entry) => entry.category === 2 && entry.useInFight === 1 && entry.active === 0);
-          console.log('direct family count', direct.length);
-          const grouped = new Map();
-          for (const effect of direct) {
-            const key = String(effect.elementId);
-            if (!grouped.has(key)) grouped.set(key, []);
-            grouped.get(key).push({
-              id: effect.id,
-              elementId: effect.elementId,
-              useDice: effect.useDice,
-              forceMinMax: effect.forceMinMax,
-              descriptionId: effect.descriptionId,
-              description: fr[String(effect.descriptionId)] || null,
-              characteristic: effect.characteristic,
-              iconId: effect.iconId,
-              effectPowerRate: effect.effectPowerRate
-            });
-          }
-          for (const [elementId, rows] of [...grouped.entries()].sort((a,b) => Number(a[0]) - Number(b[0]))) {
-            console.log(`=== element ${elementId} ===`);
-            console.log(JSON.stringify(rows.slice(0, 30), null, 2));
-          }
-
-          // Also print the direct-damage effects actually used by player class spells.
-          const refs = (name, className) => (read(name).references?.RefIds || [])
-            .filter((entry) => entry?.type?.class === className)
-            .map((entry) => entry.data);
-          const spells = refs('spells', 'SpellData');
-          const levels = refs('spell_levels', 'SpellLevelData');
-          const breeds = refs('breeds', 'BreedData');
-          const playerSpellIds = new Set(breeds.flatMap((breed) => breed?.breedSpellsId?.Array || []));
-          const levelIds = new Set(spells.filter((spell) => playerSpellIds.has(spell.id)).flatMap((spell) => spell?.spellLevels?.Array || []));
-          const used = new Map();
-          for (const level of levels.filter((entry) => levelIds.has(entry.id))) {
-            for (const effect of [...(level?.effects?.Array || []), ...(level?.criticalEffect?.Array || [])]) {
-              const meta = effects.find((entry) => entry.id === effect.effectId);
-              if (!meta || meta.category !== 2 || meta.useInFight !== 1 || meta.active !== 0) continue;
-              used.set(meta.id, {
-                id: meta.id,
-                elementId: meta.elementId,
-                description: fr[String(meta.descriptionId)] || null
-              });
-            }
-          }
-          console.log('used direct effect ids by class spells', JSON.stringify([...used.values()].sort((a,b) => a.id - b.id), null, 2));
-          NODE
+          npm run sync:spells
+          npm run normalize:spells
+      - name: Run spell tests
+        run: node --test tests/dofus-spell-normalizer.test.mjs
+      - name: Show spell coverage
+        run: cat data/normalized/spell-coverage-report.md
