@@ -23,8 +23,12 @@ import {
   buildFutureConstraintBundleCaps,
   canMeetJointConstraintBundles
 } from './constraint-bounds.js';
+import {
+  buildCandidateClassifications,
+  offensiveDofusPool
+} from './offensive-scope.js';
 
-function candidateHeuristic(item, constraints, selections, turnMode) {
+function candidateHeuristic(item, constraints, selections, turnMode, classifications) {
   const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
   let constraintScore = 0;
   for (const [key, minimum] of Object.entries(constraints || {})) {
@@ -32,17 +36,22 @@ function candidateHeuristic(item, constraints, selections, turnMode) {
     constraintScore += Math.min(1, Math.max(0, stat(item.stats, key)) / minimum) * 10000;
   }
   const objective = evaluateObjectiveUpperBound({ stats: optimistic, selections, turnMode }).score;
-  return constraintScore + (Number.isFinite(objective) ? objective : 0);
+  const directional = Number(classifications?.get(item.id)?.priority || 0);
+  return directional + constraintScore + (Number.isFinite(objective) ? objective : 0);
 }
 
-function choiceHeuristic(choice, constraints, selections, turnMode) {
+function choiceHeuristic(choice, constraints, selections, turnMode, classifications) {
   let constraintScore = 0;
   for (const [key, minimum] of Object.entries(constraints || {})) {
     if (!(minimum > 0)) continue;
     constraintScore += Math.min(1, Math.max(0, stat(choice.stats, key)) / minimum) * 10000;
   }
   const objective = evaluateObjectiveUpperBound({ stats: choice.objectiveStats, selections, turnMode }).score;
-  return constraintScore + (Number.isFinite(objective) ? objective : 0);
+  const directional = (choice.items || []).reduce(
+    (sum, item) => sum + Number(classifications?.get(item.id)?.priority || 0),
+    0
+  );
+  return directional + constraintScore + (Number.isFinite(objective) ? objective : 0);
 }
 
 function maxChoiceStats(choices, keys, field) {
@@ -82,7 +91,7 @@ function capsForCandidates(candidates, count, keys, includePassives) {
   };
 }
 
-function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode, characterLevel, shouldAbort) {
+function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode, characterLevel, shouldAbort, classifications) {
   const groups = [];
   let impossible = false;
   let aborted = false;
@@ -120,7 +129,10 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       groupCount: rule.count
     });
     const candidates = pruned.candidates
-      .map((item) => ({ item, heuristic: candidateHeuristic(item, constraints, selections, turnMode) }))
+      .map((item) => ({
+        item,
+        heuristic: candidateHeuristic(item, constraints, selections, turnMode, classifications)
+      }))
       .sort((a, b) => b.heuristic - a.heuristic || String(a.item.id).localeCompare(String(b.item.id)))
       .map((entry) => entry.item);
 
@@ -193,7 +205,10 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
     }
 
     const choices = pareto.choices
-      .map((choice) => ({ choice, heuristic: choiceHeuristic(choice, constraints, selections, turnMode) }))
+      .map((choice) => ({
+        choice,
+        heuristic: choiceHeuristic(choice, constraints, selections, turnMode, classifications)
+      }))
       .sort((a, b) => b.heuristic - a.heuristic || String(a.choice.items[0]?.id || '').localeCompare(String(b.choice.items[0]?.id || '')))
       .map((entry) => entry.choice);
 
@@ -389,6 +404,22 @@ function revertChoice(choice, selectedItems, selectedIds, rawStats, selectedPass
   }
 }
 
+function scopeDiagnostics(items, scopedItems, classifications) {
+  const roleCounts = {};
+  for (const item of items || []) {
+    if (item.slot !== 'dofus') continue;
+    const role = classifications.get(item.id)?.role || 'unknown';
+    roleCounts[role] = (roleCounts[role] || 0) + 1;
+  }
+  return {
+    itemsBefore: items?.length || 0,
+    itemsAfter: scopedItems?.length || 0,
+    dofusBefore: (items || []).filter((item) => item.slot === 'dofus').length,
+    dofusAfter: (scopedItems || []).filter((item) => item.slot === 'dofus').length,
+    dofusRoles: roleCounts
+  };
+}
+
 export function optimizeBuild({
   items,
   sets = [],
@@ -404,10 +435,12 @@ export function optimizeBuild({
   shouldAbort = null
 }) {
   const limit = Math.max(1, Number(topN || 1));
-  const relevant = relevantStatKeys({ items, selections, constraints });
+  const scope = buildCandidateClassifications(items, sets, selections, turnMode, constraints);
+  const scopedItems = offensiveDofusPool(items, scope.byId);
+  const relevant = relevantStatKeys({ items: scopedItems, selections, constraints });
   const queryRelevant = relevantStatKeys({ items: [], selections, constraints });
   const prepared = buildGroups(
-    items,
+    scopedItems,
     slotRules,
     relevant.keys,
     relevant.nonMonotoneKeys,
@@ -415,9 +448,11 @@ export function optimizeBuild({
     selections,
     turnMode,
     character.level,
-    shouldAbort
+    shouldAbort,
+    scope.byId
   );
   const groups = prepared.groups;
+  const offensiveScope = scopeDiagnostics(items, scopedItems, scope.byId);
 
   function baseDiagnostics(extra = {}) {
     return {
@@ -429,6 +464,7 @@ export function optimizeBuild({
       prunedSpecial: 0,
       impossible: false,
       aborted: false,
+      offensiveScope,
       groups: diagnosticsForGroups(groups),
       searchOrder: groups.map((group) => group.id),
       ...extra
@@ -628,7 +664,10 @@ export function optimizeBuild({
     }
 
     const choices = pareto.choices
-      .map((choice) => ({ choice, heuristic: choiceHeuristic(choice, constraints, selections, turnMode) }))
+      .map((choice) => ({
+        choice,
+        heuristic: choiceHeuristic(choice, constraints, selections, turnMode, scope.byId)
+      }))
       .sort((a, b) => b.heuristic - a.heuristic || String(a.choice.items[0]?.id || '').localeCompare(String(b.choice.items[0]?.id || '')))
       .map((entry) => entry.choice);
 
@@ -692,6 +731,7 @@ export function optimizeBuild({
       rejectedUnresolvedPassives,
       impossible: false,
       aborted,
+      offensiveScope,
       setBoundCacheEntries: setUpperCache.size,
       jointConstraintBundles: constraintBundles.map((bundle) => bundle.id),
       groups: diagnosticsForGroups(groups),
