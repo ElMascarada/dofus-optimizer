@@ -97,15 +97,14 @@ test('huge six-Dofus combination space is not materialized and dominance keeps t
   assert.equal(group.candidates, 6);
 });
 
-test('Pryssion can satisfy a 12 AP hard constraint on all three optimized turns', () => {
+test('temporary AP cannot replace the permanent 12 AP target', () => {
   const pryssion = passiveItem({
     id: 'pryssion',
     passiveId: 'pryssion-matte',
     rules: [{ trigger: { type: 'turn_in', turns: [1, 2, 3] }, stats: { ap: 1, finalDamagePct: -10 } }]
   });
-  const damageOnly = { id: 'damage-only', name: 'damage-only', slot: 'dofus', stats: { earth: 500 } };
   const output = optimizeBuild({
-    items: [damageOnly, pryssion],
+    items: [pryssion],
     sets: [],
     selections,
     constraints: { ap: 12 },
@@ -116,15 +115,10 @@ test('Pryssion can satisfy a 12 AP hard constraint on all three optimized turns'
     topN: 5
   });
 
-  assert.equal(output.results.length, 1);
-  assert.equal(output.results[0].items[0].id, 'pryssion');
-  assert.equal(output.results[0].stats.ap, 11);
-  assert.equal(output.results[0].effectiveStatsByTurn[1].ap, 12);
-  assert.equal(output.results[0].effectiveStatsByTurn[2].ap, 12);
-  assert.equal(output.results[0].effectiveStatsByTurn[3].ap, 12);
+  assert.equal(output.results.length, 0);
 });
 
-test('Prycipithon opens a T1 AP target but not the same target across T1-T3', () => {
+test('a T1-only AP passive cannot replace the permanent AP target', () => {
   const prycipithon = passiveItem({
     id: 'prycipithon',
     passiveId: 'prycipithon-matte',
@@ -143,8 +137,7 @@ test('Prycipithon opens a T1 AP target but not the same target across T1-T3', ()
 
   const t1 = optimizeBuild({ ...common, turnMode: 't1' });
   const sum = optimizeBuild({ ...common, turnMode: 'sum' });
-  assert.equal(t1.results.length, 1);
-  assert.equal(t1.results[0].effectiveStatsByTurn[1].ap, 12);
+  assert.equal(t1.results.length, 0);
   assert.equal(sum.results.length, 0);
 });
 
@@ -171,7 +164,7 @@ test('temporary AP never bypasses a static equipment condition', () => {
   assert.equal(output.diagnostics.rejectedConditions, 1);
 });
 
-test('Ratrapry can open a T1 MP constraint from explicit battlefield context', () => {
+test('temporary MP cannot replace the permanent 6 MP target', () => {
   const ratrapry = passiveItem({
     id: 'ratrapry',
     passiveId: 'ratrapry',
@@ -194,10 +187,25 @@ test('Ratrapry can open a T1 MP constraint from explicit battlefield context', (
 
   const resolved = optimizeBuild({ ...common, scenario: { turns: { 1: { farEnemiesOver9: 2 } } } });
   const unresolved = optimizeBuild(common);
-  assert.equal(resolved.results.length, 1);
-  assert.equal(resolved.results[0].effectiveStatsByTurn[1].mp, 6);
+  assert.equal(resolved.results.length, 0);
   assert.equal(unresolved.results.length, 0);
   assert.equal(unresolved.diagnostics.rejectedUnresolvedPassives, 1);
+});
+
+test('AP and MP targets reject permanent overcap builds', () => {
+  const item = { id: 'overcap', name: 'overcap', slot: 'hat', stats: { mp: 1 } };
+  const output = optimizeBuild({
+    items: [item],
+    sets: [],
+    selections,
+    constraints: { ap: 12, mp: 6 },
+    fmPolicy,
+    slotRules: [{ id: 'hat', count: 1 }],
+    character: { ...noPoints, baseStats: { ap: 12, mp: 6 } },
+    topN: 1
+  });
+
+  assert.equal(output.results.length, 0);
 });
 
 test('Pryximite is scored offensively only when its T1 proximity context is provided', () => {
