@@ -3,13 +3,13 @@
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
 - Included items: 1110
-- Self-certified items in coverage scope: 1050 (94.59%)
-- Snapshot-certified items: 1044
+- Self-certified items in coverage scope: 1052 (94.77%)
+- Snapshot-certified items: 1046
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 1
 - Active effects intentionally excluded from stats: 348
-- Meta effects: 60
+- Meta effects: 58
 - Explicitly ignored non-combat metadata: 83
 - Items with unmapped conditions: 0
 - Explicitly excluded internal/non-player items: 214
@@ -42,7 +42,7 @@
 
 ## Meta effect names
 
-- -special spell-: 60
+- -special spell-: 58
 
 ## Active effect names
 
@@ -81,9 +81,11 @@
 - Pryssion Iridescente (#21998): pryssion-iridescent
 - Surpryz (#22001): surpryz
 - Prynyang (#22004): prynyang
+- Ratrapry (#22007): ratrapry
 - Prycipithon Mate (#22011): prycipithon-matte
 - Prycipithon Brillante (#22012): prycipithon-bright
 - Prycipithon Iridescente (#22013): prycipithon-iridescent
+- Pryximite (#22023): pryximite
 
 ## Temporal items pending
 
@@ -111,7 +113,6 @@
 - Prytek Brillante (#21452; Prysmaradite): meta:-special spell-
 - Prytek Iridescente (#21453; Prysmaradite): meta:-special spell-
 - Sprynt (#21995; Prysmaradite): meta:-special spell-
-- Ratrapry (#22007; Prysmaradite): meta:-special spell-
 - Prygen (#22010; Prysmaradite): meta:-special spell-
 - Espryt (#22014; Prysmaradite): meta:-special spell-
 - Korprys (#22015; Prysmaradite): meta:-special spell-
@@ -120,7 +121,6 @@
 - Prysmenvout (#22020; Prysmaradite): meta:-special spell-
 - Supprys (#22021; Prysmaradite): meta:-special spell-
 - Aprybou (#22022; Prysmaradite): meta:-special spell-
-- Pryximite (#22023; Prysmaradite): meta:-special spell-
 - Prymune (#22024; Prysmaradite): meta:-special spell-
 - Prysantor (#22025; Prysmaradite): meta:-special spell-
 - Pestilence de Corruption (#22412; Cape): meta:-special spell-

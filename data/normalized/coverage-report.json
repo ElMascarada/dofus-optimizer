@@ -8,11 +8,11 @@
   "elements": 273,
   "items": {
     "total": 1110,
-    "certified": 1050,
+    "certified": 1052,
     "unknownSlot": 0,
     "unmappedEffects": 1,
     "activeEffects": 348,
-    "metaEffects": 60,
+    "metaEffects": 58,
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
@@ -30,9 +30,9 @@
       "Add a temporary spell": 1
     },
     "unknownConditionNames": {},
-    "certifiedPct": 94.59,
+    "certifiedPct": 94.77,
     "unknownSlotTypes": {},
-    "snapshotCertified": 1044,
+    "snapshotCertified": 1046,
     "excludedByUncertifiedSet": 6,
     "ignoredEffects": 83,
     "activeEffectNames": {
@@ -57,7 +57,7 @@
       "Advances by cell (Active)": 1
     },
     "metaEffectNames": {
-      "-special spell-": 60
+      "-special spell-": 58
     },
     "temporalPending": [
       {
@@ -397,20 +397,6 @@
         ]
       },
       {
-        "name": "Ratrapry",
-        "ankamaId": 22007,
-        "typeName": "Prysmaradite",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Le porteur gagne 1 PM pendant 1 tour pour chaque combattant ennemi à plus de 9 cases de lui au début des 3 premiers tours de jeu (cumulable 3 fois).",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
         "name": "Prygen",
         "ankamaId": 22010,
         "typeName": "Prysmaradite",
@@ -518,20 +504,6 @@
             "status": "meta",
             "name": "-special spell-",
             "formatted": "Le porteur gagne 200% de son niveau en bouclier jusqu'à la fin du combat au début du premier tour de jeu de chaque combattant ennemi qui joue avant lui.",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Pryximite",
-        "ankamaId": 22023,
-        "typeName": "Prysmaradite",
-        "slot": "dofus",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "-special spell-",
-            "formatted": "Le porteur gagne 2% de dommages en mêlée pendant 3 tours pour chaque combattant ennemi à 3 cases ou moins de lui au début et à la fin de son premier tour.",
             "reason": "meta-effect"
           }
         ]
@@ -1940,6 +1912,13 @@
         ]
       },
       {
+        "name": "Ratrapry",
+        "ankamaId": 22007,
+        "passives": [
+          "ratrapry"
+        ]
+      },
+      {
         "name": "Prycipithon Mate",
         "ankamaId": 22011,
         "passives": [
@@ -1959,10 +1938,17 @@
         "passives": [
           "prycipithon-iridescent"
         ]
+      },
+      {
+        "name": "Pryximite",
+        "ankamaId": 22023,
+        "passives": [
+          "pryximite"
+        ]
       }
     ],
     "snapshotBySlot": {
-      "dofus": 285,
+      "dofus": 287,
       "cape": 68,
       "companion": 145,
       "weapon": 121,
