@@ -1,4 +1,5 @@
 import { addStats, cloneStats, stat } from './stats.js';
+import { applyPassiveModifiers } from './passives.js';
 
 const ELEMENT_STAT = {
   earth: 'earth',
@@ -23,11 +24,13 @@ function midpoint(range) {
 
 export function statsForTurn(baseStats, items, turn) {
   const stats = cloneStats(baseStats);
+  const passives = [];
   for (const item of items) {
     const bonus = item.turnBonuses?.[turn];
     if (bonus) addStats(stats, bonus);
+    passives.push(...(item.passives || []));
   }
-  return stats;
+  return applyPassiveModifiers(stats, passives, { turn }).stats;
 }
 
 export function spellExpectedDamage(spell, stats, turn = 1) {
@@ -47,10 +50,13 @@ export function spellExpectedDamage(spell, stats, turn = 1) {
   }
 
   let expected = nonCrit * (1 - critChance) + crit * critChance;
-  let finalPct = stat(stats, 'spellDamagePct');
-  if (spell.distance === 'melee') finalPct += stat(stats, 'meleeDamagePct');
-  if (spell.distance === 'ranged') finalPct += stat(stats, 'rangedDamagePct');
-  finalPct += stat(stats, `finalDamagePctT${turn}`);
+  let specificPct = stat(stats, 'spellDamagePct');
+  if (spell.distance === 'melee') specificPct += stat(stats, 'meleeDamagePct');
+  if (spell.distance === 'ranged') specificPct += stat(stats, 'rangedDamagePct');
+  expected *= 1 + specificPct / 100;
+
+  // Final damage is a separate stage from spell/melee/ranged damage.
+  const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
   expected *= 1 + finalPct / 100;
   return expected;
 }

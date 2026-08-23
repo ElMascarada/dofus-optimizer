@@ -26,6 +26,24 @@ function listFrom(payload, key = 'items') {
   return [];
 }
 
+function effectNamesByStatus(items, status) {
+  const counts = {};
+  for (const item of items) {
+    for (const effect of item.source?.effects || []) {
+      if (effect.status !== status) continue;
+      const key = effect.name || effect.formatted || 'UNKNOWN';
+      counts[key] = (counts[key] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+function bySlot(items) {
+  const counts = {};
+  for (const item of items) counts[item.slot || 'unknown'] = (counts[item.slot || 'unknown'] || 0) + 1;
+  return counts;
+}
+
 function compactItem(item) {
   return {
     id: item.id,
@@ -38,6 +56,7 @@ function compactItem(item) {
     setId: item.setId,
     imageUrl: item.imageUrl,
     stats: item.stats,
+    passives: item.passives || [],
     conditions: item.conditions,
     conditionStatus: item.conditionStatus,
     certified: item.certification.certified
@@ -77,6 +96,12 @@ report.items.excludedByUncertifiedSet = allItems.filter((item) => item.certifica
 report.sets.certified = solverSafeSets.length;
 report.sets.uncertified = sets.length - solverSafeSets.length;
 report.items.ignoredEffects = reportItems.reduce((sum, item) => sum + (item.source?.ignoredEffects?.length || 0), 0) + sets.reduce((sum, set) => sum + (set.source?.ignoredEffects || 0), 0);
+report.items.activeEffectNames = effectNamesByStatus(reportItems, 'active');
+report.items.metaEffectNames = effectNamesByStatus(reportItems, 'meta');
+report.items.temporalPending = reportItems.filter((item) => item.certification?.temporalEffectsPending).map((item) => ({ name: item.name, typeName: item.typeName, slot: item.slot }));
+report.items.recognizedPassives = reportItems.filter((item) => item.passives?.length).map((item) => ({ name: item.name, ankamaId: item.ankamaId, passives: item.passives.map((passive) => passive.id) }));
+report.items.snapshotBySlot = bySlot(certifiedItems);
+report.sets.uncertifiedNames = sets.filter((set) => !isSolverSafeSet(set)).map((set) => set.name);
 
 const snapshot = {
   schemaVersion: 1,
@@ -101,6 +126,8 @@ await writeFile(new URL('coverage-report.json', outDir), JSON.stringify(report, 
 const unknownEffects = Object.entries(report.items.unknownEffectNames).sort((a, b) => b[1] - a[1]);
 const unknownConditions = Object.entries(report.items.unknownConditionNames).sort((a, b) => b[1] - a[1]);
 const unknownSlots = Object.entries(report.items.unknownSlotTypes).sort((a, b) => b[1] - a[1]);
+const metaEffects = Object.entries(report.items.metaEffectNames).sort((a, b) => b[1] - a[1]);
+const activeEffects = Object.entries(report.items.activeEffectNames).sort((a, b) => b[1] - a[1]);
 const markdown = [
   '# Dofusdude normalization coverage',
   '',
@@ -133,6 +160,26 @@ const markdown = [
   '## Unknown condition names',
   '',
   ...(unknownConditions.length ? unknownConditions.map(([name, count]) => `- ${name}: ${count}`) : ['- none']),
+  '',
+  '## Meta effect names',
+  '',
+  ...(metaEffects.length ? metaEffects.map(([name, count]) => `- ${name}: ${count}`) : ['- none']),
+  '',
+  '## Active effect names',
+  '',
+  ...(activeEffects.length ? activeEffects.map(([name, count]) => `- ${name}: ${count}`) : ['- none']),
+  '',
+  '## Recognized temporal passives',
+  '',
+  ...(report.items.recognizedPassives.length ? report.items.recognizedPassives.map((item) => `- ${item.name} (#${item.ankamaId}): ${item.passives.join(', ')}`) : ['- none']),
+  '',
+  '## Temporal items pending',
+  '',
+  ...(report.items.temporalPending.length ? report.items.temporalPending.map((item) => `- ${item.name} (${item.typeName || item.slot || 'unknown'})`) : ['- none']),
+  '',
+  '## Uncertified sets',
+  '',
+  ...(report.sets.uncertifiedNames.length ? report.sets.uncertifiedNames.map((name) => `- ${name}`) : ['- none']),
   ''
 ].join('\n');
 await writeFile(new URL('coverage-report.md', outDir), markdown);

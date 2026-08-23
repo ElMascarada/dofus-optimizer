@@ -5,6 +5,7 @@ import {
   normalizeMount,
   normalizeSet
 } from './dofusdude-normalizer.js';
+import { extractKnownItemPassives } from './dofus-passives.js';
 
 const ELEMENT_ALIASES = new Map([
   ['% Critical', 'Critical'],
@@ -19,10 +20,10 @@ const IGNORED_EFFECT_NAMES = new Set([
   'Hunting weapon',
   'Linked to the character',
   '/'
-]);
+].map(normalizedText));
 
 function normalizedText(value = '') {
-  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
 export function patchedElements(elements = []) {
@@ -39,7 +40,7 @@ export function filterNonCombatMetadata(effects = [], elements = []) {
   const kept = [];
   const ignored = [];
   for (const effect of Array.isArray(effects) ? effects : []) {
-    if (IGNORED_EFFECT_NAMES.has(effectName(effect, elements))) ignored.push(effect);
+    if (IGNORED_EFFECT_NAMES.has(normalizedText(effectName(effect, elements)))) ignored.push(effect);
     else kept.push(effect);
   }
   return { kept, ignored };
@@ -93,7 +94,8 @@ function finalizeNonWeaponActiveCertification(item) {
 
 export function normalizeSourceEquipment(rawItem, elements = [], options = {}) {
   const filtered = filterNonCombatMetadata(rawItem?.effects, elements);
-  const patchedRaw = { ...rawItem, effects: filtered.kept };
+  const passiveExtraction = extractKnownItemPassives(rawItem, filtered.kept, elements);
+  const patchedRaw = { ...rawItem, effects: passiveExtraction.kept };
   const item = normalizeEquipmentItem(patchedRaw, patchedElements(elements), options);
   const typeName = rawItem?.type?.name ?? item.typeName;
   if (!item.slot && normalizedText(typeName).includes('prysmaradite')) item.slot = 'dofus';
@@ -105,7 +107,9 @@ export function normalizeSourceEquipment(rawItem, elements = [], options = {}) {
   item.certification.slotKnown = Boolean(item.slot);
   item.certification.conditionsCertified = conditionResult.status !== 'unmapped';
   item.certification.certified = Boolean(item.slot) && item.certification.effectsCertified && item.certification.conditionsCertified;
+  item.passives = passiveExtraction.passives;
   item.source.ignoredEffects = filtered.ignored.map((effect) => ({ name: effectName(effect, elements), formatted: effect.formatted || null }));
+  item.source.recognizedPassiveEffects = passiveExtraction.consumed;
   item.source.unmappedConditions = conditionResult.unmapped;
   return finalizeNonWeaponActiveCertification(item);
 }
