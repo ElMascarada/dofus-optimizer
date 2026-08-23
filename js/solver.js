@@ -10,6 +10,8 @@ import {
   specialSlotRulesAreValid
 } from './build-legality.js';
 import {
+  buildSuffixCaps,
+  collectConditionStatInfo,
   optimisticItemStats,
   pruneDominatedCandidates,
   relevantStatKeys,
@@ -40,7 +42,7 @@ function choiceHeuristic(choice, constraints, selections, turnMode) {
 
 function maxChoiceStats(choices, keys, field) {
   const result = Object.fromEntries(keys.map((key) => [key, 0]));
-  for (const choice of choices) {
+  for (const choice of choices || []) {
     for (const key of keys) result[key] = Math.max(result[key], Number(choice?.[field]?.[key] || 0));
   }
   return result;
@@ -48,12 +50,31 @@ function maxChoiceStats(choices, keys, field) {
 
 function maxChoiceSetCapacity(choices) {
   const result = new Map();
-  for (const choice of choices) {
+  for (const choice of choices || []) {
     for (const [setId, count] of Object.entries(choice.setCounts || {})) {
       result.set(setId, Math.max(result.get(setId) || 0, Number(count || 0)));
     }
   }
   return result;
+}
+
+function maxCandidateSetCapacity(candidates, count) {
+  const counts = new Map();
+  for (const item of candidates || []) {
+    if (!item?.setId) continue;
+    counts.set(item.setId, (counts.get(item.setId) || 0) + 1);
+  }
+  const result = new Map();
+  for (const [setId, available] of counts) result.set(setId, Math.min(Number(count || 0), available));
+  return result;
+}
+
+function capsForCandidates(candidates, count, keys, includePassives) {
+  const caps = buildSuffixCaps(candidates, count, keys, { includePassives });
+  return {
+    bounded: caps.bounded,
+    stats: Object.fromEntries(keys.map((key) => [key, caps.cap(key, 0, count)]))
+  };
 }
 
 function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode, characterLevel, shouldAbort) {
@@ -117,6 +138,37 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       continue;
     }
 
+    // Six Dofus/trophy slots are the combinatorial hotspot. Their exact Pareto
+    // frontier depends on the conditions of the already-selected normal gear,
+    // so building one giant all-condition frontier here is wasted work.
+    if (rule.id === 'dofus' && rule.count > 1) {
+      const staticCaps = capsForCandidates(candidates, rule.count, keys, false);
+      const objectiveCaps = capsForCandidates(candidates, rule.count, keys, true);
+      groups.push({
+        ...rule,
+        dynamic: true,
+        candidates,
+        choices: null,
+        dynamicCache: new Map(),
+        dynamicProfiles: [],
+        dynamicConditionInfo: collectConditionStatInfo(candidates),
+        candidatesBefore: sourceCandidates.length,
+        conditionFiltered,
+        removed: conditionFiltered + pruned.removed,
+        equivalentRemoved: pruned.equivalentRemoved,
+        dominatedRemoved: pruned.dominatedRemoved,
+        theoreticalBefore: theoreticalChoiceCount(sourceCandidates.length, rule.count),
+        theoreticalAfter: theoreticalChoiceCount(candidates.length, rule.count),
+        maxStatic: staticCaps.stats,
+        maxObjective: objectiveCaps.stats,
+        objectiveBounded: objectiveCaps.bounded,
+        setCapacity: maxCandidateSetCapacity(candidates, rule.count),
+        impossible: false,
+        pareto: null
+      });
+      continue;
+    }
+
     const pareto = buildParetoChoices(candidates, rule.count, keys, { shouldAbort });
     if (pareto.diagnostics.aborted) {
       aborted = true;
@@ -145,6 +197,7 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
     if (!choices.length) impossible = true;
     groups.push({
       ...rule,
+      dynamic: false,
       candidates,
       choices,
       candidatesBefore: sourceCandidates.length,
@@ -165,6 +218,7 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
 
   if (!aborted) {
     groups.sort((a, b) => {
+      if (Boolean(a.dynamic) !== Boolean(b.dynamic)) return a.dynamic ? 1 : -1;
       const aChoices = a.choices?.length || Number.MAX_SAFE_INTEGER;
       const bChoices = b.choices?.length || Number.MAX_SAFE_INTEGER;
       return aChoices - bChoices || a.id.localeCompare(b.id);
@@ -274,16 +328,23 @@ function diagnosticsForGroups(groups) {
   return groups.map((group) => ({
     id: group.id,
     count: group.count,
+    dynamic: Boolean(group.dynamic),
     candidatesBefore: group.candidatesBefore,
     candidates: group.candidates?.length || 0,
-    choices: group.choices?.length || 0,
+    choices: group.dynamic
+      ? [...(group.dynamicCache?.values?.() || [])].reduce((sum, value) => sum + (value.choices?.length || 0), 0)
+      : (group.choices?.length || 0),
+    cachedProfiles: group.dynamicCache?.size || 0,
+    dynamicProfiles: group.dynamicProfiles || [],
     removed: group.removed || 0,
     conditionFiltered: group.conditionFiltered || 0,
     dominatedRemoved: group.dominatedRemoved || 0,
     equivalentRemoved: group.equivalentRemoved || 0,
     theoreticalChoicesBefore: group.theoreticalBefore?.toString?.() || '0',
     theoreticalChoices: group.theoreticalAfter?.toString?.() || '0',
-    materializedChoices: group.choices?.length || 0,
+    materializedChoices: group.dynamic
+      ? [...(group.dynamicCache?.values?.() || [])].reduce((sum, value) => sum + (value.choices?.length || 0), 0)
+      : (group.choices?.length || 0),
     paretoPartitions: group.pareto?.partitions || 0,
     paretoGenerated: group.pareto?.generated || 0,
     paretoDominatedRemoved: group.pareto?.dominatedRemoved || 0,
@@ -334,6 +395,7 @@ export function optimizeBuild({
 }) {
   const limit = Math.max(1, Number(topN || 1));
   const relevant = relevantStatKeys({ items, selections, constraints });
+  const queryRelevant = relevantStatKeys({ items: [], selections, constraints });
   const prepared = buildGroups(
     items,
     slotRules,
@@ -346,43 +408,25 @@ export function optimizeBuild({
     shouldAbort
   );
   const groups = prepared.groups;
-  const groupDiagnostics = diagnosticsForGroups(groups);
 
-  if (prepared.aborted) {
+  function baseDiagnostics(extra = {}) {
     return {
-      results: [],
-      diagnostics: {
-        visited: 0,
-        nodes: 0,
-        pruned: 0,
-        prunedConstraints: 0,
-        prunedScore: 0,
-        prunedSpecial: 0,
-        impossible: false,
-        aborted: true,
-        groups: groupDiagnostics,
-        searchOrder: groups.map((group) => group.id)
-      }
+      visited: 0,
+      nodes: 0,
+      pruned: 0,
+      prunedConstraints: 0,
+      prunedScore: 0,
+      prunedSpecial: 0,
+      impossible: false,
+      aborted: false,
+      groups: diagnosticsForGroups(groups),
+      searchOrder: groups.map((group) => group.id),
+      ...extra
     };
   }
 
-  if (prepared.impossible) {
-    return {
-      results: [],
-      diagnostics: {
-        visited: 0,
-        nodes: 0,
-        pruned: 0,
-        prunedConstraints: 0,
-        prunedScore: 0,
-        prunedSpecial: 0,
-        impossible: true,
-        aborted: false,
-        groups: groupDiagnostics,
-        searchOrder: groups.map((group) => group.id)
-      }
-    };
-  }
+  if (prepared.aborted) return { results: [], diagnostics: baseDiagnostics({ aborted: true }) };
+  if (prepared.impossible) return { results: [], diagnostics: baseDiagnostics({ impossible: true }) };
 
   const setsById = Object.fromEntries(sets.map((set) => [set.id, set]));
   const futureStaticCaps = buildFutureCaps(groups, relevant.keys, 'maxStatic');
@@ -426,8 +470,9 @@ export function optimizeBuild({
     });
   }
 
-  function checkAbort() {
-    if (!shouldAbort || nodes % 512 !== 0) return false;
+  function checkAbort(force = false) {
+    if (!shouldAbort) return false;
+    if (!force && nodes % 512 !== 0) return false;
     if (shouldAbort()) {
       aborted = true;
       return true;
@@ -510,6 +555,59 @@ export function optimizeBuild({
     }, limit);
   }
 
+  function dynamicChoicesFor(group) {
+    const selectedConditionInfo = collectConditionStatInfo(selectedItems);
+    const keys = new Set(queryRelevant.keys);
+    for (const key of selectedConditionInfo.all) keys.add(key);
+    for (const key of group.dynamicConditionInfo?.all || []) keys.add(key);
+    const keyList = [...keys].sort();
+
+    const nonMonotone = new Set(queryRelevant.nonMonotoneKeys || []);
+    for (const key of selectedConditionInfo.nonMonotone || []) nonMonotone.add(key);
+    for (const key of group.dynamicConditionInfo?.nonMonotone || []) nonMonotone.add(key);
+    const cacheKey = `${keyList.join(',')}|nm:${[...nonMonotone].sort().join(',')}`;
+    const cached = group.dynamicCache.get(cacheKey);
+    if (cached) return cached.choices;
+
+    const repruned = pruneDominatedCandidates(group.candidates, {
+      keys: keyList,
+      nonMonotoneKeys: nonMonotone,
+      groupCount: group.count
+    });
+    const pareto = buildParetoChoices(repruned.candidates, group.count, keyList, { shouldAbort });
+    if (pareto.diagnostics.aborted) {
+      aborted = true;
+      group.dynamicProfiles.push({
+        keys: keyList,
+        candidates: repruned.candidates.length,
+        choices: 0,
+        aborted: true,
+        generated: pareto.diagnostics.generated,
+        partitions: pareto.diagnostics.partitions,
+        partitionProfiles: pareto.diagnostics.partitionProfiles || []
+      });
+      return [];
+    }
+
+    const choices = pareto.choices
+      .map((choice) => ({ choice, heuristic: choiceHeuristic(choice, constraints, selections, turnMode) }))
+      .sort((a, b) => b.heuristic - a.heuristic || String(a.choice.items[0]?.id || '').localeCompare(String(b.choice.items[0]?.id || '')))
+      .map((entry) => entry.choice);
+
+    const profile = {
+      keys: keyList,
+      candidates: repruned.candidates.length,
+      choices: choices.length,
+      aborted: false,
+      generated: pareto.diagnostics.generated,
+      partitions: pareto.diagnostics.partitions,
+      partitionProfiles: pareto.diagnostics.partitionProfiles || []
+    };
+    group.dynamicProfiles.push(profile);
+    group.dynamicCache.set(cacheKey, { choices, profile });
+    return choices;
+  }
+
   function visitGroup(groupIndex) {
     if (aborted) return;
     nodes++;
@@ -523,7 +621,10 @@ export function optimizeBuild({
     if (!boundState(groupIndex)) return;
 
     const group = groups[groupIndex];
-    for (const choice of group.choices) {
+    const choices = group.dynamic ? dynamicChoicesFor(group) : group.choices;
+    if (aborted) return;
+
+    for (const choice of choices || []) {
       if (aborted) break;
       if (choice.items.some((item) => selectedIds.has(item.id))) continue;
 
@@ -553,7 +654,7 @@ export function optimizeBuild({
       rejectedUnresolvedPassives,
       impossible: false,
       aborted,
-      groups: groupDiagnostics,
+      groups: diagnosticsForGroups(groups),
       searchOrder: groups.map((group) => group.id)
     }
   };
