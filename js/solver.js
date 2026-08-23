@@ -28,6 +28,7 @@ import {
   offensiveDofusPool
 } from './offensive-scope.js';
 import { findSeedResults } from './seed-search.js';
+import { buildHardConstraintChoices } from './hard-constraint-choices.js';
 
 function candidateHeuristic(item, constraints, selections, turnMode, classifications) {
   const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
@@ -156,10 +157,18 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       continue;
     }
 
-    // Six Dofus/trophy slots are built lazily once the normal gear is known.
+    // Six Dofus/trophy slots stay dynamic for the exact offensive search. In parallel,
+    // build a tiny exact Pareto frontier only on the currently requested hard stats.
+    // That frontier can safely tighten feasibility bounds and gives the seed legal
+    // six-slot combinations without collapsing the offensive search space.
     if (rule.id === 'dofus' && rule.count > 1) {
       const staticCaps = capsForCandidates(candidates, rule.count, keys, false);
       const objectiveCaps = capsForCandidates(candidates, rule.count, keys, true);
+      const hardConstraint = buildHardConstraintChoices(candidates, rule.count, constraints, { shouldAbort });
+      if (hardConstraint.diagnostics.aborted) {
+        aborted = true;
+        break;
+      }
       groups.push({
         ...rule,
         dynamic: true,
@@ -168,6 +177,8 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
         dynamicCache: new Map(),
         dynamicProfiles: [],
         dynamicConditionInfo: collectConditionStatInfo(candidates),
+        hardConstraintChoices: hardConstraint.choices,
+        hardConstraintDiagnostics: hardConstraint.diagnostics,
         candidatesBefore: sourceCandidates.length,
         conditionFiltered,
         removed: conditionFiltered + pruned.removed,
@@ -367,6 +378,8 @@ function diagnosticsForGroups(groups) {
     choices: group.dynamic
       ? [...(group.dynamicCache?.values?.() || [])].reduce((sum, value) => sum + (value.choices?.length || 0), 0)
       : (group.choices?.length || 0),
+    hardConstraintChoices: group.hardConstraintChoices?.length || 0,
+    hardConstraintDiagnostics: group.hardConstraintDiagnostics || null,
     cachedProfiles: group.dynamicCache?.size || 0,
     dynamicProfiles: group.dynamicProfiles || [],
     removed: group.removed || 0,
