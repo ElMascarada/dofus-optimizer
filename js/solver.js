@@ -27,6 +27,7 @@ import {
   buildCandidateClassifications,
   offensiveDofusPool
 } from './offensive-scope.js';
+import { findSeedResults } from './seed-search.js';
 
 function candidateHeuristic(item, constraints, selections, turnMode, classifications) {
   const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
@@ -465,6 +466,7 @@ export function optimizeBuild({
       impossible: false,
       aborted: false,
       offensiveScope,
+      seed: null,
       groups: diagnosticsForGroups(groups),
       searchOrder: groups.map((group) => group.id),
       ...extra
@@ -502,6 +504,7 @@ export function optimizeBuild({
   let rejectedUnresolvedPassives = 0;
   let aborted = false;
   let selectedUnboundedChoices = 0;
+  let seedDiagnostics = null;
 
   const objectiveSuffixBounded = new Array(groups.length + 1).fill(true);
   for (let index = groups.length - 1; index >= 0; index--) {
@@ -581,12 +584,14 @@ export function optimizeBuild({
     return true;
   }
 
-  function evaluateLeaf() {
-    visited++;
-    const statsWithSets = { ...rawStats };
-    const activeSets = applySetBonuses(statsWithSets, selectedItems, setsById);
+  function evaluateCompleteItems(itemsToEvaluate, { countDiagnostics = true } = {}) {
+    if (!specialSlotRulesAreValid(itemsToEvaluate)) return null;
+    const completeStats = emptyStats();
+    addStats(completeStats, character.baseStats || {});
+    for (const item of itemsToEvaluate) addStats(completeStats, item.stats || {});
+    const activeSets = applySetBonuses(completeStats, itemsToEvaluate, setsById);
 
-    const charResult = optimizeCharacteristics(statsWithSets, {
+    const charResult = optimizeCharacteristics(completeStats, {
       points: character.characteristicPoints,
       scrolled: character.scrolled,
       elementValues,
@@ -594,30 +599,30 @@ export function optimizeBuild({
       baseVitality: 0
     });
 
-    if (!meetsConstraints(charResult.stats, constraints)) return;
-    if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) {
-      rejectedConditions++;
-      return;
+    if (!meetsConstraints(charResult.stats, constraints)) return null;
+    if (!itemConditionsAreValid(itemsToEvaluate, charResult.stats, character.level)) {
+      if (countDiagnostics) rejectedConditions++;
+      return null;
     }
 
     const fm = optimizeFm({
       baseStats: charResult.stats,
-      items: selectedItems,
+      items: itemsToEvaluate,
       selections,
       turnMode,
       policy: fmPolicy,
       scenario
     });
     if (!fm || fm.objective.unresolvedPassiveContexts?.length) {
-      rejectedUnresolvedPassives++;
-      return;
+      if (countDiagnostics) rejectedUnresolvedPassives++;
+      return null;
     }
-    if (!meetsConstraints(fm.stats, constraints)) return;
+    if (!meetsConstraints(fm.stats, constraints)) return null;
 
-    insertTop(results, {
+    return {
       score: fm.objective.score,
       perTurn: fm.objective.perTurn,
-      items: [...selectedItems],
+      items: [...itemsToEvaluate],
       stats: fm.stats,
       characteristics: charResult.allocation,
       fm: {
@@ -626,7 +631,13 @@ export function optimizeBuild({
         assignments: fm.assignments
       },
       activeSets
-    }, limit);
+    };
+  }
+
+  function evaluateLeaf() {
+    visited++;
+    const result = evaluateCompleteItems(selectedItems, { countDiagnostics: true });
+    if (result) insertTop(results, result, limit);
   }
 
   function dynamicChoicesFor(group) {
@@ -685,6 +696,20 @@ export function optimizeBuild({
     return choices;
   }
 
+  const seed = findSeedResults({
+    groups,
+    baseStats: character.baseStats || {},
+    setsById,
+    constraints,
+    selections,
+    turnMode,
+    classifications: scope.byId,
+    evaluateComplete: (seedItems) => evaluateCompleteItems(seedItems, { countDiagnostics: false }),
+    resultLimit: limit
+  });
+  seedDiagnostics = seed.diagnostics;
+  for (const result of seed.results) insertTop(results, result, limit);
+
   function visitGroup(groupIndex) {
     if (aborted) return;
     nodes++;
@@ -732,6 +757,7 @@ export function optimizeBuild({
       impossible: false,
       aborted,
       offensiveScope,
+      seed: seedDiagnostics,
       setBoundCacheEntries: setUpperCache.size,
       jointConstraintBundles: constraintBundles.map((bundle) => bundle.id),
       groups: diagnosticsForGroups(groups),
