@@ -116,18 +116,20 @@ test('spell casts compute and enforce their real AP requirement per turn', () =>
   assert.equal(requiredApForTurn(selections, 1), 12);
   assert.equal(requiredApForTurn(selections, 2), 8);
 
-  const hiddenWorkerConstraint = evaluateTurnConstraints({
+  const workerScenarioConstraint = evaluateTurnConstraints({
     stats: { ap: 11 },
-    constraints: { ap: 0, __requiredApByTurn: { 1: 12 } },
+    constraints: { ap: 0 },
+    scenario: { requiredApByTurn: { 1: 12 } },
     turnMode: 't1'
   });
-  assert.equal(hiddenWorkerConstraint.meets, false);
-  assert.deepEqual(hiddenWorkerConstraint.deficitsByTurn, { 1: { ap: 1 } });
+  assert.equal(workerScenarioConstraint.meets, false);
+  assert.deepEqual(workerScenarioConstraint.deficitsByTurn, { 1: { ap: 1 } });
 
   const withTemporaryAp = evaluateTurnConstraints({
     stats: { ap: 11 },
     items: [{ passives: [{ id: 'temp-ap', rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 1 } }] }] }],
-    constraints: { ap: 0, __requiredApByTurn: { 1: 12 } },
+    constraints: { ap: 0 },
+    scenario: { requiredApByTurn: { 1: 12 } },
     turnMode: 't1'
   });
   assert.equal(withTemporaryAp.meets, true);
