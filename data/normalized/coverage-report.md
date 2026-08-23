@@ -3,13 +3,13 @@
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
 - Included items: 1110
-- Self-certified items in coverage scope: 1042 (93.87%)
-- Snapshot-certified items: 1036
+- Self-certified items in coverage scope: 1050 (94.59%)
+- Snapshot-certified items: 1044
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 1
 - Active effects intentionally excluded from stats: 348
-- Meta effects: 68
+- Meta effects: 60
 - Explicitly ignored non-combat metadata: 83
 - Items with unmapped conditions: 0
 - Explicitly excluded internal/non-player items: 214
@@ -42,7 +42,7 @@
 
 ## Meta effect names
 
-- -special spell-: 68
+- -special spell-: 60
 
 ## Active effect names
 
@@ -76,6 +76,14 @@
 - Dofus Nébuleux (#8698): nebulous-dream
 - Dofus Abyssal (#18043): descent-to-abyss
 - Trompe-la-Mort (#20358): cheat-death
+- Pryssion Mate (#21996): pryssion-matte
+- Pryssion Brillante (#21997): pryssion-bright
+- Pryssion Iridescente (#21998): pryssion-iridescent
+- Surpryz (#22001): surpryz
+- Prynyang (#22004): prynyang
+- Prycipithon Mate (#22011): prycipithon-matte
+- Prycipithon Brillante (#22012): prycipithon-bright
+- Prycipithon Iridescente (#22013): prycipithon-iridescent
 
 ## Temporal items pending
 
@@ -103,16 +111,8 @@
 - Prytek Brillante (#21452; Prysmaradite): meta:-special spell-
 - Prytek Iridescente (#21453; Prysmaradite): meta:-special spell-
 - Sprynt (#21995; Prysmaradite): meta:-special spell-
-- Pryssion Mate (#21996; Prysmaradite): meta:-special spell-
-- Pryssion Brillante (#21997; Prysmaradite): meta:-special spell-
-- Pryssion Iridescente (#21998; Prysmaradite): meta:-special spell-
-- Surpryz (#22001; Prysmaradite): meta:-special spell-
-- Prynyang (#22004; Prysmaradite): meta:-special spell-
 - Ratrapry (#22007; Prysmaradite): meta:-special spell-
 - Prygen (#22010; Prysmaradite): meta:-special spell-
-- Prycipithon Mate (#22011; Prysmaradite): meta:-special spell-
-- Prycipithon Brillante (#22012; Prysmaradite): meta:-special spell-
-- Prycipithon Iridescente (#22013; Prysmaradite): meta:-special spell-
 - Espryt (#22014; Prysmaradite): meta:-special spell-
 - Korprys (#22015; Prysmaradite): meta:-special spell-
 - Caraprys (#22018; Prysmaradite): meta:-special spell-
