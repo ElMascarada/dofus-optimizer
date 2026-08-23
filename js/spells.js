@@ -59,8 +59,15 @@ function spellRawTotals(spell, stats) {
   return { nonCrit, crit };
 }
 
+function damageSource(spell) {
+  return spell?.damageSource === 'weapon' ? 'weapon' : 'spell';
+}
+
 function damageMultiplier(spell, stats, turn) {
-  let specificPct = stat(stats, 'spellDamagePct');
+  const sourcePct = damageSource(spell) === 'weapon'
+    ? stat(stats, 'weaponDamagePct')
+    : stat(stats, 'spellDamagePct');
+  let specificPct = sourcePct;
   if (spell.distance === 'melee') specificPct += stat(stats, 'meleeDamagePct');
   if (spell.distance === 'ranged') specificPct += stat(stats, 'rangedDamagePct');
   const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
