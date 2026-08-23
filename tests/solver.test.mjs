@@ -141,6 +141,44 @@ test('a T1-only AP passive cannot replace the permanent AP target', () => {
   assert.equal(sum.results.length, 0);
 });
 
+test('temporary AP overcap is allowed after a permanent 12 AP base and can fund a 15 AP turn', () => {
+  const apBurstPrysmaradite = passiveItem({
+    id: 'ap-burst-prysmaradite',
+    passiveId: 'ap-burst',
+    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3 } }]
+  });
+  const burstSpell = {
+    id: 'burst',
+    name: 'Burst',
+    apCost: 5,
+    baseCritPct: 0,
+    hits: [{ element: 'earth', normal: [10, 10] }]
+  };
+  const burstSelections = [{
+    enabled: true,
+    weight: 1,
+    spell: burstSpell,
+    casts: { 1: 3, 2: 0, 3: 0 }
+  }];
+  const output = optimizeBuild({
+    items: [apBurstPrysmaradite],
+    sets: [],
+    selections: burstSelections,
+    constraints: { ap: 12, mp: 6 },
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: { ...noPoints, baseStats: { ap: 12, mp: 6 } },
+    turnMode: 't1',
+    topN: 1
+  });
+
+  assert.equal(output.results.length, 1);
+  assert.equal(output.results[0].stats.ap, 12);
+  assert.equal(output.results[0].stats.mp, 6);
+  assert.equal(output.results[0].effectiveStatsByTurn[1].ap, 15);
+  assert.equal(output.results[0].perTurn[1], 30);
+});
+
 test('temporary AP never bypasses a static equipment condition', () => {
   const conditioned = passiveItem({
     id: 'conditioned-pryssion',
