@@ -46,6 +46,17 @@ export function weightedStatScore(stats = {}, bundle) {
 
 function groupWeightedMaximum(group, bundle) {
   if (group.dynamic) {
+    // If the dynamic group has already built a Pareto frontier on the exact hard
+    // constraints, use that legal multi-pick frontier rather than summing six
+    // independent per-item maxima that might be mutually incompatible.
+    if (group.hardConstraintChoices?.length) {
+      let best = Number.NEGATIVE_INFINITY;
+      for (const choice of group.hardConstraintChoices) {
+        best = Math.max(best, weightedStatScore(choice.stats || {}, bundle));
+      }
+      return Number.isFinite(best) ? best : 0;
+    }
+
     const scores = (group.candidates || [])
       .map((item) => weightedStatScore(item.stats || {}, bundle))
       .sort((a, b) => b - a);
