@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { buildCandidateClassifications, offensiveDofusPool } from '../js/offensive-scope.js';
-import { STRESS_SPELL_PROFILES, benchmarkSelection } from '../js/benchmark-spells.js';
+import { BENCHMARK_SPELL_PROFILES, benchmarkSelection } from '../js/benchmark-spells.js';
 
 const data = JSON.parse(await readFile(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
-const selections = benchmarkSelection(STRESS_SPELL_PROFILES[0]);
+const selections = benchmarkSelection(BENCHMARK_SPELL_PROFILES[0]);
 const constraints = { ap: 12, mp: 6, resEarth: 40, resFire: 40, resWater: 40, resAir: 40 };
 
 const EXPECTED = [
