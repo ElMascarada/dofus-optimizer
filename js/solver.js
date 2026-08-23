@@ -1,52 +1,208 @@
 import { BASE_CHARACTER, SLOT_RULES } from './config.js';
 import { addStats, emptyStats, meetsConstraints, stat } from './stats.js';
 import { applySetBonuses } from './sets.js';
-import { estimateElementValues } from './spells.js';
+import { estimateElementValues, evaluateObjectiveUpperBound } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
-import { optimizeFm } from './fm.js';
+import { FM_ELIGIBLE_SLOTS, optimizeFm } from './fm.js';
 import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
+import {
+  buildSuffixCaps,
+  optimisticItemStats,
+  passiveUpperStats,
+  pruneDominatedCandidates,
+  relevantStatKeys,
+  theoreticalChoiceCount
+} from './search-space.js';
 
-function combinations(items, count, start = 0, chosen = [], out = []) {
-  if (chosen.length === count) {
-    out.push([...chosen]);
-    return out;
+function candidateHeuristic(item, constraints, selections, turnMode) {
+  const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
+  let constraintScore = 0;
+  for (const [key, minimum] of Object.entries(constraints || {})) {
+    if (!(minimum > 0)) continue;
+    constraintScore += Math.min(1, Math.max(0, stat(item.stats, key)) / minimum) * 10000;
   }
-  for (let i = start; i < items.length; i++) {
-    chosen.push(items[i]);
-    combinations(items, count, i + 1, chosen, out);
-    chosen.pop();
-  }
-  return out;
+  const objective = evaluateObjectiveUpperBound({ stats: optimistic, selections, turnMode }).score;
+  return constraintScore + (Number.isFinite(objective) ? objective : 0);
 }
 
-function buildGroups(items, slotRules = SLOT_RULES) {
-  return slotRules.map((rule) => {
-    const candidates = items.filter((item) => item.slot === rule.id);
-    return {
-      ...rule,
-      choices: rule.count === 1 ? candidates.map((item) => [item]) : combinations(candidates, rule.count)
-    };
-  }).filter((group) => group.choices.length > 0);
-}
-
-function optimisticConstraintCaps(groups) {
-  const keys = ['ap', 'mp', 'range', 'vit', 'resEarth', 'resFire', 'resWater', 'resAir'];
-  const suffix = new Array(groups.length + 1).fill(null).map(() => ({}));
-  for (let i = groups.length - 1; i >= 0; i--) {
-    for (const key of keys) {
-      const bestChoice = Math.max(0, ...groups[i].choices.map((choice) => choice.reduce((sum, item) => sum + stat(item.stats, key), 0)));
-      suffix[i][key] = (suffix[i + 1][key] || 0) + bestChoice;
+function buildSetSuffixCounts(candidates) {
+  const setIds = new Set(candidates.map((item) => item.setId).filter(Boolean));
+  const map = new Map();
+  for (const setId of setIds) {
+    const suffix = new Int32Array(candidates.length + 1);
+    for (let index = candidates.length - 1; index >= 0; index--) {
+      suffix[index] = suffix[index + 1] + (candidates[index].setId === setId ? 1 : 0);
     }
+    map.set(setId, suffix);
+  }
+  return map;
+}
+
+function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode) {
+  const groups = [];
+  let impossible = false;
+
+  for (const rule of slotRules) {
+    const rawCandidates = items.filter((item) => item.slot === rule.id);
+    if (rawCandidates.length < rule.count) {
+      groups.push({
+        ...rule,
+        candidates: rawCandidates,
+        candidatesBefore: rawCandidates.length,
+        removed: 0,
+        theoreticalBefore: theoreticalChoiceCount(rawCandidates.length, rule.count),
+        theoreticalAfter: 0n,
+        impossible: true
+      });
+      impossible = true;
+      continue;
+    }
+
+    const pruned = pruneDominatedCandidates(rawCandidates, {
+      keys,
+      nonMonotoneKeys,
+      groupCount: rule.count
+    });
+    const candidates = pruned.candidates
+      .map((item) => ({ item, heuristic: candidateHeuristic(item, constraints, selections, turnMode) }))
+      .sort((a, b) => b.heuristic - a.heuristic || String(a.item.id).localeCompare(String(b.item.id)))
+      .map((entry) => entry.item);
+
+    if (candidates.length < rule.count) impossible = true;
+    const staticCaps = buildSuffixCaps(candidates, rule.count, keys, { includePassives: false });
+    const objectiveCaps = buildSuffixCaps(candidates, rule.count, keys, { includePassives: true });
+
+    groups.push({
+      ...rule,
+      candidates,
+      candidatesBefore: rawCandidates.length,
+      removed: pruned.removed,
+      equivalentRemoved: pruned.equivalentRemoved,
+      dominatedRemoved: pruned.dominatedRemoved,
+      theoreticalBefore: theoreticalChoiceCount(rawCandidates.length, rule.count),
+      theoreticalAfter: theoreticalChoiceCount(candidates.length, rule.count),
+      staticCaps,
+      objectiveCaps,
+      setSuffixCounts: buildSetSuffixCounts(candidates),
+      impossible: candidates.length < rule.count
+    });
+  }
+
+  groups.sort((a, b) => {
+    const aMulti = a.count > 1 ? 1 : 0;
+    const bMulti = b.count > 1 ? 1 : 0;
+    if (aMulti !== bMulti) return aMulti - bMulti;
+    return a.candidates.length - b.candidates.length || a.id.localeCompare(b.id);
+  });
+
+  return { groups, impossible };
+}
+
+function buildFutureCaps(groups, keys, capName) {
+  const suffix = new Array(groups.length + 1);
+  suffix[groups.length] = Object.fromEntries(keys.map((key) => [key, 0]));
+  for (let index = groups.length - 1; index >= 0; index--) {
+    const current = {};
+    for (const key of keys) {
+      current[key] = Number(suffix[index + 1][key] || 0) + groups[index][capName].cap(key, 0, groups[index].count);
+    }
+    suffix[index] = current;
   }
   return suffix;
 }
 
-function canStillMeetConstraints(stats, constraints, optimistic) {
-  for (const [key, minimum] of Object.entries(constraints)) {
+function buildFuturePicks(groups) {
+  const suffix = new Array(groups.length + 1).fill(0);
+  for (let index = groups.length - 1; index >= 0; index--) suffix[index] = suffix[index + 1] + groups[index].count;
+  return suffix;
+}
+
+function buildFutureSetCapacity(groups) {
+  const suffix = new Array(groups.length + 1);
+  suffix[groups.length] = new Map();
+  for (let index = groups.length - 1; index >= 0; index--) {
+    const map = new Map(suffix[index + 1]);
+    const group = groups[index];
+    for (const [setId, counts] of group.setSuffixCounts || []) {
+      const capacity = Math.min(group.count, Number(counts[0] || 0));
+      if (capacity > 0) map.set(setId, (map.get(setId) || 0) + capacity);
+    }
+    suffix[index] = map;
+  }
+  return suffix;
+}
+
+function remainingSetCapacity(group, futureCapacity, start, picksLeft) {
+  const map = new Map(futureCapacity || []);
+  if (!group) return map;
+  for (const [setId, counts] of group.setSuffixCounts || []) {
+    const capacity = Math.min(picksLeft, Number(counts[Math.max(0, start)] || 0));
+    if (capacity > 0) map.set(setId, (map.get(setId) || 0) + capacity);
+  }
+  return map;
+}
+
+function setBonusUpperStats(setCounts, remainingCapacity, setsById, keys, remainingPicks) {
+  const valuesByKey = Object.fromEntries(keys.map((key) => [key, []]));
+  const ids = new Set([...setCounts.keys(), ...remainingCapacity.keys()]);
+
+  for (const setId of ids) {
+    const set = setsById[setId];
+    if (!set) continue;
+    const selected = Number(setCounts.get(setId) || 0);
+    const maximum = selected + Number(remainingCapacity.get(setId) || 0);
+    if (maximum <= 0) continue;
+
+    const best = Object.fromEntries(keys.map((key) => [key, 0]));
+    for (const [countText, bonus] of Object.entries(set.bonuses || {})) {
+      const count = Number(countText);
+      if (!Number.isFinite(count) || count < selected || count > maximum) continue;
+      for (const key of keys) best[key] = Math.max(best[key], Number(bonus?.[key] || 0));
+    }
+    for (const key of keys) if (best[key] > 0) valuesByKey[key].push(best[key]);
+  }
+
+  const maxPotentialSets = Math.max(0, setCounts.size + remainingPicks);
+  const result = {};
+  for (const key of keys) {
+    valuesByKey[key].sort((a, b) => b - a);
+    result[key] = valuesByKey[key].slice(0, maxPotentialSets).reduce((sum, value) => sum + value, 0);
+  }
+  return result;
+}
+
+function characterUpperStats(character) {
+  const points = Math.max(0, Number(character.characteristicPoints || 0));
+  const result = { vit: points };
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    result[element] = points + Math.max(0, Number(character.scrolled?.[element] || 0));
+  }
+  return result;
+}
+
+function fmUpperStats(groups, fmPolicy) {
+  let forgeableCount = 0;
+  for (const group of groups) if (FM_ELIGIBLE_SLOTS.has(group.id)) forgeableCount += group.count;
+  return {
+    spellDamagePct: forgeableCount * Math.max(0, Number(fmPolicy?.spellDamagePct || 0)),
+    critDamage: fmPolicy?.allowCritDamage ? forgeableCount * Math.max(0, Number(fmPolicy?.critDamageAmount || 0)) : 0
+  };
+}
+
+function sumInto(target, ...sources) {
+  for (const source of sources) addStats(target, source || {});
+  return target;
+}
+
+function canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper) {
+  for (const [key, minimum] of Object.entries(constraints || {})) {
     if (!Number.isFinite(minimum) || minimum <= 0) continue;
-    // Vitality may still be supplied by characteristic points, so don't prune it here.
-    if (key === 'vit') continue;
-    if (stat(stats, key) + Number(optimistic[key] || 0) < minimum) return false;
+    const possible = stat(rawStats, key)
+      + Number(remainingStatic?.[key] || 0)
+      + Number(setUpper?.[key] || 0)
+      + Number(charUpper?.[key] || 0)
+      + Number(fmUpper?.[key] || 0);
+    if (possible < minimum) return false;
   }
   return true;
 }
@@ -55,6 +211,21 @@ function insertTop(results, result, limit) {
   results.push(result);
   results.sort((a, b) => b.score - a.score);
   if (results.length > limit) results.length = limit;
+}
+
+function diagnosticsForGroups(groups) {
+  return groups.map((group) => ({
+    id: group.id,
+    count: group.count,
+    candidatesBefore: group.candidatesBefore,
+    candidates: group.candidates.length,
+    removed: group.removed || 0,
+    dominatedRemoved: group.dominatedRemoved || 0,
+    equivalentRemoved: group.equivalentRemoved || 0,
+    theoreticalChoicesBefore: group.theoreticalBefore.toString(),
+    theoreticalChoices: group.theoreticalAfter.toString(),
+    materializedChoices: 0
+  }));
 }
 
 export function optimizeBuild({
@@ -68,78 +239,233 @@ export function optimizeBuild({
   slotRules = SLOT_RULES,
   character = BASE_CHARACTER,
   scenario = {},
-  onProgress = null
+  onProgress = null,
+  shouldAbort = null
 }) {
-  const groups = buildGroups(items, slotRules);
+  const limit = Math.max(1, Number(topN || 1));
+  const relevant = relevantStatKeys({ items, selections, constraints });
+  const prepared = buildGroups(items, slotRules, relevant.keys, relevant.nonMonotoneKeys, constraints, selections, turnMode);
+  const groups = prepared.groups;
+  const groupDiagnostics = diagnosticsForGroups(groups);
+
+  if (prepared.impossible) {
+    return {
+      results: [],
+      diagnostics: {
+        visited: 0,
+        nodes: 0,
+        pruned: 0,
+        prunedConstraints: 0,
+        prunedScore: 0,
+        prunedSpecial: 0,
+        impossible: true,
+        aborted: false,
+        groups: groupDiagnostics
+      }
+    };
+  }
+
   const setsById = Object.fromEntries(sets.map((set) => [set.id, set]));
-  const optimistic = optimisticConstraintCaps(groups);
+  const futureStaticCaps = buildFutureCaps(groups, relevant.keys, 'staticCaps');
+  const futureObjectiveCaps = buildFutureCaps(groups, relevant.keys, 'objectiveCaps');
+  const futurePicks = buildFuturePicks(groups);
+  const futureSetCapacity = buildFutureSetCapacity(groups);
+  const charUpper = characterUpperStats(character);
+  const fmUpper = fmUpperStats(groups, fmPolicy);
   const results = [];
-  let visited = 0;
-  let pruned = 0;
+  const selectedItems = [];
+  const selectedIds = new Set();
+  const setCounts = new Map();
+  const selectedPassiveUpper = emptyStats();
+  const rawStats = emptyStats();
+  addStats(rawStats, character.baseStats || {});
 
   const elementValues = estimateElementValues(selections, {});
+  let nodes = 0;
+  let visited = 0;
+  let prunedConstraints = 0;
+  let prunedScore = 0;
+  let prunedSpecial = 0;
+  let rejectedConditions = 0;
+  let rejectedUnresolvedPassives = 0;
+  let aborted = false;
+  let selectedUnboundedPassives = 0;
 
-  function visit(groupIndex, selectedItems, rawStats) {
-    if (!canStillMeetConstraints(rawStats, constraints, optimistic[groupIndex])) {
-      pruned++;
+  const objectiveSuffixBounded = new Array(groups.length + 1).fill(true);
+  for (let index = groups.length - 1; index >= 0; index--) {
+    objectiveSuffixBounded[index] = objectiveSuffixBounded[index + 1] && groups[index].objectiveCaps.bounded;
+  }
+
+  function reportProgress() {
+    if (!onProgress || nodes % 5000 !== 0) return;
+    onProgress({
+      nodes,
+      visited,
+      pruned: prunedConstraints + prunedScore + prunedSpecial,
+      best: results[0]?.score || 0,
+      threshold: results.length >= limit ? results[results.length - 1].score : null
+    });
+  }
+
+  function checkAbort() {
+    if (!shouldAbort || nodes % 1024 !== 0) return false;
+    if (shouldAbort()) {
+      aborted = true;
+      return true;
+    }
+    return false;
+  }
+
+  function boundState(groupIndex, start, picksLeft) {
+    const group = groups[groupIndex] || null;
+    const remainingStatic = {};
+    const remainingObjective = {};
+    for (const key of relevant.keys) {
+      remainingStatic[key] = Number(futureStaticCaps[groupIndex + 1]?.[key] || 0)
+        + (group ? group.staticCaps.cap(key, start, picksLeft) : 0);
+      remainingObjective[key] = Number(futureObjectiveCaps[groupIndex + 1]?.[key] || 0)
+        + (group ? group.objectiveCaps.cap(key, start, picksLeft) : 0);
+    }
+
+    const remainingPicks = Number(futurePicks[groupIndex + 1] || 0) + picksLeft;
+    const remainingSets = remainingSetCapacity(group, futureSetCapacity[groupIndex + 1], start, picksLeft);
+    const setUpper = setBonusUpperStats(setCounts, remainingSets, setsById, relevant.keys, remainingPicks);
+
+    if (!canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper)) {
+      prunedConstraints++;
+      return false;
+    }
+
+    if (results.length >= limit && selectedUnboundedPassives === 0 && objectiveSuffixBounded[groupIndex]) {
+      const optimisticStats = emptyStats();
+      sumInto(optimisticStats, rawStats, remainingObjective, setUpper, charUpper, fmUpper, selectedPassiveUpper);
+      const upper = evaluateObjectiveUpperBound({ stats: optimisticStats, selections, turnMode }).score;
+      const threshold = results[results.length - 1].score;
+      if (Number.isFinite(upper) && upper <= threshold) {
+        prunedScore++;
+        return false;
+      }
+    }
+    return true;
+  }
+
+  function evaluateLeaf() {
+    visited++;
+    const statsWithSets = { ...rawStats };
+    const activeSets = applySetBonuses(statsWithSets, selectedItems, setsById);
+
+    const charResult = optimizeCharacteristics(statsWithSets, {
+      points: character.characteristicPoints,
+      scrolled: character.scrolled,
+      elementValues,
+      minimumVitality: constraints.vit || 0,
+      baseVitality: 0
+    });
+
+    if (!meetsConstraints(charResult.stats, constraints)) return;
+    if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) {
+      rejectedConditions++;
       return;
     }
 
-    if (groupIndex === groups.length) {
-      visited++;
-      const statsWithSets = { ...rawStats };
-      const activeSets = applySetBonuses(statsWithSets, selectedItems, setsById);
-
-      const charResult = optimizeCharacteristics(statsWithSets, {
-        points: character.characteristicPoints,
-        scrolled: character.scrolled,
-        elementValues,
-        minimumVitality: constraints.vit || 0,
-        baseVitality: 0
-      });
-
-      if (!meetsConstraints(charResult.stats, constraints)) return;
-      if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) return;
-
-      const fm = optimizeFm({
-        baseStats: charResult.stats,
-        items: selectedItems,
-        selections,
-        turnMode,
-        policy: fmPolicy,
-        scenario
-      });
-
-      if (fm.objective.unresolvedPassiveContexts?.length) return;
-      if (!meetsConstraints(fm.stats, constraints)) return;
-
-      insertTop(results, {
-        score: fm.objective.score,
-        perTurn: fm.objective.perTurn,
-        items: [...selectedItems],
-        stats: fm.stats,
-        characteristics: charResult.allocation,
-        fm: { critItems: fm.critItems, spellPctItems: fm.spellPctItems, assignments: fm.assignments },
-        activeSets
-      }, topN);
-
-      if (onProgress && visited % 1000 === 0) onProgress({ visited, pruned, best: results[0]?.score || 0 });
+    const fm = optimizeFm({
+      baseStats: charResult.stats,
+      items: selectedItems,
+      selections,
+      turnMode,
+      policy: fmPolicy,
+      scenario
+    });
+    if (!fm || fm.objective.unresolvedPassiveContexts?.length) {
+      rejectedUnresolvedPassives++;
       return;
     }
+    if (!meetsConstraints(fm.stats, constraints)) return;
+
+    insertTop(results, {
+      score: fm.objective.score,
+      perTurn: fm.objective.perTurn,
+      items: [...selectedItems],
+      stats: fm.stats,
+      characteristics: charResult.allocation,
+      fm: {
+        critItems: fm.critItems,
+        spellPctItems: fm.spellPctItems,
+        assignments: fm.assignments
+      },
+      activeSets
+    }, limit);
+  }
+
+  function chooseFromGroup(groupIndex, start, picksLeft) {
+    if (aborted) return;
+    nodes++;
+    reportProgress();
+    if (checkAbort()) return;
 
     const group = groups[groupIndex];
-    for (const choice of group.choices) {
-      const ids = new Set(selectedItems.map((item) => item.id));
-      if (choice.some((item) => ids.has(item.id))) continue;
-      if (!specialSlotRulesAreValid([...selectedItems, ...choice])) continue;
-      const nextStats = { ...rawStats };
-      for (const item of choice) addStats(nextStats, item.stats);
-      visit(groupIndex + 1, [...selectedItems, ...choice], nextStats);
+    if (picksLeft === 0) {
+      visitGroup(groupIndex + 1);
+      return;
+    }
+    if (!group || group.candidates.length - start < picksLeft) return;
+    if (!boundState(groupIndex, start, picksLeft)) return;
+
+    const lastStart = group.candidates.length - picksLeft;
+    for (let index = start; index <= lastStart && !aborted; index++) {
+      const item = group.candidates[index];
+      if (selectedIds.has(item.id)) continue;
+
+      selectedItems.push(item);
+      selectedIds.add(item.id);
+      addStats(rawStats, item.stats || {});
+      const passive = passiveUpperStats(item);
+      addStats(selectedPassiveUpper, passive.stats);
+      if (!passive.bounded) selectedUnboundedPassives++;
+      if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
+
+      if (specialSlotRulesAreValid(selectedItems)) chooseFromGroup(groupIndex, index + 1, picksLeft - 1);
+      else prunedSpecial++;
+
+      if (item.setId) {
+        const next = (setCounts.get(item.setId) || 1) - 1;
+        if (next <= 0) setCounts.delete(item.setId);
+        else setCounts.set(item.setId, next);
+      }
+      if (!passive.bounded) selectedUnboundedPassives--;
+      addStats(selectedPassiveUpper, passive.stats, -1);
+      addStats(rawStats, item.stats || {}, -1);
+      selectedIds.delete(item.id);
+      selectedItems.pop();
     }
   }
 
-  const initialStats = emptyStats();
-  addStats(initialStats, character.baseStats || {});
-  visit(0, [], initialStats);
-  return { results, diagnostics: { visited, pruned, groups: groups.map((g) => ({ id: g.id, choices: g.choices.length })) } };
+  function visitGroup(groupIndex) {
+    if (aborted) return;
+    if (groupIndex >= groups.length) {
+      evaluateLeaf();
+      return;
+    }
+    chooseFromGroup(groupIndex, 0, groups[groupIndex].count);
+  }
+
+  visitGroup(0);
+  const pruned = prunedConstraints + prunedScore + prunedSpecial;
+  return {
+    results,
+    diagnostics: {
+      visited,
+      nodes,
+      pruned,
+      prunedConstraints,
+      prunedScore,
+      prunedSpecial,
+      rejectedConditions,
+      rejectedUnresolvedPassives,
+      impossible: false,
+      aborted,
+      groups: groupDiagnostics,
+      searchOrder: groups.map((group) => group.id)
+    }
+  };
 }
