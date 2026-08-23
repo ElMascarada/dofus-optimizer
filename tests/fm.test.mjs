@@ -56,3 +56,34 @@ test('FM never applies to Dofus, trophies or companions', () => {
   assert.equal(result.assignments.find((entry) => entry.itemId === 'pet').type, 'none');
   assert.equal(result.critItems + result.spellPctItems, 1);
 });
+
+test('structural exos add +1 AP and +1 MP on two different items and consume two offensive FM slots', () => {
+  const result = optimizeFm({
+    baseStats: { earth: 1000, ap: 11, mp: 5 },
+    items: [
+      { id: 'hat', slot: 'hat', stats: {} },
+      { id: 'cape', slot: 'cape', stats: {} },
+      { id: 'ring', slot: 'ring', stats: {} },
+      { id: 'dofus', slot: 'dofus', stats: {} }
+    ],
+    selections: [{ enabled: true, weight: 1, spell: noCritSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: {
+      spellDamagePct: 3,
+      allowCritDamage: false,
+      critDamageAmount: 8,
+      structuralExos: true
+    }
+  });
+
+  assert.equal(result.stats.ap, 12);
+  assert.equal(result.stats.mp, 6);
+  assert.equal(result.structuralExos, 2);
+  assert.equal(result.spellPctItems, 1);
+  const ap = result.assignments.find((entry) => entry.type === 'exoAp');
+  const mp = result.assignments.find((entry) => entry.type === 'exoMp');
+  assert.ok(ap);
+  assert.ok(mp);
+  assert.notEqual(ap.itemId, mp.itemId);
+  assert.equal(result.assignments.find((entry) => entry.itemId === 'dofus').type, 'none');
+});
