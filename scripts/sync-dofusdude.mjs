@@ -11,10 +11,14 @@ async function getJson(url) {
   return response.json();
 }
 
+// This runs at build/sync time, never in the browser. We intentionally fetch all equipment
+// because level-200 builds can still use lower-level Dofus, trophies and companions.
+// The normalization step then keeps level-200 gear plus all Dofus/trophies/companions.
+const equipmentFields = 'effects,conditions,is_weapon,parent_set';
 const sources = {
-  equipment: `${BASE}/items/equipment/all`,
-  sets: `${BASE}/sets/all`,
-  mounts: `${BASE}/mounts/all`,
+  equipment: `${BASE}/items/equipment?page[size]=-1&fields[item]=${equipmentFields}`,
+  sets: `${BASE}/sets?page[size]=-1&fields[set]=effects,equipment_ids`,
+  mounts: `${BASE}/mounts?page[size]=-1&fields[mount]=effects`,
   elements: `${META}/elements`,
   version: `${META}/version`
 };
@@ -26,4 +30,4 @@ for (const [name, url] of Object.entries(sources)) {
   console.log(`Saved ${name}.json`);
 }
 
-console.log('Raw Dofusdude snapshot complete. Normalization/coverage is intentionally a separate step.');
+console.log('Raw Dofusdude snapshot complete. Run npm run normalize:data next.');
