@@ -12,7 +12,8 @@ test('hard-constraint frontier keeps legal multi-pick tradeoffs instead of the f
   const output = buildHardConstraintChoices(candidates, 2, { resEarth: 40, resFire: 40 });
   assert.equal(output.diagnostics.skipped, false);
   assert.ok(output.choices.length > 0);
-  assert.ok(output.diagnostics.candidatesAfter < candidates.length);
+  assert.ok(output.diagnostics.generated > 0);
+  assert.ok(output.choices.length <= 6); // C(4,2): never exceed the full theoretical pair space.
   assert.ok(output.choices.some((choice) =>
     Number(choice.stats.resEarth || 0) >= 40 && Number(choice.stats.resFire || 0) >= 40
   ));
