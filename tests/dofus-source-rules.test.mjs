@@ -39,12 +39,12 @@ test('Set bonus source condition becomes supported', () => {
   assert.equal(result.node.stat, 'setBonus');
 });
 
-test('Prysmaradite uses Dofus slot and stays uncertified while temporal effect is pending', () => {
+test('unmodeled Prysmaradite uses Dofus slot and stays uncertified while temporal effect is pending', () => {
   const elements = [];
   elements[1] = 'Critical';
   const item = normalizeSourceEquipment({
-    ankama_id: 22001,
-    name: 'Surpryz',
+    ankama_id: 22023,
+    name: 'Pryximite',
     level: 200,
     type: { name: 'Prysmaradite' },
     effects: [effect(1, 10), effect(1, 1, { active: true })]

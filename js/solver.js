@@ -1,7 +1,7 @@
 import { BASE_CHARACTER, SLOT_RULES } from './config.js';
-import { addStats, emptyStats, meetsConstraints, stat } from './stats.js';
+import { addStats, emptyStats, stat } from './stats.js';
 import { applySetBonuses } from './sets.js';
-import { estimateElementValues, evaluateObjectiveUpperBound } from './spells.js';
+import { estimateElementValues, evaluateObjectiveUpperBound, evaluateTurnConstraints } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { FM_ELIGIBLE_SLOTS, optimizeFm } from './fm.js';
 import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
@@ -19,7 +19,7 @@ function candidateHeuristic(item, constraints, selections, turnMode) {
   let constraintScore = 0;
   for (const [key, minimum] of Object.entries(constraints || {})) {
     if (!(minimum > 0)) continue;
-    constraintScore += Math.min(1, Math.max(0, stat(item.stats, key)) / minimum) * 10000;
+    constraintScore += Math.min(1, Math.max(0, stat(optimistic, key)) / minimum) * 10000;
   }
   const objective = evaluateObjectiveUpperBound({ stats: optimistic, selections, turnMode }).score;
   return constraintScore + (Number.isFinite(objective) ? objective : 0);
@@ -194,11 +194,11 @@ function sumInto(target, ...sources) {
   return target;
 }
 
-function canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper) {
+function canStillMeetConstraints(rawStats, constraints, remainingOptimistic, setUpper, charUpper, fmUpper) {
   for (const [key, minimum] of Object.entries(constraints || {})) {
     if (!Number.isFinite(minimum) || minimum <= 0) continue;
     const possible = stat(rawStats, key)
-      + Number(remainingStatic?.[key] || 0)
+      + Number(remainingOptimistic?.[key] || 0)
       + Number(setUpper?.[key] || 0)
       + Number(charUpper?.[key] || 0)
       + Number(fmUpper?.[key] || 0);
@@ -266,7 +266,6 @@ export function optimizeBuild({
   }
 
   const setsById = Object.fromEntries(sets.map((set) => [set.id, set]));
-  const futureStaticCaps = buildFutureCaps(groups, relevant.keys, 'staticCaps');
   const futureObjectiveCaps = buildFutureCaps(groups, relevant.keys, 'objectiveCaps');
   const futurePicks = buildFuturePicks(groups);
   const futureSetCapacity = buildFutureSetCapacity(groups);
@@ -318,11 +317,8 @@ export function optimizeBuild({
 
   function boundState(groupIndex, start, picksLeft) {
     const group = groups[groupIndex] || null;
-    const remainingStatic = {};
     const remainingObjective = {};
     for (const key of relevant.keys) {
-      remainingStatic[key] = Number(futureStaticCaps[groupIndex + 1]?.[key] || 0)
-        + (group ? group.staticCaps.cap(key, start, picksLeft) : 0);
       remainingObjective[key] = Number(futureObjectiveCaps[groupIndex + 1]?.[key] || 0)
         + (group ? group.objectiveCaps.cap(key, start, picksLeft) : 0);
     }
@@ -330,8 +326,10 @@ export function optimizeBuild({
     const remainingPicks = Number(futurePicks[groupIndex + 1] || 0) + picksLeft;
     const remainingSets = remainingSetCapacity(group, futureSetCapacity[groupIndex + 1], start, picksLeft);
     const setUpper = setBonusUpperStats(setCounts, remainingSets, setsById, relevant.keys, remainingPicks);
+    const optimisticConstraintStats = emptyStats();
+    sumInto(optimisticConstraintStats, rawStats, selectedPassiveUpper);
 
-    if (!canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper)) {
+    if (!canStillMeetConstraints(optimisticConstraintStats, constraints, remainingObjective, setUpper, charUpper, fmUpper)) {
       prunedConstraints++;
       return false;
     }
@@ -362,7 +360,9 @@ export function optimizeBuild({
       baseVitality: 0
     });
 
-    if (!meetsConstraints(charResult.stats, constraints)) return;
+    // Equipment conditions must remain static: a temporary combat passive can
+    // satisfy a requested turn constraint, but it must never make an otherwise
+    // illegal item equipable.
     if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) {
       rejectedConditions++;
       return;
@@ -380,13 +380,26 @@ export function optimizeBuild({
       rejectedUnresolvedPassives++;
       return;
     }
-    if (!meetsConstraints(fm.stats, constraints)) return;
+
+    const turnConstraints = evaluateTurnConstraints({
+      stats: fm.stats,
+      items: selectedItems,
+      constraints,
+      turnMode,
+      scenario
+    });
+    if (turnConstraints.unresolvedPassiveContexts.length) {
+      rejectedUnresolvedPassives++;
+      return;
+    }
+    if (!turnConstraints.meets) return;
 
     insertTop(results, {
       score: fm.objective.score,
       perTurn: fm.objective.perTurn,
       items: [...selectedItems],
       stats: fm.stats,
+      effectiveStatsByTurn: turnConstraints.perTurn,
       characteristics: charResult.allocation,
       fm: {
         critItems: fm.critItems,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluateObjective, evaluateObjectiveUpperBound, spellExpectedDamage } from '../js/spells.js';
+import { evaluateObjective, evaluateObjectiveUpperBound, evaluateTurnConstraints, spellExpectedDamage } from '../js/spells.js';
 
 const spell = { baseCritPct: 0, distance: 'melee', hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }] };
 
@@ -52,6 +52,51 @@ test('objective reports unresolved conditional passive context', () => {
   const item = { passives: [{ id: 'abyssal', rules: [{ trigger: { type: 'context_equals', key: 'enemyAdjacent', value: false }, stats: { mp: 1 } }] }] };
   const result = evaluateObjective({ stats: {}, items: [item], selections: [{ enabled: true, weight: 1, spell }], turnMode: 't1' });
   assert.deepEqual(result.unresolvedPassiveContexts, ['enemyAdjacent']);
+});
+
+test('hard constraints are checked against effective stats on every selected turn', () => {
+  const item = {
+    passives: [{
+      id: 'pryssion-matte',
+      rules: [{ trigger: { type: 'turn_in', turns: [1, 2, 3] }, stats: { ap: 1, finalDamagePct: -10 } }]
+    }]
+  };
+  const result = evaluateTurnConstraints({
+    stats: { ap: 11, mp: 6 },
+    items: [item],
+    constraints: { ap: 12, mp: 6 },
+    turnMode: 'sum'
+  });
+  assert.equal(result.meets, true);
+  assert.equal(result.perTurn[1].ap, 12);
+  assert.equal(result.perTurn[2].ap, 12);
+  assert.equal(result.perTurn[3].ap, 12);
+});
+
+test('a T1-only passive satisfies a T1 constraint but not a T1-T3 constraint', () => {
+  const item = {
+    passives: [{
+      id: 'prycipithon-matte',
+      rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 2 } }]
+    }]
+  };
+  const t1 = evaluateTurnConstraints({ stats: { ap: 10 }, items: [item], constraints: { ap: 12 }, turnMode: 't1' });
+  const sum = evaluateTurnConstraints({ stats: { ap: 10 }, items: [item], constraints: { ap: 12 }, turnMode: 'sum' });
+  assert.equal(t1.meets, true);
+  assert.equal(sum.meets, false);
+  assert.deepEqual(sum.deficitsByTurn, { 2: { ap: 2 }, 3: { ap: 2 } });
+});
+
+test('negative temporal stats are enforced by hard constraints', () => {
+  const item = {
+    passives: [{
+      id: 'prynyang',
+      rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { resEarth: -10, finalDamagePct: 10 } }]
+    }]
+  };
+  const result = evaluateTurnConstraints({ stats: { resEarth: 40 }, items: [item], constraints: { resEarth: 40 }, turnMode: 't1' });
+  assert.equal(result.meets, false);
+  assert.deepEqual(result.deficitsByTurn, { 1: { resEarth: 10 } });
 });
 
 test('branch-and-bound objective upper bound never falls below an achievable mixed-crit objective', () => {

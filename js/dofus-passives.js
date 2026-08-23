@@ -82,6 +82,86 @@ const ITEM_PASSIVE_RULES = new Map([
       { id: 'above-half-hp', trigger: { type: 'context_compare', key: 'hpPct', operator: 'gt', value: 50 }, stats: { finalDamagePct: 7 } },
       { id: 'at-or-below-half-hp', trigger: { type: 'context_compare', key: 'hpPct', operator: 'lte', value: 50 }, stats: { incomingDamageReductionPct: 20 } }
     ]
+  }],
+  [21996, {
+    id: 'pryssion-matte',
+    label: 'Pryssion Mate',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turns-1-to-3', trigger: { type: 'turn_in', turns: [1, 2, 3] }, stats: { ap: 1, finalDamagePct: -10 } }
+    ]
+  }],
+  [21997, {
+    id: 'pryssion-bright',
+    label: 'Pryssion Brillante',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turns-1-to-2', trigger: { type: 'turn_in', turns: [1, 2] }, stats: { ap: 2, finalDamagePct: -35 } }
+    ]
+  }],
+  [21998, {
+    id: 'pryssion-iridescent',
+    label: 'Pryssion Iridescente',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3, finalDamagePct: -50 } }
+    ]
+  }],
+  [22001, {
+    id: 'surpryz',
+    label: 'Surpryz',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { crit: 100 } },
+      { id: 'turn-2', trigger: { type: 'turn_in', turns: [2] }, stats: { crit: 35 } },
+      { id: 'turn-3', trigger: { type: 'turn_in', turns: [3] }, stats: { crit: 15 } }
+    ]
+  }],
+  [22004, {
+    id: 'prynyang',
+    label: 'Prynyang',
+    consumeDynamicEffects: true,
+    rules: [
+      {
+        id: 'turn-1',
+        trigger: { type: 'turn_in', turns: [1] },
+        stats: { finalDamagePct: 10, resEarth: -10, resFire: -10, resWater: -10, resAir: -10 }
+      },
+      {
+        id: 'turn-2',
+        trigger: { type: 'turn_in', turns: [2] },
+        stats: { finalDamagePct: 3, resEarth: 3, resFire: 3, resWater: 3, resAir: 3 }
+      },
+      {
+        id: 'turn-3',
+        trigger: { type: 'turn_in', turns: [3] },
+        stats: { finalDamagePct: -10, resEarth: 10, resFire: 10, resWater: 10, resAir: 10 }
+      }
+    ]
+  }],
+  [22011, {
+    id: 'prycipithon-matte',
+    label: 'Prycipithon Mate',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 2 } }
+    ]
+  }],
+  [22012, {
+    id: 'prycipithon-bright',
+    label: 'Prycipithon Brillante',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3, mp: -2 } }
+    ]
+  }],
+  [22013, {
+    id: 'prycipithon-iridescent',
+    label: 'Prycipithon Iridescente',
+    consumeDynamicEffects: true,
+    rules: [
+      { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 4, mp: -4 } }
+    ]
   }]
 ]);
 

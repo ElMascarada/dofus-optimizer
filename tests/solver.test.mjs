@@ -7,6 +7,18 @@ const selections = [{ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 1, 3: 1
 const fmPolicy = { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8 };
 const noPoints = { level: 200, characteristicPoints: 0, scrolled: {}, baseStats: {} };
 
+function passiveItem({ id, passiveId, rules, stats = {}, conditions = null }) {
+  return {
+    id,
+    name: id,
+    slot: 'dofus',
+    slotSubtype: 'prysmaradite',
+    stats,
+    conditions,
+    passives: [{ id: passiveId, rules }]
+  };
+}
+
 test('solver respects a hard resistance constraint and ranks damage', () => {
   const items = [
     { id: 'h1', name: 'Damage', slot: 'hat', stats: { earth: 100 } },
@@ -83,4 +95,78 @@ test('huge six-Dofus combination space is not materialized and dominance keeps t
   assert.equal(group.theoreticalChoicesBefore, '1422630723360');
   assert.equal(group.materializedChoices, 0);
   assert.equal(group.candidates, 6);
+});
+
+test('Pryssion can satisfy a 12 AP hard constraint on all three optimized turns', () => {
+  const pryssion = passiveItem({
+    id: 'pryssion',
+    passiveId: 'pryssion-matte',
+    rules: [{ trigger: { type: 'turn_in', turns: [1, 2, 3] }, stats: { ap: 1, finalDamagePct: -10 } }]
+  });
+  const damageOnly = { id: 'damage-only', name: 'damage-only', slot: 'dofus', stats: { earth: 500 } };
+  const output = optimizeBuild({
+    items: [damageOnly, pryssion],
+    sets: [],
+    selections,
+    constraints: { ap: 12 },
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: { ...noPoints, baseStats: { ap: 11 } },
+    turnMode: 'sum',
+    topN: 5
+  });
+
+  assert.equal(output.results.length, 1);
+  assert.equal(output.results[0].items[0].id, 'pryssion');
+  assert.equal(output.results[0].stats.ap, 11);
+  assert.equal(output.results[0].effectiveStatsByTurn[1].ap, 12);
+  assert.equal(output.results[0].effectiveStatsByTurn[2].ap, 12);
+  assert.equal(output.results[0].effectiveStatsByTurn[3].ap, 12);
+});
+
+test('Prycipithon opens a T1 AP target but not the same target across T1-T3', () => {
+  const prycipithon = passiveItem({
+    id: 'prycipithon',
+    passiveId: 'prycipithon-matte',
+    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 2 } }]
+  });
+  const common = {
+    items: [prycipithon],
+    sets: [],
+    selections,
+    constraints: { ap: 12 },
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: { ...noPoints, baseStats: { ap: 10 } },
+    topN: 1
+  };
+
+  const t1 = optimizeBuild({ ...common, turnMode: 't1' });
+  const sum = optimizeBuild({ ...common, turnMode: 'sum' });
+  assert.equal(t1.results.length, 1);
+  assert.equal(t1.results[0].effectiveStatsByTurn[1].ap, 12);
+  assert.equal(sum.results.length, 0);
+});
+
+test('temporary AP never bypasses a static equipment condition', () => {
+  const conditioned = passiveItem({
+    id: 'conditioned-pryssion',
+    passiveId: 'pryssion-matte',
+    conditions: { kind: 'condition', stat: 'ap', operator: 'gte', value: 12 },
+    rules: [{ trigger: { type: 'turn_in', turns: [1, 2, 3] }, stats: { ap: 1, finalDamagePct: -10 } }]
+  });
+  const output = optimizeBuild({
+    items: [conditioned],
+    sets: [],
+    selections,
+    constraints: { ap: 12 },
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: { ...noPoints, baseStats: { ap: 11 } },
+    turnMode: 'sum',
+    topN: 1
+  });
+
+  assert.equal(output.results.length, 0);
+  assert.equal(output.diagnostics.rejectedConditions, 1);
 });
