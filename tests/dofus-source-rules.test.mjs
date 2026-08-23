@@ -58,3 +58,17 @@ test('Nébuleux consumes its dynamic source effect and becomes certified with a 
   assert.equal(item.passives[0].id, 'nebulous-dream');
   assert.equal(item.source.recognizedPassiveEffects.length, 1);
 });
+
+test('unrecognized meta passive is explicitly flagged as temporal pending with diagnostics', () => {
+  const item = normalizeSourceEquipment({
+    ankama_id: 99999,
+    name: 'Dofus à passif inconnu',
+    level: 200,
+    type: { name: 'Dofus' },
+    effects: [{ type: { id: 77, is_active: false, is_meta: true, name: '-special spell-' }, formatted: 'Passif spécial' }]
+  }, []);
+  assert.equal(item.certification.temporalEffectsPending, true);
+  assert.equal(item.certification.certified, false);
+  assert.equal(item.source.pendingDynamicEffects[0].status, 'meta');
+  assert.equal(item.source.pendingDynamicEffects[0].name, '-special spell-');
+});
