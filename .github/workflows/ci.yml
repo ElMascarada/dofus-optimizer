@@ -22,6 +22,9 @@ jobs:
         run: npm test
       - name: Search-space profile
         run: node scripts/profile-real-space.mjs
+      - name: Hard-constraint Dofus frontier profile
+        run: node scripts/profile-dofus-hard.mjs
+        timeout-minutes: 1
       - name: Real snapshot solver smoke
         run: npm run smoke:real
         timeout-minutes: 1
