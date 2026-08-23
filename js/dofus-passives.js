@@ -139,6 +139,18 @@ const ITEM_PASSIVE_RULES = new Map([
       }
     ]
   }],
+  [22007, {
+    id: 'ratrapry',
+    label: 'Ratrapry',
+    consumeDynamicEffects: true,
+    rules: [
+      {
+        id: 'far-enemies-first-three-turns',
+        trigger: { type: 'turn_in', turns: [1, 2, 3] },
+        scaledStats: [{ stat: 'mp', contextKey: 'farEnemiesOver9', multiplier: 1, min: 0, max: 3 }]
+      }
+    ]
+  }],
   [22011, {
     id: 'prycipithon-matte',
     label: 'Prycipithon Mate',
@@ -161,6 +173,21 @@ const ITEM_PASSIVE_RULES = new Map([
     consumeDynamicEffects: true,
     rules: [
       { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 4, mp: -4 } }
+    ]
+  }],
+  [22023, {
+    id: 'pryximite',
+    label: 'Pryximite',
+    consumeDynamicEffects: true,
+    rules: [
+      {
+        id: 'near-enemies-t1',
+        trigger: { type: 'turn_in', turns: [1, 2, 3] },
+        scaledStats: [
+          { stat: 'meleeDamagePct', contextKey: 'pryximiteNearbyEnemiesStartT1', multiplier: 2, min: 0 },
+          { stat: 'meleeDamagePct', contextKey: 'pryximiteNearbyEnemiesEndT1', multiplier: 2, min: 0 }
+        ]
+      }
     ]
   }]
 ]);
