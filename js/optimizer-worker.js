@@ -1,3 +1,4 @@
+import { prefilterItems } from './candidate-prefilter.js';
 import { optimizeBuild } from './solver.js';
 
 // UI policy: these contextual Dofus passives are deliberately not simulated yet.
@@ -25,11 +26,15 @@ self.addEventListener('message', (event) => {
   const { requestId, payload } = event.data;
 
   try {
+    const scenario = scenarioForUi(payload?.scenario);
+    const prefilter = prefilterItems({ ...payload, scenario });
     const output = optimizeBuild({
       ...payload,
-      scenario: scenarioForUi(payload?.scenario),
+      items: prefilter.items,
+      scenario,
       onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
     });
+    output.diagnostics.prefilter = prefilter.diagnostics;
     self.postMessage({ type: 'result', requestId, output });
   } catch (error) {
     self.postMessage({
