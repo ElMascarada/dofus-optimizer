@@ -28,6 +28,18 @@ test('context triggers report missing scenario inputs instead of silently choosi
   assert.deepEqual(state.missingKeys, ['enemyAdjacent']);
 });
 
+test('an explicitly ignored contextual passive keeps base item stats and creates no unresolved context', () => {
+  const passive = {
+    id: 'deep-purple',
+    rules: [{ trigger: { type: 'always' }, scaledStats: [{ stat: 'finalDamagePct', contextKey: 'pourpreStacks', multiplier: 1, min: 0, max: 10 }] }]
+  };
+  const result = applyPassiveModifiers({ power: 80 }, [passive], { turn: 1, ignoredPassiveIds: ['deep-purple'] });
+  assert.equal(result.stats.power, 80);
+  assert.equal(result.stats.finalDamagePct, undefined);
+  assert.deepEqual(result.unresolved, []);
+  assert.deepEqual(result.ignored, [{ passiveId: 'deep-purple' }]);
+});
+
 test('scaled passive stats clamp context-provided stacks', () => {
   const passive = { id: 'purple', rules: [{ trigger: { type: 'always' }, scaledStats: [{ stat: 'finalDamagePct', contextKey: 'stacks', multiplier: 1, min: 0, max: 10 }] }] };
   assert.equal(applyPassiveModifiers({}, [passive], { turn: 1, stacks: 7 }).stats.finalDamagePct, 7);
