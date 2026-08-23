@@ -48,8 +48,8 @@
         <section class="panel">
           <h2>4. Contraintes</h2>
           <div class="form-grid">
-            <label class="field">PA min<input id="min-ap" type="number" min="0"></label>
-            <label class="field">PM min<input id="min-mp" type="number" min="0"></label>
+            <label class="field">PA permanent<input id="min-ap" type="number" value="12" readonly></label>
+            <label class="field">PM permanent<input id="min-mp" type="number" value="6" readonly></label>
             <label class="field">PO min<input id="min-range" type="number" min="0"></label>
             <label class="field">Vitalité min<input id="min-vit" type="number" min="0"></label>
             <label class="field">Res Terre %<input id="res-earth" type="number" min="0" max="50"></label>
@@ -57,6 +57,7 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
+          <p class="hint">Le stuff de base doit être exactement en 12 PA / 6 PM. Les bonus temporaires de combat restent calculés séparément.</p>
         </section>
 
         <section class="panel">
