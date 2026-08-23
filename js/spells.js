@@ -26,6 +26,7 @@ function scenarioContextForTurn(scenario = {}, turn = 1) {
   const shared = { ...scenario };
   delete shared.turns;
   delete shared.defaults;
+  delete shared.requiredApByTurn;
   return { ...(scenario.defaults || {}), ...shared, ...(scenario.turns?.[turn] || {}), turn };
 }
 
@@ -122,9 +123,7 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
   const deficitsByTurn = {};
   const requiredApByTurn = {};
   const unresolvedPassiveContexts = new Set();
-  const explicitApByTurn = constraints?.__requiredApByTurn || {};
-  const publicConstraints = { ...constraints };
-  delete publicConstraints.__requiredApByTurn;
+  const explicitApByTurn = scenario?.requiredApByTurn || {};
 
   for (const turn of selectedTurnsForMode(turnMode)) {
     const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
@@ -138,8 +137,8 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
     );
     requiredApByTurn[turn] = requiredAp;
     const turnConstraints = {
-      ...publicConstraints,
-      ap: Math.max(Math.max(0, Number(publicConstraints.ap || 0)), requiredAp)
+      ...constraints,
+      ap: Math.max(Math.max(0, Number(constraints.ap || 0)), requiredAp)
     };
     const deficits = constraintDeficits(turnResult.stats, turnConstraints);
     if (Object.keys(deficits).length) deficitsByTurn[turn] = deficits;
