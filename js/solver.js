@@ -14,8 +14,8 @@ import {
   theoreticalChoiceCount
 } from './search-space.js';
 
-function candidateHeuristic(item, constraints, selections, turnMode) {
-  const optimistic = optimisticItemStats(item, { includePassives: true }).stats;
+function candidateHeuristic(item, constraints, selections, turnMode, scenario) {
+  const optimistic = optimisticItemStats(item, { includePassives: true, turnMode, scenario }).stats;
   let constraintScore = 0;
   for (const [key, minimum] of Object.entries(constraints || {})) {
     if (!(minimum > 0)) continue;
@@ -38,7 +38,7 @@ function buildSetSuffixCounts(candidates) {
   return map;
 }
 
-function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode) {
+function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode, scenario) {
   const groups = [];
   let impossible = false;
 
@@ -64,13 +64,17 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
       groupCount: rule.count
     });
     const candidates = pruned.candidates
-      .map((item) => ({ item, heuristic: candidateHeuristic(item, constraints, selections, turnMode) }))
+      .map((item) => ({ item, heuristic: candidateHeuristic(item, constraints, selections, turnMode, scenario) }))
       .sort((a, b) => b.heuristic - a.heuristic || String(a.item.id).localeCompare(String(b.item.id)))
       .map((entry) => entry.item);
 
     if (candidates.length < rule.count) impossible = true;
     const staticCaps = buildSuffixCaps(candidates, rule.count, keys, { includePassives: false });
-    const objectiveCaps = buildSuffixCaps(candidates, rule.count, keys, { includePassives: true });
+    const objectiveCaps = buildSuffixCaps(candidates, rule.count, keys, {
+      includePassives: true,
+      turnMode,
+      scenario
+    });
 
     groups.push({
       ...rule,
@@ -244,7 +248,16 @@ export function optimizeBuild({
 }) {
   const limit = Math.max(1, Number(topN || 1));
   const relevant = relevantStatKeys({ items, selections, constraints });
-  const prepared = buildGroups(items, slotRules, relevant.keys, relevant.nonMonotoneKeys, constraints, selections, turnMode);
+  const prepared = buildGroups(
+    items,
+    slotRules,
+    relevant.keys,
+    relevant.nonMonotoneKeys,
+    constraints,
+    selections,
+    turnMode,
+    scenario
+  );
   const groups = prepared.groups;
   const groupDiagnostics = diagnosticsForGroups(groups);
 
@@ -432,7 +445,7 @@ export function optimizeBuild({
       selectedItems.push(item);
       selectedIds.add(item.id);
       addStats(rawStats, item.stats || {});
-      const passive = passiveUpperStats(item);
+      const passive = passiveUpperStats(item, { turnMode, scenario });
       addStats(selectedPassiveUpper, passive.stats);
       if (!passive.bounded) selectedUnboundedPassives++;
       if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
