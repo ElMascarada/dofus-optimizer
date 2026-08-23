@@ -15,6 +15,10 @@ const GENERIC_OFFENSE_KEYS = [
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
+const LEVEL_200_EQUIPMENT_SLOTS = new Set([
+  'hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield'
+]);
+
 const SLOT_LIMITS = Object.freeze({
   dofus: 22,
   ring: 20,
@@ -52,15 +56,23 @@ export function activeSpellElements(selections = []) {
   return [...elements];
 }
 
-function effectiveSearchConstraints(constraints = {}, scenario = {}) {
-  const requiredByTurn = Object.values(scenario?.requiredApByTurn || {})
+function optimizerItemIsEligible(item) {
+  if (!LEVEL_200_EQUIPMENT_SLOTS.has(item?.slot)) return true;
+  return Number(item?.level || 0) === 200;
+}
+
+function effectiveSearchConstraints(constraints = {}) {
+  // PA/PM in this phase describe the permanent equipment base only. A combo can
+  // require more AP during a turn, but temporary Prysmaradite/passive AP must not
+  // distort the permanent 12/6 candidate pool.
+  return { ...constraints };
+}
+
+function comboApTarget(scenario = {}) {
+  const values = Object.values(scenario?.requiredApByTurn || {})
     .map((value) => Number(value || 0))
     .filter(Number.isFinite);
-  const comboAp = requiredByTurn.length ? Math.max(...requiredByTurn) : 0;
-  return {
-    ...constraints,
-    ap: Math.max(Number(constraints?.ap || 0), comboAp)
-  };
+  return values.length ? Math.max(...values) : 0;
 }
 
 function positiveConstraintContribution(stats, constraints = {}) {
@@ -194,7 +206,12 @@ function buildRelevantSetPlans(sets, items, context, slotRules) {
       const bonusProfile = statsProfile(bonus, context);
       if (!combinedProfile.relevant && !bonusProfile.relevant) continue;
 
-      const score = (combinedProfile.score / count) + (bonusProfile.score * 0.8);
+      // Seed ranking intentionally rewards coherent set structures. In Dofus a
+      // strong 3/4-piece set, especially one whose bonus grants AP, is a much
+      // better starting point than four unrelated individually-good pieces.
+      const structuralBonus = count >= 3 ? 12000 + count * 3000 : count === 2 ? 5000 : 0;
+      const apBonus = Math.max(0, number(bonus, 'ap')) * 50000;
+      const score = combinedProfile.score + bonusProfile.score * 1.25 + structuralBonus + apBonus;
       if (!best || score > best.score) {
         best = {
           setId: set.id,
@@ -317,9 +334,10 @@ export function prefilterItems({
   maxRelevantSets = MAX_RELEVANT_SETS,
   constraintReservePerStat = CONSTRAINT_RESERVE_PER_STAT
 } = {}) {
+  const eligibleItems = (items || []).filter(optimizerItemIsEligible);
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
-  const searchConstraints = effectiveSearchConstraints(constraints, scenario);
+  const searchConstraints = effectiveSearchConstraints(constraints);
   const context = {
     targetElement,
     constraints: searchConstraints,
@@ -332,12 +350,12 @@ export function prefilterItems({
     maxRelevantSets: Math.max(1, Number(maxRelevantSets || MAX_RELEVANT_SETS)),
     constraintReservePerStat: Math.max(1, Number(constraintReservePerStat || CONSTRAINT_RESERVE_PER_STAT))
   };
-  context.relevantSetPlans = buildRelevantSetPlans(sets, items, context, slotRules);
+  context.relevantSetPlans = buildRelevantSetPlans(sets, eligibleItems, context, slotRules);
 
   const output = [];
   const slots = [];
   for (const rule of slotRules || SLOT_RULES) {
-    const result = shortlistSlot(items, rule, context);
+    const result = shortlistSlot(eligibleItems, rule, context);
     output.push(...result.items);
     slots.push({
       id: rule.id,
@@ -351,7 +369,13 @@ export function prefilterItems({
   const topSetPlans = [...context.relevantSetPlans.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, context.maxRelevantSets)
-    .map((plan) => ({ setId: plan.setId, name: plan.name, targetCount: plan.targetCount }));
+    .map((plan) => ({
+      setId: plan.setId,
+      name: plan.name,
+      targetCount: plan.targetCount,
+      score: plan.score,
+      memberIds: [...plan.memberIds]
+    }));
 
   return {
     items: output,
@@ -359,7 +383,9 @@ export function prefilterItems({
       mode: targetElement ? 'mono-element' : 'multi-element',
       targetElement,
       apTarget: searchConstraints.ap || 0,
+      comboApTarget: comboApTarget(scenario),
       before: items.length,
+      afterLevelFilter: eligibleItems.length,
       after: output.length,
       relevantSets: context.relevantSetPlans.size,
       topSetPlans,
