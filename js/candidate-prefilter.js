@@ -53,6 +53,17 @@ export function activeSpellElements(selections = []) {
   return [...elements];
 }
 
+function effectiveSearchConstraints(constraints = {}, scenario = {}) {
+  const requiredByTurn = Object.values(scenario?.requiredApByTurn || {})
+    .map((value) => Number(value || 0))
+    .filter(Number.isFinite);
+  const comboAp = requiredByTurn.length ? Math.max(...requiredByTurn) : 0;
+  return {
+    ...constraints,
+    ap: Math.max(Number(constraints?.ap || 0), comboAp)
+  };
+}
+
 function positiveConstraintContribution(stats, constraints = {}) {
   let score = 0;
   for (const [key, minimumRaw] of Object.entries(constraints || {})) {
@@ -233,9 +244,10 @@ export function prefilterItems({
 } = {}) {
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
+  const searchConstraints = effectiveSearchConstraints(constraints, scenario);
   const context = {
     targetElement,
-    constraints,
+    constraints: searchConstraints,
     selections,
     turnMode,
     scenario,
@@ -262,6 +274,7 @@ export function prefilterItems({
     diagnostics: {
       mode: targetElement ? 'mono-element' : 'multi-element',
       targetElement,
+      apTarget: searchConstraints.ap || 0,
       before: items.length,
       after: output.length,
       relevantSets: context.relevantSetScores.size,
