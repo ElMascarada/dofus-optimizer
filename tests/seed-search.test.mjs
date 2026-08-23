@@ -88,3 +88,21 @@ test('seed ranking sees activated set bonuses so an individually weak piece can 
   assert.ok(ids.includes('set-cape'));
   assert.equal(output.results[0].score, 270);
 });
+
+test('seed search can complete an exact six-pick dynamic group', () => {
+  const candidates = Array.from({ length: 6 }, (_, index) => ({
+    id: `d-${index}`,
+    slot: 'dofus',
+    stats: { power: 100 - index }
+  }));
+  const output = findSeedResults({
+    groups: [{ id: 'dofus', count: 6, dynamic: true, candidates }],
+    selections,
+    turnMode: 'sum',
+    evaluateComplete: exactEvaluator(),
+    resultLimit: 1
+  });
+  assert.equal(output.results.length, 1);
+  assert.equal(output.results[0].items.length, 6);
+  assert.deepEqual(output.results[0].items.map((item) => item.id), candidates.map((item) => item.id));
+});
