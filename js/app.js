@@ -1,6 +1,13 @@
 import { APP_VERSION, DEFAULT_CONSTRAINTS, DEFAULT_FM, TURN_MODES } from './config.js';
-import { loadDofusData } from './data-loader.js';
-import { SAMPLE_SPELLS } from './sample-data.js';
+import { loadDofusData, loadSpellData } from './data-loader.js';
+import {
+  castCap,
+  defaultDistance,
+  distanceOptions,
+  requiredApByTurn,
+  spellElementLabel,
+  spellsForBreed
+} from './spell-selection.js';
 
 const $ = (selector) => document.querySelector(selector);
 const spellList = $('#spell-list');
@@ -8,37 +15,68 @@ const results = $('#results');
 const diagnostics = $('#diagnostics');
 const optimizeButton = $('#optimize');
 const dataStatus = $('#data-status');
+const breedSelect = $('#breed-select');
 
 let dataset = null;
+let spellData = null;
+let visibleSpells = [];
 let worker = null;
 let activeRequestId = 0;
 
+function formatDistance(value) {
+  return value === 'melee' ? 'Mêlée' : 'Distance';
+}
+
 function renderSpellRows() {
-  spellList.innerHTML = SAMPLE_SPELLS.map((spell, index) => `
-    <div class="spell-row" data-spell-id="${spell.id}">
-      <label class="check"><input type="checkbox" class="spell-enabled" ${index < 2 ? 'checked' : ''}> <span>${spell.name}</span></label>
-      <label>Poids <input class="spell-weight" type="number" min="0" step="0.1" value="${index === 0 ? 1 : 0.7}"></label>
-      <label>T1 <input class="cast-t1" type="number" min="0" max="6" value="1"></label>
-      <label>T2 <input class="cast-t2" type="number" min="0" max="6" value="1"></label>
-      <label>T3 <input class="cast-t3" type="number" min="0" max="6" value="1"></label>
-    </div>
-  `).join('');
+  if (!spellData || !breedSelect.value) {
+    visibleSpells = [];
+    spellList.innerHTML = '<div class="empty">Sélectionne une classe.</div>';
+    return;
+  }
+
+  visibleSpells = spellsForBreed(spellData, breedSelect.value);
+  spellList.innerHTML = visibleSpells.map((spell) => {
+    const options = distanceOptions(spell);
+    const fixedDistance = defaultDistance(spell);
+    const cap = castCap(spell);
+    const distanceControl = fixedDistance
+      ? `<span class="spell-meta">${formatDistance(fixedDistance)}</span>`
+      : `<label>Mode <select class="spell-distance"><option value="">Choisir</option><option value="melee">Mêlée</option><option value="ranged">Distance</option></select></label>`;
+    return `
+      <div class="spell-row" data-spell-id="${spell.id}">
+        <label class="check"><input type="checkbox" class="spell-enabled"> <span>${spell.name}</span></label>
+        <div class="spell-facts"><span>${spell.apCost} PA</span><span>${spell.baseCritPct}% crit</span><span>${spellElementLabel(spell)}</span><span>PO ${spell.minRange}–${spell.maxRange}</span>${distanceControl}</div>
+        <label>Poids <input class="spell-weight" type="number" min="0" step="0.1" value="1"></label>
+        <label>T1 <input class="cast-t1" type="number" min="0" max="${cap}" value="1"></label>
+        <label>T2 <input class="cast-t2" type="number" min="0" max="${cap}" value="1"></label>
+        <label>T3 <input class="cast-t3" type="number" min="0" max="${cap}" value="1"></label>
+      </div>
+    `;
+  }).join('') || '<div class="empty">Aucun sort offensif certifié pour cette classe.</div>';
 }
 
 function readSelections() {
-  return [...document.querySelectorAll('.spell-row')].map((row) => {
-    const spell = SAMPLE_SPELLS.find((s) => s.id === row.dataset.spellId);
-    return {
-      spell,
-      enabled: row.querySelector('.spell-enabled').checked,
-      weight: Number(row.querySelector('.spell-weight').value || 0),
+  const selections = [];
+  const missingDistance = [];
+  for (const row of document.querySelectorAll('.spell-row')) {
+    const sourceSpell = visibleSpells.find((spell) => spell.id === row.dataset.spellId);
+    if (!sourceSpell) continue;
+    const enabled = row.querySelector('.spell-enabled').checked;
+    const fixedDistance = defaultDistance(sourceSpell);
+    const distance = fixedDistance || row.querySelector('.spell-distance')?.value || null;
+    if (enabled && !distance) missingDistance.push(sourceSpell.name);
+    selections.push({
+      spell: { ...sourceSpell, distance: distance || 'ranged' },
+      enabled,
+      weight: Math.max(0, Number(row.querySelector('.spell-weight').value || 0)),
       casts: {
-        1: Number(row.querySelector('.cast-t1').value || 0),
-        2: Number(row.querySelector('.cast-t2').value || 0),
-        3: Number(row.querySelector('.cast-t3').value || 0)
+        1: Math.max(0, Number(row.querySelector('.cast-t1').value || 0)),
+        2: Math.max(0, Number(row.querySelector('.cast-t2').value || 0)),
+        3: Math.max(0, Number(row.querySelector('.cast-t3').value || 0))
       }
-    };
-  });
+    });
+  }
+  return { selections, missingDistance };
 }
 
 function readNumber(id) {
@@ -116,7 +154,7 @@ function renderResult(build, rank) {
 
 function setIdleState() {
   worker = null;
-  optimizeButton.disabled = !dataset;
+  optimizeButton.disabled = !(dataset && spellData);
   optimizeButton.textContent = 'Optimiser le stuff';
 }
 
@@ -150,7 +188,7 @@ function handleWorkerMessage(event, requestId) {
   const output = message.output;
   results.innerHTML = output.results.length
     ? output.results.map((build, index) => renderResult(build, index + 1)).join('')
-    : '<div class="empty">Aucun build certifié ne satisfait ces contraintes. Les passifs contextuels sans contexte renseigné sont volontairement écartés.</div>';
+    : '<div class="empty">Aucun build certifié ne satisfait ces contraintes et ce combo de sorts.</div>';
   diagnostics.textContent = `${output.diagnostics.visited.toLocaleString('fr-FR')} builds complets · ${output.diagnostics.nodes.toLocaleString('fr-FR')} nœuds · ${output.diagnostics.pruned.toLocaleString('fr-FR')} branches coupées`;
   setIdleState();
 }
@@ -160,14 +198,21 @@ function runSolver() {
     stopSolver();
     return;
   }
-  if (!dataset) return;
+  if (!dataset || !spellData) return;
 
-  const selections = readSelections();
+  const selectionResult = readSelections();
+  const selections = selectionResult.selections;
   if (!selections.some((selection) => selection.enabled)) {
     results.innerHTML = '<div class="empty">Active au moins un sort à optimiser.</div>';
     return;
   }
+  if (selectionResult.missingDistance.length) {
+    results.innerHTML = `<div class="empty">Choisis Mêlée ou Distance pour : ${selectionResult.missingDistance.join(', ')}.</div>`;
+    return;
+  }
 
+  const constraints = readConstraints();
+  constraints.__requiredApByTurn = requiredApByTurn(selections);
   const requestId = ++activeRequestId;
   worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
   worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
@@ -178,9 +223,10 @@ function runSolver() {
     setIdleState();
   });
 
+  const ap = constraints.__requiredApByTurn;
   optimizeButton.textContent = 'Arrêter le calcul';
-  results.innerHTML = '<div class="empty">Recherche exacte en cours sur la base certifiée…</div>';
-  diagnostics.textContent = 'Préparation de l’espace de recherche…';
+  results.innerHTML = '<div class="empty">Recherche exacte en cours sur les équipements et sorts certifiés…</div>';
+  diagnostics.textContent = `Combo demandé : ${ap[1]} PA T1 · ${ap[2]} PA T2 · ${ap[3]} PA T3`;
 
   worker.postMessage({
     type: 'optimize',
@@ -189,7 +235,7 @@ function runSolver() {
       items: dataset.items,
       sets: dataset.sets,
       selections,
-      constraints: readConstraints(),
+      constraints,
       fmPolicy: {
         spellDamagePct: readNumber('fm-spell'),
         allowCritDamage: $('#fm-crit').checked,
@@ -220,27 +266,45 @@ function initDefaults() {
   $('#turn-mode').value = 'sum';
 }
 
+function initBreedSelect() {
+  breedSelect.innerHTML = spellData.breeds.map((breed) => `<option value="${breed.id}">${breed.name} · ${breed.spellIds.length} sorts</option>`).join('');
+  breedSelect.disabled = false;
+  breedSelect.addEventListener('change', () => {
+    if (worker) stopSolver();
+    renderSpellRows();
+    results.innerHTML = '<div class="empty">Sélectionne un ou plusieurs sorts puis lance l’optimisation.</div>';
+    diagnostics.textContent = '';
+  });
+  renderSpellRows();
+}
+
 async function initData() {
   optimizeButton.disabled = true;
+  breedSelect.disabled = true;
   $('#version').textContent = `V${APP_VERSION} · chargement…`;
-  dataStatus.textContent = 'Chargement de la base certifiée…';
+  dataStatus.textContent = 'Chargement des équipements et sorts certifiés…';
   try {
-    dataset = await loadDofusData();
-    const gameVersion = dataset.gameVersion?.version || 'inconnue';
-    $('#version').textContent = `V${APP_VERSION} · Dofus ${gameVersion}`;
-    dataStatus.textContent = `${dataset.items.length.toLocaleString('fr-FR')} équipements certifiés · ${dataset.sets.length.toLocaleString('fr-FR')} panoplies · calcul 100% local`;
-    results.innerHTML = '<div class="empty">Base réelle chargée. Configure les contraintes puis lance l’optimisation.</div>';
+    [dataset, spellData] = await Promise.all([loadDofusData(), loadSpellData()]);
+    const equipmentVersion = dataset.gameVersion?.version || 'inconnue';
+    const spellVersion = spellData.gameVersion?.version || 'inconnue';
+    if (equipmentVersion !== spellVersion) throw new Error(`Versions de données incohérentes : équipements ${equipmentVersion}, sorts ${spellVersion}.`);
+    $('#version').textContent = `V${APP_VERSION} · Dofus ${equipmentVersion}`;
+    dataStatus.textContent = `${dataset.items.length.toLocaleString('fr-FR')} équipements · ${dataset.sets.length.toLocaleString('fr-FR')} panoplies · ${spellData.spells.length.toLocaleString('fr-FR')} sorts offensifs certifiés · calcul 100% local`;
+    initBreedSelect();
+    results.innerHTML = '<div class="empty">Bases réelles chargées. Choisis ta classe et tes sorts.</div>';
     optimizeButton.disabled = false;
   } catch (error) {
     dataset = null;
+    spellData = null;
     $('#version').textContent = `V${APP_VERSION} · données indisponibles`;
     dataStatus.textContent = error instanceof Error ? error.message : String(error);
-    results.innerHTML = '<div class="empty">Impossible de charger la base certifiée.</div>';
+    spellList.innerHTML = '<div class="empty">Impossible de charger le catalogue certifié.</div>';
+    results.innerHTML = '<div class="empty">Impossible de charger les bases certifiées.</div>';
     optimizeButton.disabled = true;
+    breedSelect.disabled = true;
   }
 }
 
-renderSpellRows();
 initDefaults();
 optimizeButton.addEventListener('click', runSolver);
 initData();
