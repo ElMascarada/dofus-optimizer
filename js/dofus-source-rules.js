@@ -15,7 +15,9 @@ const ELEMENT_ALIASES = new Map([
 ]);
 
 const IGNORED_EFFECT_NAMES = new Set([
+  'Exchangeable:',
   'Exchangeable::',
+  'Title:',
   'Emote',
   'Hunting weapon',
   'Linked to the character',
