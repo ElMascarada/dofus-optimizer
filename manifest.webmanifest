@@ -1,0 +1,8 @@
+{
+  "name": "Dofus Optimizer",
+  "short_name": "Optimizer",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#090b0e",
+  "theme_color": "#0b0d10"
+}

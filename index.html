@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d10">
+  <title>Dofus Optimizer</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div><span class="eyebrow">BUILD SOLVER</span><h1>Dofus Optimizer</h1><p>Trouver le meilleur stuff sous contraintes, pas simplement additionner des stats.</p></div>
+    <span id="version" class="pill"></span>
+  </header>
+
+  <main>
+    <section class="panel intro">
+      <div><strong>Prototype moteur</strong><p>Le dataset actuel est volontairement réduit. L'architecture de calcul est déjà celle du futur outil complet.</p></div>
+      <span class="status">Calcul local</span>
+    </section>
+
+    <div class="layout">
+      <aside class="controls">
+        <section class="panel">
+          <h2>1. Sorts à optimiser</h2>
+          <div id="spell-list"></div>
+        </section>
+
+        <section class="panel">
+          <h2>2. Temporalité</h2>
+          <label class="field">Objectif de tours<select id="turn-mode"></select></label>
+        </section>
+
+        <section class="panel">
+          <h2>3. Contraintes</h2>
+          <div class="form-grid">
+            <label class="field">PA min<input id="min-ap" type="number" min="0"></label>
+            <label class="field">PM min<input id="min-mp" type="number" min="0"></label>
+            <label class="field">PO min<input id="min-range" type="number" min="0"></label>
+            <label class="field">Vitalité min<input id="min-vit" type="number" min="0"></label>
+            <label class="field">Res Terre %<input id="res-earth" type="number" min="0" max="50"></label>
+            <label class="field">Res Feu %<input id="res-fire" type="number" min="0" max="50"></label>
+            <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
+            <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
+          </div>
+        </section>
+
+        <section class="panel">
+          <h2>4. FM offensive</h2>
+          <label class="field">% Do sorts par item
+            <select id="fm-spell"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+          </label>
+          <label class="toggle"><input id="fm-crit" type="checkbox"><span>Autoriser +8 Do Crit si l'item n'en possède pas</span></label>
+          <p class="hint">Le moteur compare lui-même les deux options selon les sorts sélectionnés.</p>
+        </section>
+
+        <button id="optimize" class="primary">Optimiser le stuff</button>
+        <p id="diagnostics" class="diagnostics"></p>
+      </aside>
+
+      <section class="output">
+        <div class="section-title"><div><span class="eyebrow">RÉSULTATS</span><h2>Top builds</h2></div><span class="pill">Top 10</span></div>
+        <div id="results"></div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="js/app.js"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
+</body>
+</html>
