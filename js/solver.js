@@ -337,8 +337,22 @@ function canStillMeetConstraints(rawStats, constraints, remainingStatic, setUppe
   return true;
 }
 
+function resultSignature(result) {
+  return (result?.items || [])
+    .map((item) => String(item?.id ?? ''))
+    .sort()
+    .join('|');
+}
+
 function insertTop(results, result, limit) {
-  results.push(result);
+  if (!result) return;
+  const signature = resultSignature(result);
+  const existingIndex = results.findIndex((entry) => resultSignature(entry) === signature);
+  if (existingIndex >= 0) {
+    if (Number(result.score || 0) > Number(results[existingIndex].score || 0)) results[existingIndex] = result;
+  } else {
+    results.push(result);
+  }
   results.sort((a, b) => b.score - a.score);
   if (results.length > limit) results.length = limit;
 }
