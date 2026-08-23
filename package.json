@@ -1,11 +1,12 @@
 {
   "name": "dofus-optimizer",
-  "version": "0.2.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
     "check": "node --check js/*.js && node --check scripts/*.mjs",
+    "smoke:real": "node scripts/smoke-real-solver.mjs",
     "sync:data": "node scripts/sync-dofusdude.mjs",
     "normalize:data": "node scripts/normalize-dofusdude.mjs",
     "sync:normalize": "npm run sync:data && npm run normalize:data"
