@@ -7,6 +7,7 @@ import { normalizeSourceEquipment, normalizeSourceMount, normalizeSourceSet } fr
 import {
   collectUnknownSlotTypes,
   equipmentForCoverage,
+  isInternalOrNonPlayerItem,
   isSolverSafeSet,
   selectSnapshotItems,
   sourceGeneratedAt
@@ -98,7 +99,14 @@ report.sets.uncertified = sets.length - solverSafeSets.length;
 report.items.ignoredEffects = reportItems.reduce((sum, item) => sum + (item.source?.ignoredEffects?.length || 0), 0) + sets.reduce((sum, set) => sum + (set.source?.ignoredEffects || 0), 0);
 report.items.activeEffectNames = effectNamesByStatus(reportItems, 'active');
 report.items.metaEffectNames = effectNamesByStatus(reportItems, 'meta');
-report.items.temporalPending = reportItems.filter((item) => item.certification?.temporalEffectsPending).map((item) => ({ name: item.name, typeName: item.typeName, slot: item.slot }));
+report.items.temporalPending = reportItems.filter((item) => item.certification?.temporalEffectsPending).map((item) => ({
+  name: item.name,
+  ankamaId: item.ankamaId,
+  typeName: item.typeName,
+  slot: item.slot,
+  effects: item.source?.pendingDynamicEffects || []
+}));
+report.items.excludedInternalOrNonPlayer = allEquipment.filter(isInternalOrNonPlayerItem).map((item) => ({ name: item.name, ankamaId: item.ankamaId, typeName: item.typeName }));
 report.items.recognizedPassives = reportItems.filter((item) => item.passives?.length).map((item) => ({ name: item.name, ankamaId: item.ankamaId, passives: item.passives.map((passive) => passive.id) }));
 report.items.snapshotBySlot = bySlot(certifiedItems);
 report.sets.uncertifiedNames = sets.filter((set) => !isSolverSafeSet(set)).map((set) => set.name);
@@ -143,6 +151,7 @@ const markdown = [
   `- Meta effects: ${report.items.metaEffects}`,
   `- Explicitly ignored non-combat metadata: ${report.items.ignoredEffects || 0}`,
   `- Items with unmapped conditions: ${report.items.unmappedConditions}`,
+  `- Explicitly excluded internal/non-player items: ${report.items.excludedInternalOrNonPlayer.length}`,
   `- Sets: ${report.sets.certified}/${report.sets.total} certified`,
   '',
   '## Slots',
@@ -175,7 +184,14 @@ const markdown = [
   '',
   '## Temporal items pending',
   '',
-  ...(report.items.temporalPending.length ? report.items.temporalPending.map((item) => `- ${item.name} (${item.typeName || item.slot || 'unknown'})`) : ['- none']),
+  ...(report.items.temporalPending.length ? report.items.temporalPending.map((item) => {
+    const effects = (item.effects || []).map((effect) => `${effect.status}:${effect.name || effect.formatted || 'UNKNOWN'}`).join(', ');
+    return `- ${item.name} (#${item.ankamaId}; ${item.typeName || item.slot || 'unknown'}): ${effects || 'dynamic effect'}`;
+  }) : ['- none']),
+  '',
+  '## Excluded internal/non-player items',
+  '',
+  ...(report.items.excludedInternalOrNonPlayer.length ? report.items.excludedInternalOrNonPlayer.map((item) => `- ${item.name} (#${item.ankamaId}; ${item.typeName || 'unknown'})`) : ['- none']),
   '',
   '## Uncertified sets',
   '',
