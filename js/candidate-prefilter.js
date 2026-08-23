@@ -12,8 +12,7 @@ const DAMAGE_STAT_BY_ELEMENT = {
 
 const GENERIC_OFFENSE_KEYS = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
-  'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3',
-  'meleeDamagePct', 'rangedDamagePct'
+  'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
 // The exact solver is still responsible for the final ranking. These limits only
@@ -169,8 +168,8 @@ function chooseSetMembers(profiles, count, capacities) {
 }
 
 // Score each useful set at the tier where item stats + the exact tier bonus form
-// the strongest coherent block. This catches both mono-element sets (e.g. large
-// Fire on every piece) and Do Crit sets where the payoff lives partly in the bonus.
+// the strongest coherent block. This catches both mono-element sets and Do Crit
+// sets where the payoff lives partly in the set bonus.
 function buildRelevantSetPlans(sets, items, context, slotRules) {
   const profilesBySet = new Map();
   for (const item of items || []) {
@@ -225,9 +224,6 @@ function itemProfile(item, context) {
   const setRelevant = Boolean(setPlan);
   const plannedSetPiece = Boolean(setPlan?.memberIds?.has(item.id));
 
-  // In mono-element mode, an item must contribute to the chosen element,
-  // provide generic damage / a hard constraint, or belong to a set whose
-  // coherent tier is strong enough to matter. Pure off-element pieces vanish.
   const monoRelevant = !context.targetElement
     || base.target > 0
     || base.generic > 0
@@ -257,10 +253,10 @@ function reserveConstraintSpecialists(profiles, constraints, selectedIds) {
   }
 }
 
-function reserveRelevantSetPieces(profiles, relevantSetPlans, selectedIds) {
+function reserveRelevantSetPieces(profiles, relevantSetPlans, selectedIds, maxRelevantSets) {
   const bestPlans = [...relevantSetPlans.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RELEVANT_SETS);
+    .slice(0, maxRelevantSets);
 
   for (const plan of bestPlans) {
     for (const profile of profiles) {
@@ -280,8 +276,6 @@ function shortlistSlot(items, rule, context) {
     ? allProfiles.filter((profile) => profile.monoRelevant)
     : allProfiles;
 
-  // Never make a mandatory slot impossible only because the mono filter was
-  // too strict. Fall back to the best remaining pieces solely to fill the slot.
   const eligible = [...monoProfiles];
   if (eligible.length < rule.count) {
     for (const profile of allProfiles) {
@@ -291,7 +285,7 @@ function shortlistSlot(items, rule, context) {
     }
   }
 
-  const cap = Math.max(rule.count, SLOT_LIMITS[rule.id] || 18);
+  const cap = Math.max(rule.count, context.slotLimits[rule.id] || 18);
   if (eligible.length <= cap) {
     return {
       items: eligible.map((profile) => profile.item),
@@ -303,15 +297,13 @@ function shortlistSlot(items, rule, context) {
 
   const selectedIds = new Set();
   reserveConstraintSpecialists(eligible, context.constraints, selectedIds);
-  reserveRelevantSetPieces(eligible, context.relevantSetPlans, selectedIds);
+  reserveRelevantSetPieces(eligible, context.relevantSetPlans, selectedIds, context.maxRelevantSets);
 
   for (const profile of eligible) {
     if (selectedIds.size >= cap) break;
     selectedIds.add(profile.item.id);
   }
 
-  // A small overflow is preferable to destroying a coherent high-value set.
-  // In practice the reserve is bounded by the top six set plans.
   const shortlisted = eligible.filter((profile) => selectedIds.has(profile.item.id));
   return {
     items: shortlisted.map((profile) => profile.item),
@@ -328,7 +320,9 @@ export function prefilterItems({
   constraints = {},
   turnMode = 'sum',
   scenario = {},
-  slotRules = SLOT_RULES
+  slotRules = SLOT_RULES,
+  slotLimits = SLOT_LIMITS,
+  maxRelevantSets = MAX_RELEVANT_SETS
 } = {}) {
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
@@ -340,7 +334,9 @@ export function prefilterItems({
     turnMode,
     scenario,
     baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
-    relevantSetPlans: null
+    relevantSetPlans: null,
+    slotLimits: { ...SLOT_LIMITS, ...(slotLimits || {}) },
+    maxRelevantSets: Math.max(1, Number(maxRelevantSets || MAX_RELEVANT_SETS))
   };
   context.relevantSetPlans = buildRelevantSetPlans(sets, items, context, slotRules);
 
@@ -360,7 +356,7 @@ export function prefilterItems({
 
   const topSetPlans = [...context.relevantSetPlans.values()]
     .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_RELEVANT_SETS)
+    .slice(0, context.maxRelevantSets)
     .map((plan) => ({ setId: plan.setId, name: plan.name, targetCount: plan.targetCount }));
 
   return {
