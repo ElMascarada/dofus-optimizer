@@ -36,7 +36,6 @@ function renderSpellRows() {
 
   visibleSpells = spellsForBreed(spellData, breedSelect.value);
   spellList.innerHTML = visibleSpells.map((spell) => {
-    const options = distanceOptions(spell);
     const fixedDistance = defaultDistance(spell);
     const cap = castCap(spell);
     const distanceControl = fixedDistance
@@ -212,7 +211,8 @@ function runSolver() {
   }
 
   const constraints = readConstraints();
-  constraints.__requiredApByTurn = requiredApByTurn(selections);
+  const scenario = readScenario();
+  scenario.requiredApByTurn = requiredApByTurn(selections);
   const requestId = ++activeRequestId;
   worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
   worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
@@ -223,7 +223,7 @@ function runSolver() {
     setIdleState();
   });
 
-  const ap = constraints.__requiredApByTurn;
+  const ap = scenario.requiredApByTurn;
   optimizeButton.textContent = 'Arrêter le calcul';
   results.innerHTML = '<div class="empty">Recherche exacte en cours sur les équipements et sorts certifiés…</div>';
   diagnostics.textContent = `Combo demandé : ${ap[1]} PA T1 · ${ap[2]} PA T2 · ${ap[3]} PA T3`;
@@ -242,7 +242,7 @@ function runSolver() {
         critDamageAmount: 8
       },
       turnMode: $('#turn-mode').value,
-      scenario: readScenario(),
+      scenario,
       topN: 10
     }
   });
