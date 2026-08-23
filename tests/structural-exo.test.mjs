@@ -29,7 +29,7 @@ const prysmaradite = {
   }]
 };
 
-test('11/5 native gear becomes permanent 12/6 with PA/PM exos, then temporary AP can reach 15 on T1', () => {
+test('11/5 native gear becomes permanent 12/6 with free PA/PM base bonuses, then temporary AP can reach 15 on T1', () => {
   const output = optimizeBuild({
     items: [
       { id: 'hat', name: 'Hat', slot: 'hat', stats: { fire: 100 } },
@@ -66,6 +66,7 @@ test('11/5 native gear becomes permanent 12/6 with PA/PM exos, then temporary AP
   assert.equal(build.stats.mp, 6);
   assert.equal(build.effectiveStatsByTurn[1].ap, 15);
   assert.equal(build.fm.structuralExos, 2);
-  assert.equal(build.fm.assignments.filter((entry) => entry.type === 'exoAp').length, 1);
-  assert.equal(build.fm.assignments.filter((entry) => entry.type === 'exoMp').length, 1);
+  assert.equal(build.fm.spellPctItems, 2);
+  assert.equal(build.fm.assignments.filter((entry) => entry.type === 'exoAp').length, 0);
+  assert.equal(build.fm.assignments.filter((entry) => entry.type === 'exoMp').length, 0);
 });
