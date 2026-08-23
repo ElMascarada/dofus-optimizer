@@ -1,5 +1,5 @@
 import { evaluateObjectiveUpperBound } from './spells.js';
-import { optimisticItemStats } from './search-space.js';
+import { collectConditionStatInfo, optimisticItemStats } from './search-space.js';
 import { stat } from './stats.js';
 
 const EPSILON = 1e-9;
@@ -35,6 +35,12 @@ function resourceContribution(stats = {}) {
   return { useful: keys.length > 0, keys, score: keys.reduce((sum, key) => sum + stat(stats, key), 0) };
 }
 
+function conditionContribution(stats = {}, conditionKeys = new Set()) {
+  const keys = [...conditionKeys].filter((key) => stat(stats, key) > 0);
+  const score = keys.reduce((sum, key) => sum + Math.max(0, stat(stats, key)), 0);
+  return { useful: keys.length > 0, keys, score };
+}
+
 export function buildSetObjectiveProfiles(sets = [], selections = [], turnMode = 'sum', constraints = {}) {
   const profiles = new Map();
   for (const set of sets || []) {
@@ -49,8 +55,8 @@ export function buildSetObjectiveProfiles(sets = [], selections = [], turnMode =
       const offensiveDelta = positiveObjectiveDelta(bonus, selections, turnMode);
       const constraint = constraintContribution(bonus, constraints);
       const resource = resourceContribution(bonus);
-      // Lower thresholds are much easier to activate and deserve more search priority.
-      // This is only an ordering weight: it never removes a legal solution.
+      // Lower thresholds are easier to activate and therefore deserve more search priority.
+      // This is an ordering weight only: it never changes the exact set bonus calculation.
       const activationWeight = 2 / Math.max(2, count);
       const priority = offensiveDelta * activationWeight
         + constraint.score * 2500 * activationWeight
@@ -90,12 +96,14 @@ export function classifyCandidate(item, {
   selections = [],
   turnMode = 'sum',
   constraints = {},
-  setProfiles = new Map()
+  setProfiles = new Map(),
+  conditionKeys = new Set()
 } = {}) {
   const optimistic = optimisticItemStats(item, { includePassives: true });
   const offensiveDelta = positiveObjectiveDelta(optimistic.stats, selections, turnMode);
   const constraint = constraintContribution(item?.stats || {}, constraints);
   const resource = resourceContribution(optimistic.stats);
+  const condition = conditionContribution(item?.stats || {}, conditionKeys);
   const setProfile = item?.setId ? setProfiles.get(item.setId) : null;
   const setOffensive = Number(setProfile?.bestOffensiveDelta || 0);
   const setConstraint = Number(setProfile?.bestConstraintScore || 0);
@@ -106,15 +114,17 @@ export function classifyCandidate(item, {
   else if (setOffensive > EPSILON) role = 'set-enabler';
   else if (resource.useful) role = 'resource';
   else if (constraint.useful || setConstraint > EPSILON) role = 'constraint';
+  else if (condition.useful) role = 'prerequisite';
 
-  // Search-order score only. The exact solver still validates all retained candidates.
+  // Search-order score only. The exact solver still validates every retained candidate.
   // Set potential is intentionally strong: a weak individual piece can be the key that
-  // activates an exceptional two-piece bonus (e.g. the Volkorne pattern).
+  // activates an exceptional two-piece bonus (the Volkorne pattern).
   const priority = offensiveDelta * 100
     + setPriority * 80
     + resource.score * 100000
     + constraint.score * 75000
-    + setConstraint * 40000;
+    + setConstraint * 40000
+    + condition.score * 100;
 
   return {
     role,
@@ -123,6 +133,7 @@ export function classifyCandidate(item, {
     constraintScore: constraint.score,
     constraintKeys: constraint.keys,
     resourceKeys: resource.keys,
+    prerequisiteKeys: condition.keys,
     setOffensiveDelta: setOffensive,
     setPriority,
     setName: setProfile?.name || null,
@@ -132,11 +143,19 @@ export function classifyCandidate(item, {
 
 export function buildCandidateClassifications(items = [], sets = [], selections = [], turnMode = 'sum', constraints = {}) {
   const setProfiles = buildSetObjectiveProfiles(sets, selections, turnMode, constraints);
+  const conditionInfo = collectConditionStatInfo(items);
+  const conditionKeys = new Set(conditionInfo.all || []);
   const byId = new Map();
   for (const item of items || []) {
-    byId.set(item.id, classifyCandidate(item, { selections, turnMode, constraints, setProfiles }));
+    byId.set(item.id, classifyCandidate(item, {
+      selections,
+      turnMode,
+      constraints,
+      setProfiles,
+      conditionKeys
+    }));
   }
-  return { setProfiles, byId };
+  return { setProfiles, byId, conditionKeys };
 }
 
 export function offensiveDofusPool(items = [], classifications = new Map()) {
@@ -145,8 +164,8 @@ export function offensiveDofusPool(items = [], classifications = new Map()) {
     const classification = classifications.get(item.id);
     if (!classification) return true;
     // Pure defensive/utility Dofus do not belong to the offensive optimizer.
-    // Constraint/resource pieces stay available because they may be necessary to make
-    // 12/6 or the requested resistance floor legal.
+    // Constraint/resource/prerequisite pieces stay available because they can be needed
+    // to make 12/6, resistance floors or another item's condition legal.
     return classification.role !== 'neutral';
   });
 }
