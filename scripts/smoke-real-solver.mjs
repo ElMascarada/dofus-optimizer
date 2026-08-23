@@ -1,17 +1,19 @@
 import { readFile } from 'node:fs/promises';
 import { performance } from 'node:perf_hooks';
 import { optimizeBuild } from '../js/solver.js';
-import { SAMPLE_SPELLS } from '../js/sample-data.js';
+import { benchmarkProfile, benchmarkSelection } from '../js/benchmark-spells.js';
 
 const data = JSON.parse(await readFile(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
-const spell = SAMPLE_SPELLS[0];
+const profile = benchmarkProfile('stress-high-base-earth');
+if (!profile) throw new Error('Missing high-base solver stress profile.');
+
 const start = performance.now();
 const budgetMs = 30_000;
 
 const output = optimizeBuild({
   items: data.items,
   sets: data.sets,
-  selections: [{ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 1, 3: 1 } }],
+  selections: benchmarkSelection(profile),
   constraints: { ap: 12, mp: 6, resEarth: 40, resFire: 40, resWater: 40, resAir: 40 },
   fmPolicy: { spellDamagePct: 3, allowCritDamage: true, critDamageAmount: 8 },
   turnMode: 'sum',
@@ -28,6 +30,7 @@ const output = optimizeBuild({
 
 const elapsedMs = performance.now() - start;
 console.log(JSON.stringify({
+  profile: { id: profile.id, name: profile.name },
   elapsedMs: Math.round(elapsedMs),
   results: output.results.length,
   bestScore: output.results[0]?.score || null,
