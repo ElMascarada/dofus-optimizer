@@ -1,0 +1,54 @@
+name: Sync Dofus data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 5 * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-dofus-data.yml'
+      - 'js/data-certification.js'
+      - 'js/dofusdude-normalizer.js'
+      - 'scripts/sync-dofusdude.mjs'
+      - 'scripts/normalize-dofusdude.mjs'
+      - 'package.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dofus-data-sync
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Sync and normalize Dofusdude
+        run: npm run sync:normalize
+      - name: Run tests on normalized code
+        run: |
+          npm run check
+          npm test
+      - name: Show coverage summary
+        run: cat data/normalized/coverage-report.md
+      - name: Commit changed snapshot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/normalized/dofus-data.json data/normalized/coverage-report.json data/normalized/coverage-report.md
+          if git diff --cached --quiet; then
+            echo "Dofus data is already current."
+            exit 0
+          fi
+          VERSION=$(node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync('./data/normalized/dofus-data.json','utf8')); console.log(d.gameVersion?.version || 'unknown')")
+          git commit -m "data: sync Dofus ${VERSION}"
+          git push

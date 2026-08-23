@@ -6,6 +6,13 @@ import {
   normalizeSet,
   shouldIncludeEquipment
 } from '../js/dofusdude-normalizer.js';
+import {
+  collectUnknownSlotTypes,
+  equipmentForCoverage,
+  isSolverSafeSet,
+  selectSnapshotItems,
+  sourceGeneratedAt
+} from '../js/data-certification.js';
 
 const rawDir = new URL('../data/raw/', import.meta.url);
 const outDir = new URL('../data/normalized/', import.meta.url);
@@ -48,6 +55,7 @@ const [equipmentRaw, setsRaw, mountsRaw, elements, version] = await Promise.all(
 
 const allEquipment = listFrom(equipmentRaw).map((item) => normalizeEquipmentItem(item, elements));
 const equipment = allEquipment.filter(shouldIncludeEquipment);
+const coverageEquipment = equipmentForCoverage(allEquipment);
 const mounts = listFrom(mountsRaw).map((mount) => normalizeMount(mount, elements));
 
 const deduped = new Map();
@@ -59,9 +67,16 @@ const sets = listFrom(setsRaw, 'sets')
   .map((set) => normalizeSet(set, elements))
   .filter((set) => includedSetIds.has(set.id));
 
-const report = buildCoverageReport({ items: allItems, sets, elements, version });
-const certifiedItems = allItems.filter((item) => item.certification.certified);
-const certifiedSetIds = new Set(sets.filter((set) => set.certification.certified).map((set) => set.id));
+const reportItems = [...coverageEquipment, ...mounts];
+const report = buildCoverageReport({ items: reportItems, sets, elements, version });
+report.generatedAt = sourceGeneratedAt(version, report.generatedAt);
+report.items.unknownSlotTypes = collectUnknownSlotTypes(reportItems);
+const solverSafeSets = sets.filter(isSolverSafeSet);
+const certifiedItems = selectSnapshotItems(allItems, sets);
+report.items.snapshotCertified = certifiedItems.length;
+report.items.excludedByUncertifiedSet = allItems.filter((item) => item.certification.certified && item.setId && !certifiedItems.includes(item)).length;
+report.sets.certified = solverSafeSets.length;
+report.sets.uncertified = sets.length - solverSafeSets.length;
 
 const snapshot = {
   schemaVersion: 1,
@@ -71,7 +86,7 @@ const snapshot = {
   gameVersion: version,
   generatedAt: report.generatedAt,
   items: certifiedItems.map(compactItem),
-  sets: sets.filter((set) => certifiedSetIds.has(set.id)).map((set) => ({
+  sets: solverSafeSets.map((set) => ({
     id: set.id,
     ankamaId: set.ankamaId,
     name: set.name,
@@ -85,13 +100,16 @@ await writeFile(new URL('coverage-report.json', outDir), JSON.stringify(report, 
 
 const unknownEffects = Object.entries(report.items.unknownEffectNames).sort((a, b) => b[1] - a[1]);
 const unknownConditions = Object.entries(report.items.unknownConditionNames).sort((a, b) => b[1] - a[1]);
+const unknownSlots = Object.entries(report.items.unknownSlotTypes).sort((a, b) => b[1] - a[1]);
 const markdown = [
   '# Dofusdude normalization coverage',
   '',
   `- Generated: ${report.generatedAt}`,
   `- Game version: ${version?.version || 'unknown'} (${version?.release || 'unknown'})`,
   `- Included items: ${report.items.total}`,
-  `- Certified items: ${report.items.certified} (${report.items.certifiedPct}%)`,
+  `- Self-certified items in coverage scope: ${report.items.certified} (${report.items.certifiedPct}%)`,
+  `- Snapshot-certified items: ${report.items.snapshotCertified}`,
+  `- Excluded because linked set is not certified: ${report.items.excludedByUncertifiedSet}`,
   `- Unknown slots: ${report.items.unknownSlot}`,
   `- Unmapped passive effects: ${report.items.unmappedEffects}`,
   `- Active effects intentionally excluded from stats: ${report.items.activeEffects}`,
@@ -102,6 +120,10 @@ const markdown = [
   '## Slots',
   '',
   ...Object.entries(report.items.bySlot).sort().map(([slot, count]) => `- ${slot}: ${count}`),
+  '',
+  '## Unknown slot types',
+  '',
+  ...(unknownSlots.length ? unknownSlots.map(([name, count]) => `- ${name}: ${count}`) : ['- none']),
   '',
   '## Unknown effect names',
   '',
