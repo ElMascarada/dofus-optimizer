@@ -122,6 +122,9 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
   const deficitsByTurn = {};
   const requiredApByTurn = {};
   const unresolvedPassiveContexts = new Set();
+  const explicitApByTurn = constraints?.__requiredApByTurn || {};
+  const publicConstraints = { ...constraints };
+  delete publicConstraints.__requiredApByTurn;
 
   for (const turn of selectedTurnsForMode(turnMode)) {
     const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
@@ -129,11 +132,14 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
     for (const unresolved of turnResult.unresolved || []) {
       for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
     }
-    const requiredAp = requiredApForTurn(selections, turn);
+    const requiredAp = Math.max(
+      requiredApForTurn(selections, turn),
+      Math.max(0, Number(explicitApByTurn?.[turn] || 0))
+    );
     requiredApByTurn[turn] = requiredAp;
     const turnConstraints = {
-      ...constraints,
-      ap: Math.max(Math.max(0, Number(constraints.ap || 0)), requiredAp)
+      ...publicConstraints,
+      ap: Math.max(Math.max(0, Number(publicConstraints.ap || 0)), requiredAp)
     };
     const deficits = constraintDeficits(turnResult.stats, turnConstraints);
     if (Object.keys(deficits).length) deficitsByTurn[turn] = deficits;
