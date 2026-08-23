@@ -10,7 +10,7 @@ const ELEMENT_STAT = {
 
 const FLAT_DAMAGE_STAT = {
   earth: 'damageEarth',
-  neutral: 'damageEarth',
+  neutral: 'damageNeutral',
   fire: 'damageFire',
   water: 'damageWater',
   air: 'damageAir'
