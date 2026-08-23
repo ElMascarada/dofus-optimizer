@@ -17,6 +17,10 @@ function ids(result) {
   return result.items.map((item) => item.id);
 }
 
+function gear(id, slot, stats, extra = {}) {
+  return { id, slot, level: 200, stats, ...extra };
+}
+
 test('detects mono-element and multi-element spell selections', () => {
   assert.deepEqual(activeSpellElements(earthSelections), ['earth']);
   assert.deepEqual(activeSpellElements([
@@ -28,8 +32,8 @@ test('detects mono-element and multi-element spell selections', () => {
 test('mono-element prefilter drops purely off-element gear', () => {
   const result = prefilterItems({
     items: [
-      { id: 'earth-hat', slot: 'hat', stats: { earth: 80 } },
-      { id: 'fire-hat', slot: 'hat', stats: { fire: 120 } }
+      gear('earth-hat', 'hat', { earth: 80 }),
+      gear('fire-hat', 'hat', { fire: 120 })
     ],
     selections: earthSelections,
     constraints: {},
@@ -40,11 +44,25 @@ test('mono-element prefilter drops purely off-element gear', () => {
   assert.equal(result.diagnostics.targetElement, 'earth');
 });
 
+test('classic equipment below level 200 is excluded from optimizer candidates', () => {
+  const result = prefilterItems({
+    items: [
+      gear('level-200-hat', 'hat', { earth: 80 }),
+      { id: 'level-190-hat', slot: 'hat', level: 190, stats: { earth: 500 } }
+    ],
+    selections: earthSelections,
+    constraints: {},
+    slotRules: [{ id: 'hat', count: 1 }]
+  });
+
+  assert.deepEqual(ids(result), ['level-200-hat']);
+});
+
 test('mono-element prefilter keeps structural AP or MP pieces needed by hard constraints', () => {
   const result = prefilterItems({
     items: [
-      { id: 'earth-amu', slot: 'amulet', stats: { earth: 80 } },
-      { id: 'ap-fire-amu', slot: 'amulet', stats: { fire: 80, ap: 1 } }
+      gear('earth-amu', 'amulet', { earth: 80 }),
+      gear('ap-fire-amu', 'amulet', { fire: 80, ap: 1 })
     ],
     selections: earthSelections,
     constraints: { ap: 12, mp: 6 },
@@ -54,11 +72,11 @@ test('mono-element prefilter keeps structural AP or MP pieces needed by hard con
   assert.ok(ids(result).includes('ap-fire-amu'));
 });
 
-test('combo AP requirement is promoted into the prefilter search target', () => {
+test('combat AP requirement does not replace the permanent 12 AP prefilter target', () => {
   const result = prefilterItems({
     items: [
-      { id: 'earth-amu', slot: 'amulet', stats: { earth: 80 } },
-      { id: 'ap-fire-amu', slot: 'amulet', stats: { fire: 80, ap: 1 } }
+      gear('earth-amu', 'amulet', { earth: 80 }),
+      gear('ap-fire-amu', 'amulet', { fire: 80, ap: 1 })
     ],
     selections: earthSelections,
     constraints: { ap: 12 },
@@ -66,16 +84,17 @@ test('combo AP requirement is promoted into the prefilter search target', () => 
     slotRules: [{ id: 'amulet', count: 1 }]
   });
 
-  assert.equal(result.diagnostics.apTarget, 14);
+  assert.equal(result.diagnostics.apTarget, 12);
+  assert.equal(result.diagnostics.comboApTarget, 14);
   assert.ok(ids(result).includes('ap-fire-amu'));
 });
 
 test('off-element set piece remains eligible when its set bonus helps the target build', () => {
   const result = prefilterItems({
     items: [
-      { id: 'earth-cape', slot: 'cape', stats: { earth: 80 } },
-      { id: 'fire-set-cape', slot: 'cape', setId: 'earth-set', stats: { fire: 120 } },
-      { id: 'earth-set-hat', slot: 'hat', setId: 'earth-set', stats: { earth: 10 } }
+      gear('earth-cape', 'cape', { earth: 80 }),
+      gear('fire-set-cape', 'cape', { fire: 120 }, { setId: 'earth-set' }),
+      gear('earth-set-hat', 'hat', { earth: 10 }, { setId: 'earth-set' })
     ],
     sets: [{ id: 'earth-set', bonuses: { '2': { earth: 60, power: 20 } } }],
     selections: earthSelections,
@@ -104,15 +123,11 @@ test('large multi-pick slots are capped aggressively before exact search', () =>
 });
 
 test('a strong two-piece set is kept as a coherent block even when both items are weak alone', () => {
-  const filler = Array.from({ length: 40 }, (_, index) => ({
-    id: `ring-${index}`,
-    slot: 'ring',
-    stats: { earth: 200 - index }
-  }));
+  const filler = Array.from({ length: 40 }, (_, index) => gear(`ring-${index}`, 'ring', { earth: 200 - index }));
   const items = [
     ...filler,
-    { id: 'set-ring-a', slot: 'ring', setId: 'burst-set', stats: { earth: 5 } },
-    { id: 'set-ring-b', slot: 'ring', setId: 'burst-set', stats: { earth: 4 } }
+    gear('set-ring-a', 'ring', { earth: 5 }, { setId: 'burst-set' }),
+    gear('set-ring-b', 'ring', { earth: 4 }, { setId: 'burst-set' })
   ];
   const result = prefilterItems({
     items,
@@ -138,16 +153,12 @@ test('Do Crit set synergy is evaluated from item plus set bonus, not items in is
     ]
   };
   const critSelections = [{ enabled: true, weight: 1, spell: critSpell, casts: { 1: 1 } }];
-  const filler = Array.from({ length: 40 }, (_, index) => ({
-    id: `generic-${index}`,
-    slot: 'ring',
-    stats: { power: 120 - index }
-  }));
+  const filler = Array.from({ length: 40 }, (_, index) => gear(`generic-${index}`, 'ring', { power: 120 - index }));
   const result = prefilterItems({
     items: [
       ...filler,
-      { id: 'crit-set-a', slot: 'ring', setId: 'crit-set', stats: { critDamage: 10 } },
-      { id: 'crit-set-b', slot: 'ring', setId: 'crit-set', stats: { critDamage: 10 } }
+      gear('crit-set-a', 'ring', { critDamage: 10 }, { setId: 'crit-set' }),
+      gear('crit-set-b', 'ring', { critDamage: 10 }, { setId: 'crit-set' })
     ],
     sets: [{ id: 'crit-set', name: 'Crit', bonuses: { '2': { critDamage: 120, power: 40 } } }],
     selections: critSelections,
