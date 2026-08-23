@@ -7,7 +7,7 @@ const selections = [{ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 1, 3: 1
 const fmPolicy = { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8 };
 const noPoints = { level: 200, characteristicPoints: 0, scrolled: {}, baseStats: {} };
 
-test('solver respects a hard resistance constraint and ranks damage', () => {
+test('solver respects a hard resistance constraint, ranks damage and deduplicates seed/exact results', () => {
   const items = [
     { id: 'h1', name: 'Damage', slot: 'hat', stats: { earth: 100 } },
     { id: 'h2', name: 'Res', slot: 'hat', stats: { earth: 20, resEarth: 40 } }
@@ -77,11 +77,10 @@ test('solver can complete a six-Dofus group after preprocessing', () => {
     character: noPoints,
     topN: 1
   });
-  if (!output.results.length) console.error('SIX_SMALL_DIAGNOSTICS', JSON.stringify(output.diagnostics));
   assert.equal(output.results.length, 1);
 });
 
-test('huge six-Dofus space materializes only its exact Pareto frontier and keeps the optimum', () => {
+test('huge six-Dofus space keeps the exact optimum without expanding the theoretical combination space', () => {
   const items = Array.from({ length: 320 }, (_, index) => ({
     id: `d-${index}`,
     slot: 'dofus',
@@ -97,12 +96,13 @@ test('huge six-Dofus space materializes only its exact Pareto frontier and keeps
     character: noPoints,
     topN: 1
   });
-  if (!output.results.length) console.error('SIX_HUGE_DIAGNOSTICS', JSON.stringify(output.diagnostics));
   assert.equal(output.results.length, 1);
   assert.deepEqual(output.results[0].items.map((entry) => entry.id), ['d-0', 'd-1', 'd-2', 'd-3', 'd-4', 'd-5']);
   const group = output.diagnostics.groups[0];
   assert.equal(group.theoreticalChoicesBefore, '1422630723360');
-  assert.equal(group.materializedChoices, 1);
   assert.equal(group.candidates, 6);
+  // A strong seed may prove the optimum at the root, in which case the dynamic
+  // Pareto frontier is never materialized at all. Zero or one choice are both valid.
+  assert.ok(group.materializedChoices <= 1);
   assert.ok(BigInt(group.materializedChoices) < BigInt(group.theoreticalChoicesBefore));
 });
