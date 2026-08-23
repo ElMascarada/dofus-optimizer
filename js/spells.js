@@ -65,14 +65,13 @@ function damageSource(spell) {
 }
 
 function damageMultiplier(spell, stats, turn) {
+  // Melee / ranged modes are intentionally ignored by the optimizer. The user
+  // optimizes a spell package, not a battlefield positioning mode.
   const sourcePct = damageSource(spell) === 'weapon'
     ? stat(stats, 'weaponDamagePct')
     : stat(stats, 'spellDamagePct');
-  let specificPct = sourcePct;
-  if (spell.distance === 'melee') specificPct += stat(stats, 'meleeDamagePct');
-  if (spell.distance === 'ranged') specificPct += stat(stats, 'rangedDamagePct');
   const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
-  return (1 + specificPct / 100) * (1 + finalPct / 100);
+  return (1 + sourcePct / 100) * (1 + finalPct / 100);
 }
 
 export function spellExpectedDamage(spell, stats, turn = 1) {
