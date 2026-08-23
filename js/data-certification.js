@@ -17,7 +17,8 @@ export function isInternalOrNonPlayerItem(item) {
 
 export function isPlayerEquipmentScope(item) {
   if (isInternalOrNonPlayerItem(item)) return false;
-  return Number(item?.level) === 200 || item?.slot === 'dofus' || item?.slot === 'companion';
+  if (item?.slot === 'dofus' || item?.slot === 'companion') return true;
+  return Number(item?.level) >= 190;
 }
 
 export function equipmentForCoverage(items = []) {
