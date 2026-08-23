@@ -49,7 +49,8 @@ self.addEventListener('message', (event) => {
       items: prefilter.items,
       scenario,
       slotLimits: SEED_SLOT_LIMITS,
-      maxRelevantSets: 3
+      maxRelevantSets: 3,
+      constraintReservePerStat: 1
     });
     const seedOutput = optimizeBuild({
       ...payload,
