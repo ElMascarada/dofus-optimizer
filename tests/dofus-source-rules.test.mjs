@@ -43,8 +43,8 @@ test('unmodeled Prysmaradite uses Dofus slot and stays uncertified while tempora
   const elements = [];
   elements[1] = 'Critical';
   const item = normalizeSourceEquipment({
-    ankama_id: 22023,
-    name: 'Pryximite',
+    ankama_id: 21995,
+    name: 'Sprynt',
     level: 200,
     type: { name: 'Prysmaradite' },
     effects: [effect(1, 10), effect(1, 1, { active: true })]
