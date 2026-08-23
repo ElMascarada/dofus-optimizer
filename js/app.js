@@ -2,8 +2,6 @@ import { APP_VERSION, DEFAULT_CONSTRAINTS, DEFAULT_FM, TURN_MODES } from './conf
 import { loadDofusData, loadSpellData } from './data-loader.js';
 import {
   castCap,
-  defaultDistance,
-  distanceOptions,
   requiredApByTurn,
   spellElementLabel,
   spellsForBreed
@@ -22,10 +20,8 @@ let spellData = null;
 let visibleSpells = [];
 let worker = null;
 let activeRequestId = 0;
-
-function formatDistance(value) {
-  return value === 'melee' ? 'Mêlée' : 'Distance';
-}
+let latestPartialResults = [];
+let latestProgress = null;
 
 function renderSpellRows() {
   if (!spellData || !breedSelect.value) {
@@ -36,15 +32,11 @@ function renderSpellRows() {
 
   visibleSpells = spellsForBreed(spellData, breedSelect.value);
   spellList.innerHTML = visibleSpells.map((spell) => {
-    const fixedDistance = defaultDistance(spell);
     const cap = castCap(spell);
-    const distanceControl = fixedDistance
-      ? `<span class="spell-meta">${formatDistance(fixedDistance)}</span>`
-      : `<label>Mode <select class="spell-distance"><option value="">Choisir</option><option value="melee">Mêlée</option><option value="ranged">Distance</option></select></label>`;
     return `
       <div class="spell-row" data-spell-id="${spell.id}">
         <label class="check"><input type="checkbox" class="spell-enabled"> <span>${spell.name}</span></label>
-        <div class="spell-facts"><span>${spell.apCost} PA</span><span>${spell.baseCritPct}% crit</span><span>${spellElementLabel(spell)}</span><span>PO ${spell.minRange}–${spell.maxRange}</span>${distanceControl}</div>
+        <div class="spell-facts"><span>${spell.apCost} PA</span><span>${spell.baseCritPct}% crit</span><span>${spellElementLabel(spell)}</span><span>PO ${spell.minRange}–${spell.maxRange}</span></div>
         <label>Poids <input class="spell-weight" type="number" min="0" step="0.1" value="1"></label>
         <label>T1 <input class="cast-t1" type="number" min="0" max="${cap}" value="1"></label>
         <label>T2 <input class="cast-t2" type="number" min="0" max="${cap}" value="1"></label>
@@ -56,17 +48,12 @@ function renderSpellRows() {
 
 function readSelections() {
   const selections = [];
-  const missingDistance = [];
   for (const row of document.querySelectorAll('.spell-row')) {
     const sourceSpell = visibleSpells.find((spell) => spell.id === row.dataset.spellId);
     if (!sourceSpell) continue;
-    const enabled = row.querySelector('.spell-enabled').checked;
-    const fixedDistance = defaultDistance(sourceSpell);
-    const distance = fixedDistance || row.querySelector('.spell-distance')?.value || null;
-    if (enabled && !distance) missingDistance.push(sourceSpell.name);
     selections.push({
-      spell: { ...sourceSpell, distance: distance || 'ranged' },
-      enabled,
+      spell: { ...sourceSpell },
+      enabled: row.querySelector('.spell-enabled').checked,
       weight: Math.max(0, Number(row.querySelector('.spell-weight').value || 0)),
       casts: {
         1: Math.max(0, Number(row.querySelector('.cast-t1').value || 0)),
@@ -75,7 +62,7 @@ function readSelections() {
       }
     });
   }
-  return { selections, missingDistance };
+  return selections;
 }
 
 function readNumber(id) {
@@ -151,8 +138,16 @@ function renderResult(build, rank) {
   `;
 }
 
+function renderBuilds(builds, emptyText) {
+  results.innerHTML = builds.length
+    ? builds.map((build, index) => renderResult(build, index + 1)).join('')
+    : `<div class="empty">${emptyText}</div>`;
+}
+
 function setIdleState() {
+  const finishedWorker = worker;
   worker = null;
+  if (finishedWorker) finishedWorker.terminate();
   optimizeButton.disabled = !(dataset && spellData);
   optimizeButton.textContent = 'Optimiser le stuff';
 }
@@ -162,8 +157,16 @@ function stopSolver() {
   worker.terminate();
   worker = null;
   activeRequestId++;
-  diagnostics.textContent = 'Recherche arrêtée.';
   optimizeButton.textContent = 'Optimiser le stuff';
+
+  if (latestPartialResults.length) {
+    renderBuilds(latestPartialResults, 'Aucun stuff trouvé avant l’arrêt.');
+    const nodes = Number(latestProgress?.nodes || 0).toLocaleString('fr-FR');
+    diagnostics.textContent = `Recherche arrêtée · ${latestPartialResults.length} meilleur${latestPartialResults.length > 1 ? 's' : ''} stuff${latestPartialResults.length > 1 ? 's' : ''} conservé${latestPartialResults.length > 1 ? 's' : ''} · ${nodes} nœuds parcourus`;
+  } else {
+    diagnostics.textContent = 'Recherche arrêtée avant qu’un stuff valide ne soit trouvé.';
+    results.innerHTML = '<div class="empty">Aucun stuff valide trouvé avant l’arrêt.</div>';
+  }
 }
 
 function handleWorkerMessage(event, requestId) {
@@ -172,7 +175,12 @@ function handleWorkerMessage(event, requestId) {
 
   if (message.type === 'progress') {
     const progress = message.progress || {};
-    diagnostics.textContent = `${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · ${Number(progress.pruned || 0).toLocaleString('fr-FR')} branches coupées · meilleur ${fmt(progress.best)}`;
+    latestProgress = progress;
+    if (Array.isArray(progress.partialResults) && progress.partialResults.length) {
+      latestPartialResults = progress.partialResults;
+    }
+    const seedLabel = progress.seeded ? 'base rapide · ' : '';
+    diagnostics.textContent = `${seedLabel}${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · ${Number(progress.pruned || 0).toLocaleString('fr-FR')} branches coupées · meilleur ${fmt(progress.best)}`;
     return;
   }
 
@@ -185,9 +193,8 @@ function handleWorkerMessage(event, requestId) {
 
   if (message.type !== 'result') return;
   const output = message.output;
-  results.innerHTML = output.results.length
-    ? output.results.map((build, index) => renderResult(build, index + 1)).join('')
-    : '<div class="empty">Aucun build certifié ne satisfait ces contraintes et ce combo de sorts.</div>';
+  latestPartialResults = output.results || [];
+  renderBuilds(output.results, 'Aucun build certifié ne satisfait ces contraintes et ce combo de sorts.');
   diagnostics.textContent = `${output.diagnostics.visited.toLocaleString('fr-FR')} builds complets · ${output.diagnostics.nodes.toLocaleString('fr-FR')} nœuds · ${output.diagnostics.pruned.toLocaleString('fr-FR')} branches coupées`;
   setIdleState();
 }
@@ -199,14 +206,9 @@ function runSolver() {
   }
   if (!dataset || !spellData) return;
 
-  const selectionResult = readSelections();
-  const selections = selectionResult.selections;
+  const selections = readSelections();
   if (!selections.some((selection) => selection.enabled)) {
     results.innerHTML = '<div class="empty">Active au moins un sort à optimiser.</div>';
-    return;
-  }
-  if (selectionResult.missingDistance.length) {
-    results.innerHTML = `<div class="empty">Choisis Mêlée ou Distance pour : ${selectionResult.missingDistance.join(', ')}.</div>`;
     return;
   }
 
@@ -214,6 +216,8 @@ function runSolver() {
   const scenario = readScenario();
   scenario.requiredApByTurn = requiredApByTurn(selections);
   const requestId = ++activeRequestId;
+  latestPartialResults = [];
+  latestProgress = null;
   worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
   worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
   worker.addEventListener('error', (event) => {
@@ -225,7 +229,7 @@ function runSolver() {
 
   const ap = scenario.requiredApByTurn;
   optimizeButton.textContent = 'Arrêter le calcul';
-  results.innerHTML = '<div class="empty">Recherche exacte en cours sur les équipements et sorts certifiés…</div>';
+  results.innerHTML = '<div class="empty">Recherche en cours : base rapide puis optimisation exacte…</div>';
   diagnostics.textContent = `Combo demandé : ${ap[1]} PA T1 · ${ap[2]} PA T2 · ${ap[3]} PA T3`;
 
   worker.postMessage({
