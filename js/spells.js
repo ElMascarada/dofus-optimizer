@@ -1,4 +1,4 @@
-import { addStats, cloneStats, stat } from './stats.js';
+import { addStats, cloneStats, constraintDeficits, stat } from './stats.js';
 import { applyPassiveModifiers } from './passives.js';
 
 const ELEMENT_STAT = {
@@ -83,7 +83,7 @@ export function spellDamageUpperBound(spell, stats, turn = 1) {
   return Math.max(totals.nonCrit, totals.crit) * damageMultiplier(spell, stats, turn);
 }
 
-function selectedTurns(mode) {
+export function selectedTurnsForMode(mode) {
   if (mode === 't1') return [1];
   if (mode === 't2') return [2];
   if (mode === 't3') return [3];
@@ -99,8 +99,31 @@ function aggregateTurnScores(perTurn, turnMode) {
   return score;
 }
 
+export function evaluateTurnConstraints({ stats, items = [], constraints = {}, turnMode = 'sum', scenario = {} }) {
+  const perTurn = {};
+  const deficitsByTurn = {};
+  const unresolvedPassiveContexts = new Set();
+
+  for (const turn of selectedTurnsForMode(turnMode)) {
+    const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
+    perTurn[turn] = turnResult.stats;
+    for (const unresolved of turnResult.unresolved || []) {
+      for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
+    }
+    const deficits = constraintDeficits(turnResult.stats, constraints);
+    if (Object.keys(deficits).length) deficitsByTurn[turn] = deficits;
+  }
+
+  return {
+    meets: Object.keys(deficitsByTurn).length === 0 && unresolvedPassiveContexts.size === 0,
+    perTurn,
+    deficitsByTurn,
+    unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort()
+  };
+}
+
 export function evaluateObjective({ stats, items = [], selections = [], turnMode = 'sum', scenario = {} }) {
-  const turns = selectedTurns(turnMode);
+  const turns = selectedTurnsForMode(turnMode);
   const perTurn = {};
   const unresolvedPassiveContexts = new Set();
 
@@ -129,7 +152,7 @@ export function evaluateObjective({ stats, items = [], selections = [], turnMode
 
 export function evaluateObjectiveUpperBound({ stats, selections = [], turnMode = 'sum' }) {
   const perTurn = {};
-  for (const turn of selectedTurns(turnMode)) {
+  for (const turn of selectedTurnsForMode(turnMode)) {
     let score = 0;
     for (const selection of selections || []) {
       if (!selection?.enabled) continue;
