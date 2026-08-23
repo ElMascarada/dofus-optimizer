@@ -30,7 +30,7 @@ function relevantStats(source = {}, keys = []) {
   return result;
 }
 
-function choiceForItem(item, keys) {
+export function choiceForItem(item, keys) {
   const passive = passiveUpperStats(item);
   const stats = relevantStats(item.stats, keys);
   const passiveUpper = relevantStats(passive.stats, keys);
@@ -98,9 +98,86 @@ function compareVectors(a, b, keys) {
   return -1;
 }
 
-function insertPareto(frontier, choice, keys, diagnostics) {
-  const remove = [];
-  for (let index = 0; index < frontier.length; index++) {
+function varyingKeysForItems(items, keys) {
+  const varying = [];
+  for (const key of keys) {
+    let first;
+    let initialized = false;
+    let differs = false;
+    for (const item of items) {
+      const value = stat(item.stats, key);
+      if (!initialized) {
+        first = value;
+        initialized = true;
+      } else if (value !== first) {
+        differs = true;
+        break;
+      }
+    }
+    if (differs) varying.push(key);
+  }
+  return varying;
+}
+
+function pivotForItems(items, keys) {
+  let best = null;
+  let bestDistinct = -1;
+  let bestRange = -1;
+  for (const key of keys) {
+    const values = items.map((item) => stat(item.stats, key));
+    const distinct = new Set(values).size;
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    if (distinct > bestDistinct || (distinct === bestDistinct && range > bestRange)) {
+      best = key;
+      bestDistinct = distinct;
+      bestRange = range;
+    }
+  }
+  return best;
+}
+
+function firstAtMost(frontier, pivotKey, value) {
+  let lo = 0;
+  let hi = frontier.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (stat(frontier[mid].stats, pivotKey) > value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function firstBelow(frontier, pivotKey, value) {
+  let lo = 0;
+  let hi = frontier.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (stat(frontier[mid].stats, pivotKey) >= value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+function insertPareto(frontier, choice, keys, pivotKey, diagnostics) {
+  if (!frontier.length) {
+    frontier.push(choice);
+    return true;
+  }
+  if (!keys.length) {
+    diagnostics.equivalentRemoved++;
+    return false;
+  }
+
+  const pivot = pivotKey || keys[0];
+  const value = stat(choice.stats, pivot);
+  const equalStart = firstAtMost(frontier, pivot, value);
+  const lowerStart = firstBelow(frontier, pivot, value);
+
+  // States with a strictly larger pivot (plus equal-pivot states) are the only
+  // states that can dominate the incoming state. Most weak states die here.
+  for (let index = 0; index < lowerStart; index++) {
     const relation = compareVectors(frontier[index].stats, choice.stats, keys);
     if (relation === 1) {
       diagnostics.dominatedRemoved++;
@@ -110,13 +187,20 @@ function insertPareto(frontier, choice, keys, diagnostics) {
       diagnostics.equivalentRemoved++;
       return false;
     }
-    if (relation === -1) remove.push(index);
+  }
+
+  // Only equal/lower-pivot states can be dominated by the incoming state.
+  const remove = [];
+  for (let index = equalStart; index < frontier.length; index++) {
+    if (compareVectors(choice.stats, frontier[index].stats, keys) === 1) remove.push(index);
   }
   for (let index = remove.length - 1; index >= 0; index--) {
     frontier.splice(remove[index], 1);
     diagnostics.dominatedRemoved++;
   }
-  frontier.push(choice);
+
+  const insertion = firstAtMost(frontier, pivot, value);
+  frontier.splice(insertion, 0, choice);
   return true;
 }
 
@@ -130,7 +214,11 @@ function partitionCandidates(candidates = []) {
   return [...partitions.entries()];
 }
 
-function buildPartitionFrontiers(items, maxPick, keys, diagnostics, shouldAbort) {
+function buildPartitionFrontiers(items, maxPick, keys, diagnostics, shouldAbort, profile) {
+  const activeKeys = varyingKeysForItems(items, keys);
+  const pivotKey = pivotForItems(items, activeKeys);
+  profile.activeKeys = activeKeys;
+  profile.pivotKey = pivotKey;
   const frontiers = Array.from({ length: maxPick + 1 }, () => []);
   frontiers[0].push(emptyChoice());
   let generated = 0;
@@ -143,18 +231,35 @@ function buildPartitionFrontiers(items, maxPick, keys, diagnostics, shouldAbort)
       const snapshot = source.slice();
       for (const state of snapshot) {
         generated++;
-        if ((generated & 2047) === 0 && shouldAbort?.()) {
+        diagnostics.generated++;
+        if ((generated & 1023) === 0 && shouldAbort?.()) {
           diagnostics.aborted = true;
+          profile.frontierSizes = frontiers.map((frontier) => frontier.length);
+          profile.generated = generated;
           return frontiers;
         }
         const next = combineChoices(state, single);
         if (next.prysmaCount > 1) continue;
-        insertPareto(frontiers[pick], next, keys, diagnostics);
+        insertPareto(frontiers[pick], next, activeKeys, pivotKey, diagnostics);
       }
     }
   }
-  diagnostics.generated += generated;
+  profile.frontierSizes = frontiers.map((frontier) => frontier.length);
+  profile.generated = generated;
   return frontiers;
+}
+
+function pivotForChoices(choices, keys) {
+  let best = null;
+  let bestDistinct = -1;
+  for (const key of keys) {
+    const distinct = new Set(choices.map((choice) => stat(choice.stats, key))).size;
+    if (distinct > bestDistinct) {
+      best = key;
+      bestDistinct = distinct;
+    }
+  }
+  return best;
 }
 
 export function buildParetoChoices(candidates = [], count = 1, keys = [], { shouldAbort = null } = {}) {
@@ -163,10 +268,17 @@ export function buildParetoChoices(candidates = [], count = 1, keys = [], { shou
     generated: 0,
     dominatedRemoved: 0,
     equivalentRemoved: 0,
+    partitionProfiles: [],
     aborted: false
   };
   if (count <= 0) return { choices: [emptyChoice()], diagnostics };
   if (candidates.length < count) return { choices: [], diagnostics };
+  if (count === 1) {
+    return {
+      choices: candidates.map((item) => choiceForItem(item, keys)),
+      diagnostics: { ...diagnostics, partitions: candidates.length, generated: candidates.length }
+    };
+  }
 
   const partitions = partitionCandidates(candidates);
   diagnostics.partitions = partitions.length;
@@ -177,7 +289,9 @@ export function buildParetoChoices(candidates = [], count = 1, keys = [], { shou
     const [token, items] = partitions[partitionIndex];
     const tokenObject = JSON.parse(token);
     const partitionLimit = Math.min(count, items.length, tokenObject.prysmaradite ? 1 : count);
-    const local = buildPartitionFrontiers(items, partitionLimit, keys, diagnostics, shouldAbort);
+    const profile = { size: items.length, limit: partitionLimit, activeKeys: [], pivotKey: null, frontierSizes: [], generated: 0 };
+    diagnostics.partitionProfiles.push(profile);
+    const local = buildPartitionFrontiers(items, partitionLimit, keys, diagnostics, shouldAbort, profile);
     if (diagnostics.aborted) return { choices: [], diagnostics };
 
     const nextGlobal = Array.from({ length: count + 1 }, () => new Map());
@@ -192,16 +306,18 @@ export function buildParetoChoices(candidates = [], count = 1, keys = [], { shou
             frontier = [];
             nextGlobal[total + localPick].set(nextSignature, frontier);
           }
+          const pivot = pivotForChoices([...states, ...localStates], keys) || keys[0];
+          if (frontier.length && pivot) frontier.sort((a, b) => stat(b.stats, pivot) - stat(a.stats, pivot));
           for (const state of states) {
             for (const localState of localStates) {
               diagnostics.generated++;
-              if ((diagnostics.generated & 2047) === 0 && shouldAbort?.()) {
+              if ((diagnostics.generated & 1023) === 0 && shouldAbort?.()) {
                 diagnostics.aborted = true;
                 return { choices: [], diagnostics };
               }
               const combined = combineChoices(state, localState);
               if (combined.prysmaCount > 1) continue;
-              insertPareto(frontier, combined, keys, diagnostics);
+              insertPareto(frontier, combined, keys, pivot, diagnostics);
             }
           }
         }
