@@ -150,26 +150,15 @@ export function normalizeEffect(effect, elements = [], { valueMode = 'max' } = {
     sourceRange: sourceRange(effect)
   };
 
-  if (effect?.type?.is_active) {
-    return { ...base, status: 'active', reason: 'active-effect' };
-  }
-  if (effect?.type?.is_meta) {
-    return { ...base, status: 'meta', reason: 'meta-effect' };
-  }
-  if (!name) {
-    return { ...base, status: 'unmapped', reason: 'missing-effect-name' };
-  }
+  if (effect?.type?.is_active) return { ...base, status: 'active', reason: 'active-effect' };
+  if (effect?.type?.is_meta) return { ...base, status: 'meta', reason: 'meta-effect' };
+  if (!name) return { ...base, status: 'unmapped', reason: 'missing-effect-name' };
 
   const stat = EFFECT_STAT_ALIASES.get(name);
-  if (!stat) {
-    return { ...base, status: 'unmapped', reason: 'unknown-effect-name' };
-  }
+  if (!stat) return { ...base, status: 'unmapped', reason: 'unknown-effect-name' };
 
   const value = effectNumericValue(effect, valueMode);
-  if (!Number.isFinite(value)) {
-    return { ...base, status: 'unmapped', reason: 'non-numeric-effect' };
-  }
-
+  if (!Number.isFinite(value)) return { ...base, status: 'unmapped', reason: 'non-numeric-effect' };
   return { ...base, status: 'mapped', stat, value };
 }
 
@@ -181,25 +170,17 @@ export function normalizeEffects(effects = [], elements = [], options = {}) {
     details.push(detail);
     if (detail.status === 'mapped') addStats(stats, { [detail.stat]: detail.value });
   }
-
   const coverage = details.reduce((acc, detail) => {
     acc[detail.status] = (acc[detail.status] || 0) + 1;
     return acc;
   }, { mapped: 0, active: 0, meta: 0, unmapped: 0 });
-
-  return {
-    stats: { ...stats },
-    details,
-    coverage,
-    certified: coverage.unmapped === 0 && coverage.meta === 0
-  };
+  return { stats: { ...stats }, details, coverage, certified: coverage.unmapped === 0 && coverage.meta === 0 };
 }
 
 export function slotFromEquipment(item) {
   if (item?.is_weapon === true) return 'weapon';
   const typeName = normalizeText(item?.type?.name || '');
   if (!typeName) return null;
-
   for (const [slot, aliases] of Object.entries(SLOT_ALIASES)) {
     if (aliases.some((alias) => typeName === normalizeText(alias) || typeName.includes(normalizeText(alias)))) return slot;
   }
@@ -212,17 +193,14 @@ function normalizeOperator(operator) {
   const aliases = {
     '=': 'eq', '==': 'eq', '===': 'eq', eq: 'eq',
     '!=': 'neq', '<>': 'neq', neq: 'neq',
-    '>': 'gt', gt: 'gt',
-    '>=': 'gte', gte: 'gte',
-    '<': 'lt', lt: 'lt',
-    '<=': 'lte', lte: 'lte'
+    '>': 'gt', gt: 'gt', '>=': 'gte', gte: 'gte',
+    '<': 'lt', lt: 'lt', '<=': 'lte', lte: 'lte'
   };
   return aliases[raw] || null;
 }
 
 export function normalizeConditionNode(node, elements = []) {
   if (!node) return { status: 'none', node: null, unmapped: [] };
-
   const isOperand = node.is_operand ?? node.isOperand;
   if (isOperand === true || node.condition) {
     const condition = node.condition || {};
@@ -231,19 +209,10 @@ export function normalizeConditionNode(node, elements = []) {
     const operator = normalizeOperator(condition.operator);
     const value = Number(condition.int_value ?? condition.intValue);
     if (!name || !stat || !operator || !Number.isFinite(value)) {
-      return {
-        status: 'unmapped',
-        node: null,
-        unmapped: [{ name, operator: condition.operator || null, value: Number.isFinite(value) ? value : null }]
-      };
+      return { status: 'unmapped', node: null, unmapped: [{ name, operator: condition.operator || null, value: Number.isFinite(value) ? value : null }] };
     }
-    return {
-      status: 'supported',
-      node: { kind: 'condition', stat, operator, value, sourceName: name },
-      unmapped: []
-    };
+    return { status: 'supported', node: { kind: 'condition', stat, operator, value, sourceName: name }, unmapped: [] };
   }
-
   const relation = String(node.relation || '').toLowerCase();
   if ((isOperand === false || Array.isArray(node.children)) && (relation === 'and' || relation === 'or')) {
     const children = [];
@@ -256,13 +225,8 @@ export function normalizeConditionNode(node, elements = []) {
       if (normalized.status === 'unmapped') supported = false;
       unmapped.push(...(normalized.unmapped || []));
     }
-    return {
-      status: supported ? 'supported' : 'unmapped',
-      node: supported ? { kind: 'relation', relation, children } : null,
-      unmapped
-    };
+    return { status: supported ? 'supported' : 'unmapped', node: supported ? { kind: 'relation', relation, children } : null, unmapped };
   }
-
   return { status: 'unmapped', node: null, unmapped: [{ reason: 'unknown-condition-shape' }] };
 }
 
@@ -289,7 +253,6 @@ export function normalizeEquipmentItem(item, elements = [], options = {}) {
   const conditions = normalizeConditionNode(item?.conditions, elements);
   const setId = item?.parent_set?.id ?? item?.parentSet?.id ?? null;
   const id = item?.ankama_id ?? item?.ankamaId;
-
   return {
     id: `item-${id}`,
     ankamaId: id,
@@ -309,10 +272,7 @@ export function normalizeEquipmentItem(item, elements = [], options = {}) {
       conditionsCertified: conditions.status !== 'unmapped',
       certified: Boolean(slot) && effects.certified && conditions.status !== 'unmapped'
     },
-    source: {
-      effects: effects.details,
-      unmappedConditions: conditions.unmapped
-    }
+    source: { effects: effects.details, unmappedConditions: conditions.unmapped }
   };
 }
 
@@ -332,12 +292,7 @@ export function normalizeMount(mount, elements = [], options = {}) {
     stats: effects.stats,
     conditions: null,
     conditionStatus: 'none',
-    certification: {
-      slotKnown: true,
-      effectsCertified: effects.certified,
-      conditionsCertified: true,
-      certified: effects.certified
-    },
+    certification: { slotKnown: true, effectsCertified: effects.certified, conditionsCertified: true, certified: effects.certified },
     source: { effects: effects.details, unmappedConditions: [] }
   };
 }
@@ -345,7 +300,7 @@ export function normalizeMount(mount, elements = [], options = {}) {
 export function shouldIncludeEquipment(item) {
   if (!item?.slot) return false;
   if (item.slot === 'dofus' || item.slot === 'companion') return true;
-  return Number(item.level) === 200;
+  return Number(item.level) >= 190;
 }
 
 export function normalizeSet(set, elements = [], options = {}) {
@@ -368,52 +323,57 @@ export function normalizeSet(set, elements = [], options = {}) {
   };
 }
 
-export function buildCoverageReport({ items = [], sets = [], elements = [], version = null } = {}) {
-  const report = {
+export function buildCoverageReport({ items = [], sets = [], elements = [], version = {} }) {
+  const unknownEffectNames = {};
+  const unknownConditionNames = {};
+  let certified = 0;
+  let unknownSlot = 0;
+  let unmappedEffects = 0;
+  let activeEffects = 0;
+  let metaEffects = 0;
+  let unmappedConditions = 0;
+  const bySlot = {};
+
+  for (const item of items) {
+    if (item.certification?.certified) certified++;
+    if (!item.slot) unknownSlot++;
+    bySlot[item.slot || 'unknown'] = (bySlot[item.slot || 'unknown'] || 0) + 1;
+    for (const effect of item.source?.effects || []) {
+      if (effect.status === 'unmapped') {
+        unmappedEffects++;
+        const key = effect.name || effect.reason || 'UNKNOWN';
+        unknownEffectNames[key] = (unknownEffectNames[key] || 0) + 1;
+      } else if (effect.status === 'active') activeEffects++;
+      else if (effect.status === 'meta') metaEffects++;
+    }
+    for (const condition of item.source?.unmappedConditions || []) {
+      unmappedConditions++;
+      const key = condition.name || condition.reason || 'UNKNOWN';
+      unknownConditionNames[key] = (unknownConditionNames[key] || 0) + 1;
+    }
+  }
+
+  return {
     generatedAt: new Date().toISOString(),
     version,
     elements: elements.length,
     items: {
       total: items.length,
-      certified: 0,
-      unknownSlot: 0,
-      unmappedEffects: 0,
-      activeEffects: 0,
-      metaEffects: 0,
-      unmappedConditions: 0,
-      bySlot: {},
-      unknownEffectNames: {},
-      unknownConditionNames: {}
+      certified,
+      unknownSlot,
+      unmappedEffects,
+      activeEffects,
+      metaEffects,
+      unmappedConditions,
+      bySlot,
+      unknownEffectNames,
+      unknownConditionNames,
+      certifiedPct: items.length ? Math.round((certified / items.length) * 10000) / 100 : 100
     },
-    sets: { total: sets.length, certified: 0, uncertified: 0 }
+    sets: {
+      total: sets.length,
+      certified: sets.filter((set) => set.certification?.certified).length,
+      uncertifiedNames: sets.filter((set) => !set.certification?.certified).map((set) => set.name)
+    }
   };
-
-  for (const item of items) {
-    if (item.certification?.certified) report.items.certified++;
-    if (!item.slot) report.items.unknownSlot++;
-    if (item.slot) report.items.bySlot[item.slot] = (report.items.bySlot[item.slot] || 0) + 1;
-    if (item.conditionStatus === 'unmapped') report.items.unmappedConditions++;
-
-    for (const effect of item.source?.effects || []) {
-      if (effect.status === 'unmapped') {
-        report.items.unmappedEffects++;
-        const key = effect.name || effect.formatted || 'UNKNOWN';
-        report.items.unknownEffectNames[key] = (report.items.unknownEffectNames[key] || 0) + 1;
-      }
-      if (effect.status === 'active') report.items.activeEffects++;
-      if (effect.status === 'meta') report.items.metaEffects++;
-    }
-    for (const condition of item.source?.unmappedConditions || []) {
-      const key = condition.name || condition.reason || 'UNKNOWN';
-      report.items.unknownConditionNames[key] = (report.items.unknownConditionNames[key] || 0) + 1;
-    }
-  }
-
-  for (const set of sets) {
-    if (set.certification?.certified) report.sets.certified++;
-    else report.sets.uncertified++;
-  }
-
-  report.items.certifiedPct = report.items.total ? Number((report.items.certified / report.items.total * 100).toFixed(2)) : 100;
-  return report;
 }
