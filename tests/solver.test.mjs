@@ -170,3 +170,71 @@ test('temporary AP never bypasses a static equipment condition', () => {
   assert.equal(output.results.length, 0);
   assert.equal(output.diagnostics.rejectedConditions, 1);
 });
+
+test('Ratrapry can open a T1 MP constraint from explicit battlefield context', () => {
+  const ratrapry = passiveItem({
+    id: 'ratrapry',
+    passiveId: 'ratrapry',
+    rules: [{
+      trigger: { type: 'turn_in', turns: [1, 2, 3] },
+      scaledStats: [{ stat: 'mp', contextKey: 'farEnemiesOver9', multiplier: 1, min: 0, max: 3 }]
+    }]
+  });
+  const common = {
+    items: [ratrapry],
+    sets: [],
+    selections,
+    constraints: { mp: 6 },
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: { ...noPoints, baseStats: { mp: 4 } },
+    turnMode: 't1',
+    topN: 1
+  };
+
+  const resolved = optimizeBuild({ ...common, scenario: { turns: { 1: { farEnemiesOver9: 2 } } } });
+  const unresolved = optimizeBuild(common);
+  assert.equal(resolved.results.length, 1);
+  assert.equal(resolved.results[0].effectiveStatsByTurn[1].mp, 6);
+  assert.equal(unresolved.results.length, 0);
+  assert.equal(unresolved.diagnostics.rejectedUnresolvedPassives, 1);
+});
+
+test('Pryximite is scored offensively only when its T1 proximity context is provided', () => {
+  const pryximite = passiveItem({
+    id: 'pryximite',
+    passiveId: 'pryximite',
+    rules: [{
+      trigger: { type: 'turn_in', turns: [1, 2, 3] },
+      scaledStats: [
+        { stat: 'meleeDamagePct', contextKey: 'pryximiteNearbyEnemiesStartT1', multiplier: 2, min: 0 },
+        { stat: 'meleeDamagePct', contextKey: 'pryximiteNearbyEnemiesEndT1', multiplier: 2, min: 0 }
+      ]
+    }]
+  });
+  const powerDofus = { id: 'power-dofus', name: 'power-dofus', slot: 'dofus', stats: { power: 5 } };
+  const meleeSpell = { id: 'melee', name: 'Melee', baseCritPct: 0, distance: 'melee', hits: [{ element: 'earth', normal: [100, 100] }] };
+  const meleeSelections = [{ enabled: true, weight: 1, spell: meleeSpell, casts: { 1: 1 } }];
+  const common = {
+    items: [powerDofus, pryximite],
+    sets: [],
+    selections: meleeSelections,
+    constraints: {},
+    fmPolicy,
+    slotRules: [{ id: 'dofus', count: 1 }],
+    character: noPoints,
+    turnMode: 't1',
+    topN: 2
+  };
+
+  const resolved = optimizeBuild({
+    ...common,
+    scenario: { pryximiteNearbyEnemiesStartT1: 2, pryximiteNearbyEnemiesEndT1: 2 }
+  });
+  assert.equal(resolved.results[0].items[0].id, 'pryximite');
+  assert.equal(resolved.results[0].effectiveStatsByTurn[1].meleeDamagePct, 8);
+
+  const unresolved = optimizeBuild(common);
+  assert.equal(unresolved.results.some((result) => result.items[0].id === 'pryximite'), false);
+  assert.ok(unresolved.diagnostics.rejectedUnresolvedPassives >= 1);
+});
