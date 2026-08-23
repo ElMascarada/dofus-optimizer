@@ -1,11 +1,9 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import {
   buildCoverageReport,
-  normalizeEquipmentItem,
-  normalizeMount,
-  normalizeSet,
   shouldIncludeEquipment
 } from '../js/dofusdude-normalizer.js';
+import { normalizeSourceEquipment, normalizeSourceMount, normalizeSourceSet } from '../js/dofus-source-rules.js';
 import {
   collectUnknownSlotTypes,
   equipmentForCoverage,
@@ -36,6 +34,7 @@ function compactItem(item) {
     level: item.level,
     slot: item.slot,
     typeName: item.typeName,
+    slotSubtype: item.slotSubtype || null,
     setId: item.setId,
     imageUrl: item.imageUrl,
     stats: item.stats,
@@ -53,10 +52,10 @@ const [equipmentRaw, setsRaw, mountsRaw, elements, version] = await Promise.all(
   readJson('version')
 ]);
 
-const allEquipment = listFrom(equipmentRaw).map((item) => normalizeEquipmentItem(item, elements));
+const allEquipment = listFrom(equipmentRaw).map((item) => normalizeSourceEquipment(item, elements));
 const equipment = allEquipment.filter(shouldIncludeEquipment);
 const coverageEquipment = equipmentForCoverage(allEquipment);
-const mounts = listFrom(mountsRaw).map((mount) => normalizeMount(mount, elements));
+const mounts = listFrom(mountsRaw).map((mount) => normalizeSourceMount(mount, elements));
 
 const deduped = new Map();
 for (const item of [...equipment, ...mounts]) deduped.set(item.id, item);
@@ -64,7 +63,7 @@ const allItems = [...deduped.values()];
 
 const includedSetIds = new Set(allItems.map((item) => item.setId).filter(Boolean));
 const sets = listFrom(setsRaw, 'sets')
-  .map((set) => normalizeSet(set, elements))
+  .map((set) => normalizeSourceSet(set, elements))
   .filter((set) => includedSetIds.has(set.id));
 
 const reportItems = [...coverageEquipment, ...mounts];
@@ -77,6 +76,7 @@ report.items.snapshotCertified = certifiedItems.length;
 report.items.excludedByUncertifiedSet = allItems.filter((item) => item.certification.certified && item.setId && !certifiedItems.includes(item)).length;
 report.sets.certified = solverSafeSets.length;
 report.sets.uncertified = sets.length - solverSafeSets.length;
+report.items.ignoredEffects = reportItems.reduce((sum, item) => sum + (item.source?.ignoredEffects?.length || 0), 0) + sets.reduce((sum, set) => sum + (set.source?.ignoredEffects || 0), 0);
 
 const snapshot = {
   schemaVersion: 1,
@@ -114,6 +114,7 @@ const markdown = [
   `- Unmapped passive effects: ${report.items.unmappedEffects}`,
   `- Active effects intentionally excluded from stats: ${report.items.activeEffects}`,
   `- Meta effects: ${report.items.metaEffects}`,
+  `- Explicitly ignored non-combat metadata: ${report.items.ignoredEffects || 0}`,
   `- Items with unmapped conditions: ${report.items.unmappedConditions}`,
   `- Sets: ${report.sets.certified}/${report.sets.total} certified`,
   '',
