@@ -4,7 +4,13 @@ import { applySetBonuses } from './sets.js';
 import { estimateElementValues, evaluateObjectiveUpperBound } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { FM_ELIGIBLE_SLOTS, optimizeFm } from './fm.js';
-import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
+import {
+  countSetBonuses,
+  itemConditionCompatibleWithHardConstraints,
+  itemConditionsAreValid,
+  selectedItemConditionsCouldStillBeValid,
+  specialSlotRulesAreValid
+} from './build-legality.js';
 import {
   buildSuffixCaps,
   optimisticItemStats,
@@ -38,19 +44,23 @@ function buildSetSuffixCounts(candidates) {
   return map;
 }
 
-function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode) {
+function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selections, turnMode, characterLevel) {
   const groups = [];
   let impossible = false;
 
   for (const rule of slotRules) {
-    const rawCandidates = items.filter((item) => item.slot === rule.id);
+    const sourceCandidates = items.filter((item) => item.slot === rule.id);
+    const rawCandidates = sourceCandidates.filter((item) => itemConditionCompatibleWithHardConstraints(item, constraints, characterLevel));
+    const conditionFiltered = sourceCandidates.length - rawCandidates.length;
+
     if (rawCandidates.length < rule.count) {
       groups.push({
         ...rule,
         candidates: rawCandidates,
-        candidatesBefore: rawCandidates.length,
-        removed: 0,
-        theoreticalBefore: theoreticalChoiceCount(rawCandidates.length, rule.count),
+        candidatesBefore: sourceCandidates.length,
+        conditionFiltered,
+        removed: conditionFiltered,
+        theoreticalBefore: theoreticalChoiceCount(sourceCandidates.length, rule.count),
         theoreticalAfter: 0n,
         impossible: true
       });
@@ -75,11 +85,12 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
     groups.push({
       ...rule,
       candidates,
-      candidatesBefore: rawCandidates.length,
-      removed: pruned.removed,
+      candidatesBefore: sourceCandidates.length,
+      conditionFiltered,
+      removed: conditionFiltered + pruned.removed,
       equivalentRemoved: pruned.equivalentRemoved,
       dominatedRemoved: pruned.dominatedRemoved,
-      theoreticalBefore: theoreticalChoiceCount(rawCandidates.length, rule.count),
+      theoreticalBefore: theoreticalChoiceCount(sourceCandidates.length, rule.count),
       theoreticalAfter: theoreticalChoiceCount(candidates.length, rule.count),
       staticCaps,
       objectiveCaps,
@@ -220,6 +231,7 @@ function diagnosticsForGroups(groups) {
     candidatesBefore: group.candidatesBefore,
     candidates: group.candidates.length,
     removed: group.removed || 0,
+    conditionFiltered: group.conditionFiltered || 0,
     dominatedRemoved: group.dominatedRemoved || 0,
     equivalentRemoved: group.equivalentRemoved || 0,
     theoreticalChoicesBefore: group.theoreticalBefore.toString(),
@@ -244,7 +256,7 @@ export function optimizeBuild({
 }) {
   const limit = Math.max(1, Number(topN || 1));
   const relevant = relevantStatKeys({ items, selections, constraints });
-  const prepared = buildGroups(items, slotRules, relevant.keys, relevant.nonMonotoneKeys, constraints, selections, turnMode);
+  const prepared = buildGroups(items, slotRules, relevant.keys, relevant.nonMonotoneKeys, constraints, selections, turnMode, character.level);
   const groups = prepared.groups;
   const groupDiagnostics = diagnosticsForGroups(groups);
 
@@ -256,6 +268,7 @@ export function optimizeBuild({
         nodes: 0,
         pruned: 0,
         prunedConstraints: 0,
+        prunedConditions: 0,
         prunedScore: 0,
         prunedSpecial: 0,
         impossible: true,
@@ -284,6 +297,7 @@ export function optimizeBuild({
   let nodes = 0;
   let visited = 0;
   let prunedConstraints = 0;
+  let prunedConditions = 0;
   let prunedScore = 0;
   let prunedSpecial = 0;
   let rejectedConditions = 0;
@@ -296,12 +310,16 @@ export function optimizeBuild({
     objectiveSuffixBounded[index] = objectiveSuffixBounded[index + 1] && groups[index].objectiveCaps.bounded;
   }
 
+  function totalPruned() {
+    return prunedConstraints + prunedConditions + prunedScore + prunedSpecial;
+  }
+
   function reportProgress() {
     if (!onProgress || nodes % 5000 !== 0) return;
     onProgress({
       nodes,
       visited,
-      pruned: prunedConstraints + prunedScore + prunedSpecial,
+      pruned: totalPruned(),
       best: results[0]?.score || 0,
       threshold: results.length >= limit ? results[results.length - 1].score : null
     });
@@ -333,6 +351,20 @@ export function optimizeBuild({
 
     if (!canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper)) {
       prunedConstraints++;
+      return false;
+    }
+
+    const optimisticFinalStats = emptyStats();
+    sumInto(optimisticFinalStats, rawStats, remainingStatic, setUpper, charUpper, fmUpper);
+    const currentSetBonus = countSetBonuses(selectedItems);
+    if (!selectedItemConditionsCouldStillBeValid(selectedItems, {
+      constraints,
+      characterLevel: character.level,
+      upperStats: optimisticFinalStats,
+      currentSetBonus,
+      maxSetBonus: currentSetBonus + remainingPicks
+    })) {
+      prunedConditions++;
       return false;
     }
 
@@ -450,14 +482,14 @@ export function optimizeBuild({
   }
 
   visitGroup(0);
-  const pruned = prunedConstraints + prunedScore + prunedSpecial;
   return {
     results,
     diagnostics: {
       visited,
       nodes,
-      pruned,
+      pruned: totalPruned(),
       prunedConstraints,
+      prunedConditions,
       prunedScore,
       prunedSpecial,
       rejectedConditions,
