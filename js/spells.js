@@ -97,6 +97,17 @@ export function selectedTurnsForMode(mode) {
   return [1, 2, 3];
 }
 
+export function requiredApForTurn(selections = [], turn = 1) {
+  let total = 0;
+  for (const selection of selections || []) {
+    if (!selection?.enabled) continue;
+    const casts = Math.max(0, Number(selection.casts?.[turn] ?? 0));
+    const apCost = Math.max(0, Number(selection.spell?.apCost || 0));
+    total += casts * apCost;
+  }
+  return total;
+}
+
 function aggregateTurnScores(perTurn, turnMode) {
   const values = Object.values(perTurn);
   let score = values[0] || 0;
@@ -106,9 +117,10 @@ function aggregateTurnScores(perTurn, turnMode) {
   return score;
 }
 
-export function evaluateTurnConstraints({ stats, items = [], constraints = {}, turnMode = 'sum', scenario = {} }) {
+export function evaluateTurnConstraints({ stats, items = [], constraints = {}, selections = [], turnMode = 'sum', scenario = {} }) {
   const perTurn = {};
   const deficitsByTurn = {};
+  const requiredApByTurn = {};
   const unresolvedPassiveContexts = new Set();
 
   for (const turn of selectedTurnsForMode(turnMode)) {
@@ -117,7 +129,13 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, t
     for (const unresolved of turnResult.unresolved || []) {
       for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
     }
-    const deficits = constraintDeficits(turnResult.stats, constraints);
+    const requiredAp = requiredApForTurn(selections, turn);
+    requiredApByTurn[turn] = requiredAp;
+    const turnConstraints = {
+      ...constraints,
+      ap: Math.max(Math.max(0, Number(constraints.ap || 0)), requiredAp)
+    };
+    const deficits = constraintDeficits(turnResult.stats, turnConstraints);
     if (Object.keys(deficits).length) deficitsByTurn[turn] = deficits;
   }
 
@@ -125,6 +143,7 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, t
     meets: Object.keys(deficitsByTurn).length === 0 && unresolvedPassiveContexts.size === 0,
     perTurn,
     deficitsByTurn,
+    requiredApByTurn,
     unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort()
   };
 }
