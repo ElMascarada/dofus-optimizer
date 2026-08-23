@@ -1,0 +1,63 @@
+{
+  "generatedAt": "2026-08-06T14:44:19.969310786+02:00",
+  "version": {
+    "version": "3.6.10.10",
+    "release": "main",
+    "update_stamp": "2026-08-06T14:44:19.969310786+02:00"
+  },
+  "elements": 273,
+  "items": {
+    "total": 1111,
+    "certified": 380,
+    "unknownSlot": 236,
+    "unmappedEffects": 551,
+    "activeEffects": 248,
+    "metaEffects": 528,
+    "unmappedConditions": 87,
+    "bySlot": {
+      "dofus": 295,
+      "cape": 48,
+      "companion": 147,
+      "weapon": 94,
+      "hat": 62,
+      "ring": 51,
+      "boots": 56,
+      "amulet": 52,
+      "belt": 41,
+      "shield": 29
+    },
+    "unknownEffectNames": {
+      "Exchangeable:": 30,
+      "Emote": 30,
+      "% Critical": 336,
+      "Heal": 124,
+      "Pod": 10,
+      "reflected damage": 3,
+      "Linked to the character": 6,
+      "/": 2,
+      "Add a temporary spell": 1,
+      "Hunting weapon": 9
+    },
+    "unknownConditionNames": {
+      "Set bonus": 87
+    },
+    "certifiedPct": 34.2,
+    "unknownSlotTypes": {
+      "Prysmaradite": 25,
+      "Fers de Percepteur": 41,
+      "Tunique de Percepteur": 41,
+      "Bannière de Percepteur": 41,
+      "Poignards de Percepteur": 41,
+      "Cuirasses de Percepteur": 41,
+      "Coffres de Percepteur": 3,
+      "Sacoches de Percepteur": 3
+    },
+    "snapshotCertified": 339,
+    "excludedByUncertifiedSet": 41
+  },
+  "sets": {
+    "total": 107,
+    "certified": 47,
+    "uncertified": 60
+  }
+}
