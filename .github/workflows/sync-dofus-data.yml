@@ -9,6 +9,7 @@ on:
     paths:
       - '.github/workflows/sync-dofus-data.yml'
       - 'js/data-certification.js'
+      - 'js/dofus-source-rules.js'
       - 'js/dofusdude-normalizer.js'
       - 'scripts/sync-dofusdude.mjs'
       - 'scripts/normalize-dofusdude.mjs'
