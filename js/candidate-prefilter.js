@@ -109,13 +109,16 @@ function addNumericStats(target, source) {
   return target;
 }
 
-function statsProfile(stats, { targetElement, constraints, selections, turnMode }) {
+function statsProfile(stats, { targetElement, constraints, selections, turnMode, baselineObjective = 0 }) {
   const objective = evaluateObjectiveUpperBound({ stats: stats || {}, selections, turnMode }).score;
+  const objectiveGain = Number.isFinite(objective)
+    ? Math.max(0, objective - Number(baselineObjective || 0))
+    : 0;
   const constraint = positiveConstraintContribution(stats, constraints);
   const target = targetElementValue(stats, targetElement);
   const generic = genericOffenseValue(stats);
   const other = otherElementValue(stats, targetElement);
-  let score = constraint + (Number.isFinite(objective) ? Math.max(0, objective) : 0);
+  let score = constraint + objectiveGain;
   if (targetElement) {
     score += target * 35;
     score += generic * 6;
@@ -124,9 +127,10 @@ function statsProfile(stats, { targetElement, constraints, selections, turnMode 
     score += generic * 4;
   }
   return {
-    relevant: target > 0 || generic > 0 || constraint > 0 || (Number.isFinite(objective) && objective > 0),
+    relevant: target > 0 || generic > 0 || constraint > 0 || objectiveGain > 0,
     score,
     objective: Number.isFinite(objective) ? objective : 0,
+    objectiveGain,
     constraint,
     target,
     generic,
@@ -335,6 +339,7 @@ export function prefilterItems({
     selections,
     turnMode,
     scenario,
+    baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
     relevantSetPlans: null
   };
   context.relevantSetPlans = buildRelevantSetPlans(sets, items, context, slotRules);
