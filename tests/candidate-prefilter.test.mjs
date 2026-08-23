@@ -54,6 +54,22 @@ test('mono-element prefilter keeps structural AP or MP pieces needed by hard con
   assert.ok(ids(result).includes('ap-fire-amu'));
 });
 
+test('combo AP requirement is promoted into the prefilter search target', () => {
+  const result = prefilterItems({
+    items: [
+      { id: 'earth-amu', slot: 'amulet', stats: { earth: 80 } },
+      { id: 'ap-fire-amu', slot: 'amulet', stats: { fire: 80, ap: 1 } }
+    ],
+    selections: earthSelections,
+    constraints: { ap: 12 },
+    scenario: { requiredApByTurn: { 1: 14, 2: 12, 3: 12 } },
+    slotRules: [{ id: 'amulet', count: 1 }]
+  });
+
+  assert.equal(result.diagnostics.apTarget, 14);
+  assert.ok(ids(result).includes('ap-fire-amu'));
+});
+
 test('off-element set piece remains eligible when its set bonus helps the target build', () => {
   const result = prefilterItems({
     items: [
