@@ -2,6 +2,7 @@ import { addStats, emptyStats, stat } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import { evaluateObjectiveUpperBound } from './spells.js';
 import { specialSlotRulesAreValid } from './build-legality.js';
+import { coreOffensiveDofus, dofusSeedPrior } from './dofus-seed-priors.js';
 
 function itemId(item) {
   return String(item?.id ?? '');
@@ -43,11 +44,13 @@ function directionalFitness(items = [], classifications = new Map()) {
   let score = 0;
   for (const item of items) {
     const priority = Math.max(0, Number(classifications?.get(item.id)?.priority || 0));
-    // Search priorities can be deliberately very large (PA/PM, set activation, etc.).
-    // Compress them here so one metadata weight cannot drown the actual damage signal.
     score += Math.log1p(priority);
   }
   return score;
+}
+
+function dofusPriorFitness(items = []) {
+  return items.reduce((sum, item) => sum + dofusSeedPrior(item), 0);
 }
 
 function rankState(items, {
@@ -62,13 +65,15 @@ function rankState(items, {
   const constraint = constraintFitness(stats, constraints);
   const objective = Number(evaluateObjectiveUpperBound({ stats, selections, turnMode }).score || 0);
   const directional = directionalFitness(items, classifications);
+  const dofusPrior = dofusPriorFitness(items);
 
-  // This is deliberately a feasibility-first ranking: a seed only needs to provide a
-  // strong legal lower bound. It never replaces the exact branch-and-bound result.
   const feasibility = constraint.active
     ? (constraint.coverage * 1e9 - constraint.missing * 1e8)
     : 0;
-  return feasibility + objective * 1000 + directional * 100;
+
+  // The Dofus prior is deliberately strong only inside the heuristic seed. It helps
+  // test familiar offensive cores early, but never forces them into the exact result.
+  return feasibility + dofusPrior * 1e6 + objective * 1000 + directional * 100;
 }
 
 function pushUnique(map, key, value) {
@@ -120,6 +125,12 @@ function shortlistDynamicCandidates(group, constraints, classifications, {
   if (candidates.length <= baseLimit) return candidates;
   const selected = new Map();
   for (const item of candidates.slice(0, baseLimit)) pushUnique(selected, itemId(item), item);
+
+  // Always preserve known high-value offensive/flexible Dofus in the heuristic pool.
+  // This is only an ordering hint; final correctness is still owned by exact search.
+  for (const item of candidates.filter((candidate) => dofusSeedPrior(candidate) > 0)) {
+    pushUnique(selected, itemId(item), item);
+  }
 
   for (const [key, minimumRaw] of Object.entries(constraints || {})) {
     if (!(Number(minimumRaw) > 0)) continue;
@@ -182,6 +193,33 @@ function expandWithHardChoices(beam, group, rankOptions, dynamicBaseWidth, dynam
   };
 }
 
+function expandWithDynamicCandidates(beam, group, candidates, rankOptions, dynamicBaseWidth, dynamicBeamWidth) {
+  let dynamicBeam = beam.slice(0, dynamicBaseWidth).map((state) => ({ ...state, lastIndex: -1 }));
+  let generated = 0;
+  for (let pick = 0; pick < Number(group.count || 0); pick++) {
+    const expanded = [];
+    const remainingAfter = Number(group.count || 0) - pick - 1;
+    for (const state of dynamicBeam) {
+      const selectedIds = new Set(state.items.map((item) => item.id));
+      const maxIndex = candidates.length - remainingAfter;
+      for (let index = state.lastIndex + 1; index < maxIndex; index++) {
+        const item = candidates[index];
+        if (selectedIds.has(item.id)) continue;
+        const items = [...state.items, item];
+        if (!specialSlotRulesAreValid(items)) continue;
+        generated++;
+        expanded.push({ items, lastIndex: index, rank: rankState(items, rankOptions) });
+      }
+    }
+    dynamicBeam = trimBeam(expanded, dynamicBeamWidth).map((state) => ({ ...state, lastIndex: state.lastIndex ?? -1 }));
+    if (!dynamicBeam.length) break;
+  }
+  return {
+    beam: dynamicBeam.map(({ lastIndex, ...state }) => state),
+    generated
+  };
+}
+
 export function findSeedResults({
   groups = [],
   baseStats = {},
@@ -225,39 +263,28 @@ export function findSeedResults({
     if (!beam.length) break;
   }
 
-  // For constrained searches, a dynamic multi-pick group can expose a compact exact
-  // Pareto frontier on the requested hard stats. Use it directly for the seed. This
-  // avoids guessing six trophies/Dofus independently while remaining heuristic-only:
-  // the exact solver still owns the full offensive dynamic search afterwards.
   for (const group of dynamicGroups) {
+    const channels = [];
+
     if (group.hardConstraintChoices?.length) {
-      const expanded = expandWithHardChoices(beam, group, rankOptions, dynamicBaseWidth, dynamicBeamWidth);
-      generated += expanded.generated;
-      beam = expanded.beam;
-      continue;
+      const hard = expandWithHardChoices(beam, group, rankOptions, dynamicBaseWidth, dynamicBeamWidth);
+      generated += hard.generated;
+      channels.push(...hard.beam);
     }
 
     const candidates = shortlistDynamicCandidates(group, constraints, classifications);
-    let dynamicBeam = beam.slice(0, dynamicBaseWidth).map((state) => ({ ...state, lastIndex: -1 }));
-    for (let pick = 0; pick < Number(group.count || 0); pick++) {
-      const expanded = [];
-      const remainingAfter = Number(group.count || 0) - pick - 1;
-      for (const state of dynamicBeam) {
-        const selectedIds = new Set(state.items.map((item) => item.id));
-        const maxIndex = candidates.length - remainingAfter;
-        for (let index = state.lastIndex + 1; index < maxIndex; index++) {
-          const item = candidates[index];
-          if (selectedIds.has(item.id)) continue;
-          const items = [...state.items, item];
-          if (!specialSlotRulesAreValid(items)) continue;
-          generated++;
-          expanded.push({ items, lastIndex: index, rank: rankState(items, rankOptions) });
-        }
-      }
-      dynamicBeam = trimBeam(expanded, dynamicBeamWidth).map((state) => ({ ...state, lastIndex: state.lastIndex ?? -1 }));
-      if (!dynamicBeam.length) break;
-    }
-    beam = dynamicBeam.map(({ lastIndex, ...state }) => state);
+    const offensive = expandWithDynamicCandidates(
+      beam,
+      group,
+      candidates,
+      rankOptions,
+      dynamicBaseWidth,
+      dynamicBeamWidth
+    );
+    generated += offensive.generated;
+    channels.push(...offensive.beam);
+
+    beam = trimBeam(channels, dynamicBeamWidth);
   }
 
   const results = [];
@@ -282,9 +309,8 @@ export function findSeedResults({
         count: group.count,
         candidates: group.candidates?.length || 0,
         hardConstraintChoices: group.hardConstraintChoices?.length || 0,
-        shortlisted: group.hardConstraintChoices?.length
-          ? group.hardConstraintChoices.length
-          : shortlistDynamicCandidates(group, constraints, classifications).length
+        coreCandidates: coreOffensiveDofus(group.candidates || []).length,
+        shortlisted: shortlistDynamicCandidates(group, constraints, classifications).length
       }))
     }
   };
