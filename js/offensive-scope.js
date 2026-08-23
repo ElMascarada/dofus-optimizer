@@ -1,4 +1,4 @@
-import { evaluateObjectiveUpperBound } from './spells.js';
+import { evaluateObjective } from './spells.js';
 import { collectConditionStatInfo, optimisticItemStats } from './search-space.js';
 import { stat } from './stats.js';
 
@@ -6,7 +6,7 @@ const EPSILON = 1e-9;
 const RESOURCE_KEYS = ['ap', 'mp'];
 
 function objectiveScore(stats, selections, turnMode) {
-  return Number(evaluateObjectiveUpperBound({ stats, selections, turnMode }).score || 0);
+  return Number(evaluateObjective({ stats, selections, turnMode }).score || 0);
 }
 
 function positiveObjectiveDelta(stats, selections, turnMode) {
@@ -119,6 +119,8 @@ export function classifyCandidate(item, {
   // Search-order score only. The exact solver still validates every retained candidate.
   // Set potential is intentionally strong: a weak individual piece can be the key that
   // activates an exceptional two-piece bonus (the Volkorne pattern).
+  // Offensive value is EXPECTED damage, so critical chance naturally rises only when
+  // the selected spells actually gain damage from critical hits.
   const priority = offensiveDelta * 100
     + setPriority * 80
     + resource.score * 100000
