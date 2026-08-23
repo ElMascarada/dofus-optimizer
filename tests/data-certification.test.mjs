@@ -29,11 +29,12 @@ test('snapshot excludes otherwise-certified items linked to unsafe or missing se
   assert.deepEqual(selectSnapshotItems(items, sets).map((item) => item.id), ['free', 'safe']);
 });
 
-test('coverage keeps unknown level-200 slot types visible and timestamp stable', () => {
+test('coverage keeps unknown player slot types visible, ignores collectors, and keeps timestamp stable', () => {
   const items = [
     { id: 'unknown', level: 200, slot: null, typeName: 'Prysmaradite' },
     { id: 'old-hat', level: 199, slot: 'hat', typeName: 'Coiffe' },
-    { id: 'dofus', level: 100, slot: 'dofus', typeName: 'Dofus' }
+    { id: 'dofus', level: 100, slot: 'dofus', typeName: 'Dofus' },
+    { id: 'collector', level: 200, slot: null, typeName: 'Fers de Percepteur' }
   ];
   const coverage = equipmentForCoverage(items);
   assert.deepEqual(coverage.map((item) => item.id), ['unknown', 'dofus']);
