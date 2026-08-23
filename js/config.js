@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.10.5';
+export const APP_VERSION = '0.10.6';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
@@ -43,7 +43,8 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
 export const DEFAULT_FM = Object.freeze({
   spellDamagePct: 3,
   allowCritDamage: true,
-  critDamageAmount: 8
+  critDamageAmount: 8,
+  structuralExos: true
 });
 
 export const TURN_MODES = [
