@@ -187,7 +187,10 @@ function characterUpperStats(character) {
 function fmUpperStats(groups, fmPolicy) {
   let forgeableCount = 0;
   for (const group of groups) if (FM_ELIGIBLE_SLOTS.has(group.id)) forgeableCount += group.count;
+  const structuralExos = fmPolicy?.structuralExos === true && forgeableCount >= 2;
   return {
+    ap: structuralExos ? 1 : 0,
+    mp: structuralExos ? 1 : 0,
     spellDamagePct: forgeableCount * Math.max(0, Number(fmPolicy?.spellDamagePct || 0)),
     critDamage: fmPolicy?.allowCritDamage ? forgeableCount * Math.max(0, Number(fmPolicy?.critDamageAmount || 0)) : 0
   };
@@ -390,11 +393,6 @@ export function optimizeBuild({
       baseVitality: 0
     });
 
-    if (!itemConditionsAreValid(selectedItems, charResult.stats, character.level)) {
-      rejectedConditions++;
-      return;
-    }
-
     const fm = optimizeFm({
       baseStats: charResult.stats,
       items: selectedItems,
@@ -405,6 +403,14 @@ export function optimizeBuild({
     });
     if (!fm || fm.objective.unresolvedPassiveContexts?.length) {
       rejectedUnresolvedPassives++;
+      return;
+    }
+
+    // Permanent PA/PM exos are part of the equipped build and therefore count
+    // for static item conditions. Temporary combat passives are still applied
+    // only afterwards by evaluateTurnConstraints.
+    if (!itemConditionsAreValid(selectedItems, fm.stats, character.level)) {
+      rejectedConditions++;
       return;
     }
 
@@ -432,6 +438,7 @@ export function optimizeBuild({
       fm: {
         critItems: fm.critItems,
         spellPctItems: fm.spellPctItems,
+        structuralExos: fm.structuralExos || 0,
         assignments: fm.assignments
       },
       activeSets
