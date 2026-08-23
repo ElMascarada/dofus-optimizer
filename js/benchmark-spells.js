@@ -2,6 +2,18 @@
 // These are deliberately synthetic: they are stable regression fixtures, not canonical game data.
 export const BENCHMARK_SPELL_PROFILES = [
   {
+    id: 'stress-high-base-earth',
+    name: 'Charge solveur — Terre base très élevée',
+    intent: 'Profil artificiel de performance : amplifie le signal Force/Puissance pour mesurer le pruning du solveur.',
+    spell: {
+      id: 'bench-stress-high-base-earth',
+      name: 'Benchmark charge Terre',
+      baseCritPct: 0,
+      distance: 'ranged',
+      hits: [{ element: 'earth', normal: [300, 300], crit: [300, 300] }]
+    }
+  },
+  {
     id: 'mono-earth-nuke',
     name: 'Mono Terre — grosse base',
     intent: 'Favorise Force/Terre, Puissance et dommages finaux plutôt que les petits bonus plats.',
@@ -87,6 +99,10 @@ export const BENCHMARK_SPELL_PROFILES = [
     }
   }
 ];
+
+export function benchmarkProfile(id) {
+  return BENCHMARK_SPELL_PROFILES.find((profile) => profile.id === id) || null;
+}
 
 export function benchmarkSelection(profile, casts = { 1: 1, 2: 1, 3: 1 }) {
   return [{
