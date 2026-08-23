@@ -14,33 +14,66 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect current Dofusdude release assets
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          VERSION=3.6.10.10
-          gh release view "$VERSION" -R dofusdude/dofus3-main --json assets --jq '.assets[].name' | grep -Ei '(^|_)(fr|effect|spell|breed)|language|i18n' || true
-      - name: Download current Dofusdude release spell assets
+      - name: Download current Dofusdude release assets
         run: |
           VERSION=3.6.10.10
           BASE="https://github.com/dofusdude/dofus3-main/releases/download/${VERSION}"
-          curl -LfsS "$BASE/spells.json" -o /tmp/spells.json
-          curl -LfsS "$BASE/spell_levels.json" -o /tmp/spell_levels.json
-          curl -LfsS "$BASE/breeds.json" -o /tmp/breeds.json
-      - name: Print representative spell and level data
+          for FILE in spells spell_levels breeds effects fr; do
+            curl -LfsS "$BASE/${FILE}.json" -o "/tmp/${FILE}.json"
+          done
+      - name: Map representative French labels and effect metadata
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const refs = (name) => JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8')).references.RefIds;
-          const spells = refs('spells').filter((entry) => entry?.type?.class === 'SpellData').map((entry) => entry.data);
-          const levels = refs('spell_levels').filter((entry) => entry?.type?.class === 'SpellLevelData').map((entry) => entry.data);
-          const breeds = refs('breeds').filter((entry) => entry?.type?.class === 'BreedData').map((entry) => entry.data);
-          console.log('counts', { spells: spells.length, levels: levels.length, breeds: breeds.length });
-          const breed = breeds.find((entry) => entry?.breedSpellsId?.Array?.length) || breeds[0];
-          console.log('breed', JSON.stringify({ id: breed?.id, shortNameId: breed?.shortNameId, spellIds: breed?.breedSpellsId?.Array?.slice(0, 8) }, null, 2));
-          const wantedId = breed?.breedSpellsId?.Array?.[0];
-          const spell = spells.find((entry) => entry?.id === wantedId) || spells.find((entry) => entry?.spellLevels?.Array?.length);
-          console.log('spell', JSON.stringify(spell, null, 2).slice(0, 16000));
+          const read = (name) => JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8'));
+          const refs = (name, className) => (read(name).references?.RefIds || [])
+            .filter((entry) => !className || entry?.type?.class === className)
+            .map((entry) => entry.data);
+          const spells = refs('spells', 'SpellData');
+          const levels = refs('spell_levels', 'SpellLevelData');
+          const breeds = refs('breeds', 'BreedData');
+          const effects = refs('effects');
+          const breed = breeds.find((entry) => entry?.id === 1) || breeds.find((entry) => entry?.breedSpellsId?.Array?.length);
+          const spell = spells.find((entry) => entry?.id === breed?.breedSpellsId?.Array?.[0]);
           const levelIds = spell?.spellLevels?.Array || [];
-          console.log('spell levels', JSON.stringify(levels.filter((entry) => levelIds.includes(entry.id)), null, 2).slice(0, 40000));
+          const level = levels.filter((entry) => levelIds.includes(entry.id)).sort((a,b) => b.minPlayerLevel - a.minPlayerLevel)[0];
+          const effectIds = [...new Set([...(level?.effects?.Array || []), ...(level?.criticalEffect?.Array || [])].map((entry) => entry.effectId))];
+
+          const fr = read('fr');
+          console.log('fr top-level', Object.keys(fr).slice(0, 20));
+          console.log('fr sample', JSON.stringify(fr, null, 2).slice(0, 8000));
+          function findTranslation(id) {
+            const wanted = String(id);
+            const seen = new Set();
+            const queue = [{ path: '$', value: fr }];
+            while (queue.length) {
+              const { path, value } = queue.shift();
+              if (!value || typeof value !== 'object' || seen.has(value)) continue;
+              seen.add(value);
+              if (!Array.isArray(value)) {
+                if (Object.prototype.hasOwnProperty.call(value, wanted)) return { path: `${path}.${wanted}`, value: value[wanted] };
+                if (Object.prototype.hasOwnProperty.call(value, Number(id))) return { path: `${path}.${wanted}`, value: value[Number(id)] };
+              }
+              for (const [key, child] of Object.entries(value)) {
+                if (child && typeof child === 'object') queue.push({ path: `${path}.${key}`, value: child });
+              }
+            }
+            return null;
+          }
+          console.log('translations', {
+            breed: { id: breed?.shortNameId, match: findTranslation(breed?.shortNameId) },
+            spell: { id: spell?.nameId, match: findTranslation(spell?.nameId) }
+          });
+          console.log('representative', JSON.stringify({
+            breedId: breed?.id,
+            spellId: spell?.id,
+            levelId: level?.id,
+            minPlayerLevel: level?.minPlayerLevel,
+            apCost: level?.apCost,
+            crit: level?.criticalHitProbability,
+            effectIds,
+            effectElements: [...new Set([...(level?.effects?.Array || []), ...(level?.criticalEffect?.Array || [])].map((entry) => entry.effectElement))]
+          }, null, 2));
+          console.log('effects top-level', Object.keys(read('effects')));
+          console.log('effect matches', JSON.stringify(effects.filter((entry) => effectIds.includes(entry?.id)), null, 2).slice(0, 30000));
           NODE
