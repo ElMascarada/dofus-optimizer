@@ -1,8 +1,8 @@
-# Dofus Optimizer — prototype V0.1
+# Dofus Optimizer — prototype V0.2
 
 Web app statique/PWA destinée à rechercher un équipement Dofus optimal sous contraintes.
 
-## V0.1
+## V0.2
 
 Le prototype pose les contrats de calcul avant d'intégrer toute la base de jeu :
 
@@ -11,12 +11,12 @@ Le prototype pose les contrats de calcul avant d'intégrer toute la base de jeu 
 - contraintes minimales sur PA/PM/PO, vitalité et résistances ;
 - bonus de panoplie ;
 - répartition automatique des 995 points de caractéristiques par paliers ;
-- FM offensive simplifiée : `+X % dommages aux sorts` ou `+8 dommages critiques` lorsque l'objet n'a pas de Do Crit natifs ;
+- FM offensive simplifiée : `+X % dommages aux sorts` ou `+8 dommages critiques` lorsque l'objet n'a pas de Do Crit natifs, uniquement sur les slots réellement forgeables ;
 - classement Top N des builds ;
-- architecture de données prévue pour un snapshot Dofusdude vendored ;
+- pipeline Dofusdude : snapshot brut hors navigateur → normalisation stricte → rapport de couverture → snapshot certifié ;
 - tests Node sans dépendance.
 
-Le dataset livré ici est volontairement un **fixture de démonstration**, pas la base Dofus complète. Le script `scripts/sync-dofusdude.mjs` prépare la récupération brute de Dofusdude ; la prochaine étape consiste à finaliser la normalisation des effets réels et son rapport de couverture avant d'autoriser le solveur à utiliser le snapshot complet.
+Le dataset utilisé par l'UI reste pour l'instant un **fixture de démonstration**. En revanche, la V0.2 contient désormais le pipeline complet de synchronisation et de normalisation Dofusdude. Seuls les items dont le slot, les effets passifs et les conditions sont compris entrent dans le snapshot certifié.
 
 ## Lancer localement
 
@@ -33,6 +33,9 @@ Tests :
 ```bash
 npm test
 npm run check
+
+# lorsque la machine a accès au réseau
+npm run sync:normalize
 ```
 
 ## Architecture
@@ -48,7 +51,9 @@ npm run check
 - `js/solver.js` — recherche, pruning de contraintes et Top N.
 - `js/sample-data.js` — petit dataset permettant de tester immédiatement.
 - `js/app.js` — UI et orchestration.
-- `scripts/sync-dofusdude.mjs` — récupération des snapshots bruts.
+- `js/dofusdude-normalizer.js` — mapping strict effets/conditions/slots Dofusdude.
+- `scripts/sync-dofusdude.mjs` — récupération des snapshots bruts hors navigateur.
+- `scripts/normalize-dofusdude.mjs` — snapshot compact certifié + rapport de couverture.
 - `SOURCE_DATA.md` — provenance et stratégie de validation des données.
 
 ## Principe de fiabilité
