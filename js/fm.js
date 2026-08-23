@@ -3,7 +3,7 @@ import { evaluateObjective } from './spells.js';
 
 export const FM_ELIGIBLE_SLOTS = new Set(['hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield']);
 
-export function optimizeFm({ baseStats, items, selections, turnMode, policy }) {
+export function optimizeFm({ baseStats, items, selections, turnMode, policy, scenario = {} }) {
   const forgeableItems = items.filter((item) => FM_ELIGIBLE_SLOTS.has(item.slot));
   const critEligible = forgeableItems.filter((item) => Number(item.stats?.critDamage || 0) === 0);
   const forcedSpellPct = forgeableItems.length - critEligible.length;
@@ -16,7 +16,7 @@ export function optimizeFm({ baseStats, items, selections, turnMode, policy }) {
     stats.spellDamagePct = (stats.spellDamagePct || 0) + spellPctItems * policy.spellDamagePct;
     stats.critDamage = (stats.critDamage || 0) + critItems * policy.critDamageAmount;
 
-    const objective = evaluateObjective({ stats, items, selections, turnMode });
+    const objective = evaluateObjective({ stats, items, selections, turnMode, scenario });
     if (!best || objective.score > best.objective.score) {
       const critIds = new Set(critEligible.slice(0, critItems).map((item) => item.id));
       best = {
