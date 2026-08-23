@@ -20,6 +20,7 @@ elements[3] = 'Earth Resistance';
 elements[4] = 'Critical Damage';
 elements[5] = 'AP';
 elements[6] = 'Level';
+elements[7] = '% Weapon Damage';
 elements[99] = 'Unsupported Future Stat';
 
 function effect(typeId, min, max = min, extra = {}) {
@@ -40,6 +41,13 @@ test('normalizes max item rolls and keeps fixed/% resistances separate', () => {
   });
   assert.equal(normalizeEffect(effect(2, 6, 10), elements).stat, 'resEarth');
   assert.equal(normalizeEffect(effect(3, 6, 10), elements).stat, 'fixedResEarth');
+});
+
+test('normalizes weapon damage as its own offensive stat', () => {
+  const normalized = normalizeEffect(effect(7, 6), elements);
+  assert.equal(normalized.status, 'mapped');
+  assert.equal(normalized.stat, 'weaponDamagePct');
+  assert.equal(normalized.value, 6);
 });
 
 test('active and unknown effects never silently become passive stats', () => {
