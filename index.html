@@ -16,7 +16,7 @@
 
   <main>
     <section class="panel intro">
-      <div><strong>Prototype moteur</strong><p>Le dataset actuel est volontairement réduit. L'architecture de calcul est déjà celle du futur outil complet.</p></div>
+      <div><strong>Base de jeu certifiée</strong><p id="data-status">Chargement de la base certifiée…</p></div>
       <span class="status">Calcul local</span>
     </section>
 
@@ -25,6 +25,7 @@
         <section class="panel">
           <h2>1. Sorts à optimiser</h2>
           <div id="spell-list"></div>
+          <p class="hint">Les sorts sont encore le jeu de test actuel ; l’équipement et les panoplies viennent désormais de la base Dofus certifiée.</p>
         </section>
 
         <section class="panel">
@@ -33,7 +34,17 @@
         </section>
 
         <section class="panel">
-          <h2>3. Contraintes</h2>
+          <h2>3. Contexte Prysmaradites</h2>
+          <div class="form-grid">
+            <label class="field">Ratrapry · ennemis à +9 PO<input id="ctx-ratrapry-far" type="number" min="0" max="3" placeholder="non renseigné"></label>
+            <label class="field">Pryximite · proches début T1<input id="ctx-pryximite-start" type="number" min="0" placeholder="non renseigné"></label>
+            <label class="field">Pryximite · proches fin T1<input id="ctx-pryximite-end" type="number" min="0" placeholder="non renseigné"></label>
+          </div>
+          <p class="hint">Laisser vide signifie « ne pas supposer ». Un item dont le calcul dépend de ce contexte ne sera pas retenu tant que l’information manque.</p>
+        </section>
+
+        <section class="panel">
+          <h2>4. Contraintes</h2>
           <div class="form-grid">
             <label class="field">PA min<input id="min-ap" type="number" min="0"></label>
             <label class="field">PM min<input id="min-mp" type="number" min="0"></label>
@@ -47,7 +58,7 @@
         </section>
 
         <section class="panel">
-          <h2>4. FM offensive</h2>
+          <h2>5. FM offensive</h2>
           <label class="field">% Do sorts par item
             <select id="fm-spell"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
           </label>
@@ -55,13 +66,13 @@
           <p class="hint">Le moteur compare lui-même les deux options selon les sorts sélectionnés.</p>
         </section>
 
-        <button id="optimize" class="primary">Optimiser le stuff</button>
+        <button id="optimize" class="primary" disabled>Optimiser le stuff</button>
         <p id="diagnostics" class="diagnostics"></p>
       </aside>
 
       <section class="output">
         <div class="section-title"><div><span class="eyebrow">RÉSULTATS</span><h2>Top builds</h2></div><span class="pill">Top 10</span></div>
-        <div id="results"></div>
+        <div id="results"><div class="empty">Chargement de la base certifiée…</div></div>
       </section>
     </div>
   </main>
