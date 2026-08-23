@@ -2,9 +2,9 @@
 
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
-- Included items: 900
-- Self-certified items in coverage scope: 815 (90.56%)
-- Snapshot-certified items: 809
+- Included items: 898
+- Self-certified items in coverage scope: 813 (90.53%)
+- Snapshot-certified items: 807
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 31
@@ -12,6 +12,7 @@
 - Meta effects: 76
 - Explicitly ignored non-combat metadata: 47
 - Items with unmapped conditions: 0
+- Explicitly excluded internal/non-player items: 214
 - Sets: 106/107 certified
 
 ## Slots
@@ -20,7 +21,7 @@
 - belt: 41
 - boots: 56
 - cape: 48
-- companion: 147
+- companion: 145
 - dofus: 320
 - hat: 62
 - ring: 51
@@ -73,7 +74,290 @@
 
 ## Temporal items pending
 
-- none
+- Dofus Pourpre (#694; Dofus): meta:-special spell-
+- Dofus Émeraude (#737; Dofus): meta:-special spell-
+- Dofus Turquoise (#739; Dofus): meta:-special spell-
+- Dofusteuse (#958; Cape): meta:-special spell-
+- Dofus Cawotte (#972; Dofus): meta:-special spell-
+- Dofus Vulbis (#6980; Dofus): meta:-special spell-
+- Dofus Tacheté (#7112; Dofus): meta:-special spell-
+- Dofus Ébène (#7114; Dofus): meta:-special spell-
+- Dofus Ivoire (#7115; Dofus): meta:-special spell-
+- Dofus Ocre (#7754; Dofus): meta:-special spell-
+- Chercheur d'Ogrines (#10657; Familier): meta:Title:
+- Dofus des Veilleurs (#16061; Dofus): meta:-special spell-
+- Dokoko (#17078; Dofus): meta:-special spell-
+- Dofus Abyssal (#18043; Dofus): meta:-special spell-
+- Dofus Forgelave (#19398; Dofus): meta:-special spell-
+- Dofus Argenté (#19629; Dofus): meta:-special spell-
+- Dofus Argenté Scintillant (#20286; Dofus): meta:-special spell-
+- Droiture de Fallanster (#20357; Bouclier): meta:-special spell-
+- Trompe-la-Mort (#20358; Bouclier): meta:-special spell-
+- Couronne de Brâm Barbe-Monde (#20359; Chapeau): meta:-special spell-
+- Diadème de Ganymède (#20360; Chapeau): meta:-special spell-
+- Bravoure de Rykke Errel (#20361; Cape): meta:-special spell-
+- Noblesse de Jahash Jurgen (#20362; Cape): meta:-special spell-
+- Bottes de Mille Lieues (#20363; Bottes): meta:-special spell-
+- Bottes du Cul Botté (#20364; Bottes): meta:-special spell-
+- Audace de Dodge (#20365; Ceinture): meta:-special spell-
+- Courage de Dame Jhessica (#20366; Ceinture): meta:-special spell-
+- Dofus Cacao (#20987; Dofus): meta:-special spell-
+- Prytek Mate (#21451; Prysmaradite): meta:-special spell-
+- Prytek Brillante (#21452; Prysmaradite): meta:-special spell-
+- Prytek Iridescente (#21453; Prysmaradite): meta:-special spell-
+- Sprynt (#21995; Prysmaradite): meta:-special spell-
+- Pryssion Mate (#21996; Prysmaradite): meta:-special spell-
+- Pryssion Brillante (#21997; Prysmaradite): meta:-special spell-
+- Pryssion Iridescente (#21998; Prysmaradite): meta:-special spell-
+- Surpryz (#22001; Prysmaradite): meta:-special spell-
+- Prynyang (#22004; Prysmaradite): meta:-special spell-
+- Ratrapry (#22007; Prysmaradite): meta:-special spell-
+- Prygen (#22010; Prysmaradite): meta:-special spell-
+- Prycipithon Mate (#22011; Prysmaradite): meta:-special spell-
+- Prycipithon Brillante (#22012; Prysmaradite): meta:-special spell-
+- Prycipithon Iridescente (#22013; Prysmaradite): meta:-special spell-
+- Espryt (#22014; Prysmaradite): meta:-special spell-
+- Korprys (#22015; Prysmaradite): meta:-special spell-
+- Caraprys (#22018; Prysmaradite): meta:-special spell-
+- Prysmaru (#22019; Prysmaradite): meta:-special spell-
+- Prysmenvout (#22020; Prysmaradite): meta:-special spell-
+- Supprys (#22021; Prysmaradite): meta:-special spell-
+- Aprybou (#22022; Prysmaradite): meta:-special spell-
+- Pryximite (#22023; Prysmaradite): meta:-special spell-
+- Prymune (#22024; Prysmaradite): meta:-special spell-
+- Prysantor (#22025; Prysmaradite): meta:-special spell-
+- Pestilence de Corruption (#22412; Cape): meta:-special spell-
+- Étreinte de Servitude (#22429; Ceinture): meta:-special spell-
+- Domakuro (#23237; Dofus): meta:-special spell-
+- Dorigami (#23408; Dofus): meta:-special spell-
+- Dofus du Cauchemar (#26066; Dofus): meta:-special spell-
+- Dofus Verdoyant (#29135; Dofus): meta:-special spell-
+- Dofus Sylvestre (#29136; Dofus): meta:-special spell-
+- Jyfus (#30356; Dofus): meta:-special spell-
+- Dofoozbz (#31794; Dofus): meta:-special spell-
+- Ardeur d'Oto Mustam (#32114; Chapeau): meta:-special spell-
+- Bouclier Miroir (#32115; Bouclier): meta:-special spell-
+- Amour d'Helséphine (#32118; Amulette): meta:-special spell-
+- Ponctualité d'Henual (#32119; Anneau): meta:-special spell-
+- Clairvoyance de Mériana (#32121; Bottes): meta:-special spell-
+- Indeprys (#32164; Prysmaradite): meta:-special spell-
+
+## Excluded internal/non-player items
+
+- Surpuissant Chacha de Combat (MJ) (#6894; Familier)
+- Petit Chacha de Combat (MJ) (#6895; Familier)
+- Le Diviseur (MJ) (#7913; Anneau)
+- Fers Fu (#27995; Fers de Percepteur)
+- Fers Ta (#27996; Fers de Percepteur)
+- Fers Espem (#27997; Fers de Percepteur)
+- Fers Age (#27998; Fers de Percepteur)
+- Fers Repem (#27999; Fers de Percepteur)
+- Fers Repo (#28000; Fers de Percepteur)
+- Fers Fu Ta (#28001; Fers de Percepteur)
+- Fers Fu Espem (#28002; Fers de Percepteur)
+- Fers Fu Age (#28003; Fers de Percepteur)
+- Fers Fu Repem (#28004; Fers de Percepteur)
+- Fers Fu Repo (#28005; Fers de Percepteur)
+- Fers Ta Espem (#28006; Fers de Percepteur)
+- Fers Ta Age (#28007; Fers de Percepteur)
+- Fers Ta Repem (#28008; Fers de Percepteur)
+- Fers Ta Repo (#28009; Fers de Percepteur)
+- Fers Espem Age (#28010; Fers de Percepteur)
+- Fers Esrepem (#28011; Fers de Percepteur)
+- Fers Espem Repo (#28012; Fers de Percepteur)
+- Fers Age Repem (#28013; Fers de Percepteur)
+- Fers Age Repo (#28014; Fers de Percepteur)
+- Fers Repem Repo (#28015; Fers de Percepteur)
+- Fers Fu Taespem (#28016; Fers de Percepteur)
+- Fers Fu Taage (#28017; Fers de Percepteur)
+- Fers Fu Tarepem (#28018; Fers de Percepteur)
+- Fers Fu Tarepo (#28019; Fers de Percepteur)
+- Fers Fu Espemage (#28020; Fers de Percepteur)
+- Fers Fu Esrepem (#28021; Fers de Percepteur)
+- Fers Fu Espemrepo (#28022; Fers de Percepteur)
+- Fers Fu Agerepem (#28023; Fers de Percepteur)
+- Fers Fu Agerepo (#28024; Fers de Percepteur)
+- Fers Fu Repemrepo (#28025; Fers de Percepteur)
+- Fers Ta Espemage (#28026; Fers de Percepteur)
+- Fers Ta Esrepem (#28027; Fers de Percepteur)
+- Fers Ta Espemrepo (#28028; Fers de Percepteur)
+- Fers Ta Agerepem (#28029; Fers de Percepteur)
+- Fers Ta Agerepo (#28030; Fers de Percepteur)
+- Fers Ta Repempo (#28031; Fers de Percepteur)
+- Fers Age Esrepem (#28032; Fers de Percepteur)
+- Fers Espem Agerepo (#28033; Fers de Percepteur)
+- Fers Esrepem Repo (#28034; Fers de Percepteur)
+- Fers Age Repemrepo (#28035; Fers de Percepteur)
+- Tunique Ta (#28036; Tunique de Percepteur)
+- Tunique Fo (#28037; Tunique de Percepteur)
+- Tunique Espa (#28038; Tunique de Percepteur)
+- Tunique Cri (#28039; Tunique de Percepteur)
+- Tunique Repa (#28040; Tunique de Percepteur)
+- Tunique Docri (#28041; Tunique de Percepteur)
+- Tunique Tafo (#28042; Tunique de Percepteur)
+- Tunique Ta Espa (#28043; Tunique de Percepteur)
+- Tunique Ta Cri (#28044; Tunique de Percepteur)
+- Tunique Ta Repa (#28045; Tunique de Percepteur)
+- Tunique Ta Docri (#28046; Tunique de Percepteur)
+- Tunique Fo Espa (#28047; Tunique de Percepteur)
+- Tunique Fo Cri (#28048; Tunique de Percepteur)
+- Tunique Fo Repa (#28049; Tunique de Percepteur)
+- Tunique Fo Docri (#28050; Tunique de Percepteur)
+- Tunique Espa Cri (#28051; Tunique de Percepteur)
+- Tunique Esrepa (#28052; Tunique de Percepteur)
+- Tunique Espa Docri (#28053; Tunique de Percepteur)
+- Tunique Crirepa (#28054; Tunique de Percepteur)
+- Tunique Crido (#28055; Tunique de Percepteur)
+- Tunique Repa Docri (#28056; Tunique de Percepteur)
+- Tunique Ta Foespa (#28057; Tunique de Percepteur)
+- Tunique Ta Focri (#28058; Tunique de Percepteur)
+- Tunique Ta Forepa (#28059; Tunique de Percepteur)
+- Tunique Ta Fodocri (#28060; Tunique de Percepteur)
+- Tunique Ta Espacri (#28061; Tunique de Percepteur)
+- Tunique Ta Esrepa (#28062; Tunique de Percepteur)
+- Tunique Ta Espadocri (#28063; Tunique de Percepteur)
+- Tunique Ta Crirepa (#28064; Tunique de Percepteur)
+- Tunique Ta Crido (#28065; Tunique de Percepteur)
+- Tunique Ta Repadocri (#28066; Tunique de Percepteur)
+- Tunique Fo Espacri (#28067; Tunique de Percepteur)
+- Tunique Fo Esrepa (#28068; Tunique de Percepteur)
+- Tunique Fo Espadocri (#28069; Tunique de Percepteur)
+- Tunique Fo Crirepa (#28070; Tunique de Percepteur)
+- Tunique Fo Crido (#28071; Tunique de Percepteur)
+- Tunique Fo Repadocri (#28072; Tunique de Percepteur)
+- Tunique Escrirepa (#28073; Tunique de Percepteur)
+- Tunique Escrido (#28074; Tunique de Percepteur)
+- Tunique Esrepa Docri (#28075; Tunique de Percepteur)
+- Tunique Crido Repa (#28076; Tunique de Percepteur)
+- Bannières Ina (#28077; Bannière de Percepteur)
+- Bannières Repem (#28078; Bannière de Percepteur)
+- Bannières So (#28079; Bannière de Percepteur)
+- Bannières Dopo (#28080; Bannière de Percepteur)
+- Bannières Vi (#28081; Bannière de Percepteur)
+- Bannières Récri (#28082; Bannière de Percepteur)
+- Bannières Ine Repem (#28083; Bannière de Percepteur)
+- Bannières Ine So (#28084; Bannière de Percepteur)
+- Bannières Ine Dopo (#28085; Bannière de Percepteur)
+- Bannières Ine Vi (#28086; Bannière de Percepteur)
+- Bannières Ine Récri (#28087; Bannière de Percepteur)
+- Bannières Repem So (#28088; Bannière de Percepteur)
+- Bannières Repem Dopo (#28089; Bannière de Percepteur)
+- Bannières Repem Vi (#28090; Bannière de Percepteur)
+- Bannières Repem Récri (#28091; Bannière de Percepteur)
+- Bannières So Dopo (#28092; Bannière de Percepteur)
+- Bannières So Vi (#28093; Bannière de Percepteur)
+- Bannières So Récri (#28094; Bannière de Percepteur)
+- Bannières Dopo Vi (#28095; Bannière de Percepteur)
+- Bannières Dopo Récri (#28096; Bannière de Percepteur)
+- Bannières Vi Récri (#28097; Bannière de Percepteur)
+- Bannières Ine Repemso (#28098; Bannière de Percepteur)
+- Bannières Ine Repemdopo (#28099; Bannière de Percepteur)
+- Bannières Ine Repemvi (#28100; Bannière de Percepteur)
+- Bannières Ine Repemrécri (#28101; Bannière de Percepteur)
+- Bannières Ine Sodopo (#28102; Bannière de Percepteur)
+- Bannières Ine Sovi (#28103; Bannière de Percepteur)
+- Bannières Ine Sorécri (#28104; Bannière de Percepteur)
+- Bannières Ine Dopovi (#28105; Bannière de Percepteur)
+- Bannières Ine Doporécri (#28106; Bannière de Percepteur)
+- Bannières Ine Virécri (#28107; Bannière de Percepteur)
+- Bannières Repem Sodopo (#28108; Bannière de Percepteur)
+- Bannières Repem Sovi (#28109; Bannière de Percepteur)
+- Bannières Repem Sorécri (#28110; Bannière de Percepteur)
+- Bannières Repem Dopovi (#28111; Bannière de Percepteur)
+- Bannières Repem Doporécri (#28112; Bannière de Percepteur)
+- Bannières Repem Virécri (#28113; Bannière de Percepteur)
+- Bannières So Dopovi (#28114; Bannière de Percepteur)
+- Bannières So Doporécri (#28115; Bannière de Percepteur)
+- Bannières So Virécri (#28116; Bannière de Percepteur)
+- Bannières Dopo Virécri (#28117; Bannière de Percepteur)
+- Poignards Fu (#28118; Poignards de Percepteur)
+- Poignards Cha (#28119; Poignards de Percepteur)
+- Poignards Cri (#28120; Poignards de Percepteur)
+- Poignards Repa (#28121; Poignards de Percepteur)
+- Poignards Docri (#28122; Poignards de Percepteur)
+- Poignards Dopo (#28123; Poignards de Percepteur)
+- Poignards Fu Cha (#28124; Poignards de Percepteur)
+- Poignards Fu Cri (#28125; Poignards de Percepteur)
+- Poignards Fu Repa (#28126; Poignards de Percepteur)
+- Poignards Fu Docri (#28127; Poignards de Percepteur)
+- Poignards Fu Dopo (#28128; Poignards de Percepteur)
+- Poignards Cha Cri (#28129; Poignards de Percepteur)
+- Poignards Cha Repa (#28130; Poignards de Percepteur)
+- Poignards Cha Docri (#28131; Poignards de Percepteur)
+- Poignards Cha Dopo (#28132; Poignards de Percepteur)
+- Poignards Cri Repa (#28133; Poignards de Percepteur)
+- Poignards Crido (#28134; Poignards de Percepteur)
+- Poignards Cridopo (#28135; Poignards de Percepteur)
+- Poignards Repa Docri (#28136; Poignards de Percepteur)
+- Poignards Repa Dopo (#28137; Poignards de Percepteur)
+- Poignards Docripo (#28138; Poignards de Percepteur)
+- Poignards Fu Chacri (#28139; Poignards de Percepteur)
+- Poignards Fu Charepa (#28140; Poignards de Percepteur)
+- Poignards Fu Chadocri (#28141; Poignards de Percepteur)
+- Poignards Fu Chadopo (#28142; Poignards de Percepteur)
+- Poignards Fu Crirepa (#28143; Poignards de Percepteur)
+- Poignards Fu Crido (#28144; Poignards de Percepteur)
+- Poignards Fu Cridopo (#28145; Poignards de Percepteur)
+- Poignards Fu Repadocri (#28146; Poignards de Percepteur)
+- Poignards Fu Repadopo (#28147; Poignards de Percepteur)
+- Poignards Fu Docripo (#28148; Poignards de Percepteur)
+- Poignards Cha Crirepa (#28149; Poignards de Percepteur)
+- Poignards Cha Crido (#28150; Poignards de Percepteur)
+- Poignards Cha Cridopo (#28151; Poignards de Percepteur)
+- Poignards Cha Repadocir (#28152; Poignards de Percepteur)
+- Poignards Cha Repadopo (#28153; Poignards de Percepteur)
+- Poignards Cha Docripo (#28154; Poignards de Percepteur)
+- Poignards Repa Crido (#28155; Poignards de Percepteur)
+- Poignards Cri Repadopo (#28156; Poignards de Percepteur)
+- Poignards Cri Dopo (#28157; Poignards de Percepteur)
+- Poignards Repa Docripo (#28158; Poignards de Percepteur)
+- Cuirasses Espem (#28159; Cuirasses de Percepteur)
+- Cuirasses Espa (#28160; Cuirasses de Percepteur)
+- Cuirasses So (#28161; Cuirasses de Percepteur)
+- Cuirasses Vi (#28162; Cuirasses de Percepteur)
+- Cuirasses Récri (#28163; Cuirasses de Percepteur)
+- Cuirasses Répo (#28164; Cuirasses de Percepteur)
+- Cuirasses Espem Pa (#28165; Cuirasses de Percepteur)
+- Cuirasses Espem So (#28166; Cuirasses de Percepteur)
+- Cuirasses Espem Vi (#28167; Cuirasses de Percepteur)
+- Cuirasses Espem Récri (#28168; Cuirasses de Percepteur)
+- Cuirasses Espem Répo (#28169; Cuirasses de Percepteur)
+- Cuirasses Espa So (#28170; Cuirasses de Percepteur)
+- Cuirasses Espa Vi (#28171; Cuirasses de Percepteur)
+- Cuirasses Espa Récri (#28172; Cuirasses de Percepteur)
+- Cuirasses Espa Répo (#28173; Cuirasses de Percepteur)
+- Cuirasses Sovi (#28174; Cuirasses de Percepteur)
+- Cuirasses So Récri (#28175; Cuirasses de Percepteur)
+- Cuirasses So Répo (#28176; Cuirasses de Percepteur)
+- Cuirasses Vi Récri (#28177; Cuirasses de Percepteur)
+- Cuirasses Vi Répo (#28178; Cuirasses de Percepteur)
+- Cuirasses Ré Cripo (#28179; Cuirasses de Percepteur)
+- Cuirasses Espem Paso (#28180; Cuirasses de Percepteur)
+- Cuirasses Espem Pavi (#28181; Cuirasses de Percepteur)
+- Cuirasses Espem Parécri (#28182; Cuirasses de Percepteur)
+- Cuirasses Espem Parépo (#28183; Cuirasses de Percepteur)
+- Cuirasses Espem Sovi (#28184; Cuirasses de Percepteur)
+- Cuirasses Espem Sorécri (#28185; Cuirasses de Percepteur)
+- Cuirasses Espem Sorépo (#28186; Cuirasses de Percepteur)
+- Cuirasses Espem Virécri (#28187; Cuirasses de Percepteur)
+- Cuirasses Espem Virépo (#28188; Cuirasses de Percepteur)
+- Cuirasses Espem Récripo (#28189; Cuirasses de Percepteur)
+- Cuirasses Espa Sovi (#28190; Cuirasses de Percepteur)
+- Cuirasses Espa Sorécri (#28191; Cuirasses de Percepteur)
+- Cuirasses Espa Sorépo (#28192; Cuirasses de Percepteur)
+- Cuirasses Espa Virécri (#28193; Cuirasses de Percepteur)
+- Cuirasses Espa Virépo (#28194; Cuirasses de Percepteur)
+- Cuirasses Espa Récripo (#28195; Cuirasses de Percepteur)
+- Cuirasses So Virécri (#28196; Cuirasses de Percepteur)
+- Cuirasses So Virépo (#28197; Cuirasses de Percepteur)
+- Cuirasses So Récripo (#28198; Cuirasses de Percepteur)
+- Cuirasses Vi Récripo (#28199; Cuirasses de Percepteur)
+- Coffres Propse (#28200; Coffres de Percepteur)
+- Coffres Gapa (#28201; Coffres de Percepteur)
+- Coffres Ini (#28202; Coffres de Percepteur)
+- Sacoches Pod (#28203; Sacoches de Percepteur)
+- Sacoches Gapem (#28204; Sacoches de Percepteur)
+- Sacoches Po (#28205; Sacoches de Percepteur)
 
 ## Uncertified sets
 

@@ -7,8 +7,8 @@
   },
   "elements": 273,
   "items": {
-    "total": 900,
-    "certified": 815,
+    "total": 898,
+    "certified": 813,
     "unknownSlot": 0,
     "unmappedEffects": 31,
     "activeEffects": 248,
@@ -17,7 +17,7 @@
     "bySlot": {
       "dofus": 320,
       "cape": 48,
-      "companion": 147,
+      "companion": 145,
       "weapon": 94,
       "hat": 62,
       "ring": 51,
@@ -31,9 +31,9 @@
       "Add a temporary spell": 1
     },
     "unknownConditionNames": {},
-    "certifiedPct": 90.56,
+    "certifiedPct": 90.53,
     "unknownSlotTypes": {},
-    "snapshotCertified": 809,
+    "snapshotCertified": 807,
     "excludedByUncertifiedSet": 6,
     "ignoredEffects": 47,
     "activeEffectNames": {
@@ -61,7 +61,2018 @@
       "-special spell-": 75,
       "Title:": 1
     },
-    "temporalPending": [],
+    "temporalPending": [
+      {
+        "name": "Dofus Pourpre",
+        "ankamaId": 694,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Pourpre Profond :\n• Lorsque le porteur est attaqué, il gagne 1% de dommages finaux pendant 2 tours (cumulable 10 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Émeraude",
+        "ankamaId": 737,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Vert Émeraude :\n• Lorsque le porteur termine son tour, il gagne 100% de son niveau en bouclier pendant 1 tour pour chaque ennemi à son contact. Les effets sont réduits de moitié si l'ennemi est une invocation.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Turquoise",
+        "ankamaId": 739,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Bleu Turquoise :\n• Lorsque le porteur effectue un coup critique, il gagne 1% de dommages finaux pendant 3 tours (cumulable 10 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofusteuse",
+        "ankamaId": 958,
+        "typeName": "Cape",
+        "slot": "cape",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Bénédiction des Dofus :\n• Augmente une caractéristique élémentaire du porteur par tour de jeu :\n • <sprite name=\"eau\"> 400 Chance > <sprite name=\"terre\"> 400 Force > <sprite name=\"air\"> 400 Agilité > <sprite name=\"feu\"> 400 Intelligence",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Cawotte",
+        "ankamaId": 972,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Sagesse Wabbit :\n• Lorsque le porteur subit une tentative de retrait de PA ou de PM, il gagne 25 Esquive PA ou 25 Esquive PM pendant 1 tour (cumulable 1 fois, partagé entre les effets).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Vulbis",
+        "ankamaId": 6980,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Rouge Vermeil :\n• À chaque début de tour, le porteur gagne 10% de dommages finaux s'il n'a subi aucune attaque ennemie depuis son précédent tour de jeu. Sinon, il gagne 20 de Tacle.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Tacheté",
+        "ankamaId": 7112,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Harmonie de Pandala :\n• Lorsque le porteur occasionne des dommages durant son tour de jeu, lui et ses alliés porteurs du {{item,23408::Dorigami}} gagnent 20 de Dommages pendant 1 tour (cumulable 1 fois).\n• S'il n'en occasionne pas, lui et ses alliés porteurs du {{item,23237::Domakuro}} gagnent 100% de son niveau en bouclier pendant 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Ébène",
+        "ankamaId": 7114,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Noir Ébène :\n• Lorsque le porteur attaque en mêlée durant son tour, il gagne 2% de dommages à distance, et s'il attaque à distance, il gagne 2% de dommages en mêlée pendant 3 tours (cumulable 5 fois).\n• Déclencher les 2 effets dans le tour permet à la prochaine attaque d'appliquer un poison de 16 dans son élément pendant 2 tours (cumulable 2 fois).\n• Le temps de relance du poison est de 2 tours, mais peut être réinitialisé si la cible est achevée.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Ivoire",
+        "ankamaId": 7115,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Blanc Ivoire :\n• Le porteur réduit de 50% les dommages d'une attaque sur 5. Les effets d'interception et de partage de dommages sont incompatibles.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Ocre",
+        "ankamaId": 7754,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Jaune Ocre :\n• À chaque début de tour, le porteur gagne 1 PA s'il n'a subi aucune attaque ennemie depuis son précédent tour de jeu. Sinon, il gagne 20 de Fuite.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Chercheur d'Ogrines",
+        "ankamaId": 10657,
+        "typeName": "Familier",
+        "slot": "companion",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "Title:",
+            "formatted": "Titre : Farfouilleur d'Otomaï",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus des Veilleurs",
+        "ankamaId": 16061,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Veille Dimensionnelle :\n• Lorsque le porteur termine son tour, il soigne ses alliés alignés avec lui de 7% de leur vie.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dokoko",
+        "ankamaId": 17078,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le Singe et la Lune :\n• Tous les 3 tours à partir du tour 3, le porteur est soigné de 10% de sa vie.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Abyssal",
+        "ankamaId": 18043,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Descente aux Abysses :\n• À chaque début de tour, le porteur gagne 1 PM si aucun ennemi n'est à son contact. Sinon, il gagne 1 PA.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Forgelave",
+        "ankamaId": 19398,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Forge du Volcan :\n• Le porteur gagne 100% de son niveau en bouclier selon les effets qu'il subit d'un ennemi (1 fois par type d'effet par tour) :\n • Dommages de poussée\n • Attirance ou poussée\n • Échange de positions, téléportation ou téléportail\n • Portage Pandawa",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Argenté",
+        "ankamaId": 19629,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Souvenir d'Argent :\n• Lorsque le porteur descend sous les 20% de sa vie, il est soigné de 20% de sa vie au début de son prochain tour (1 fois par combat).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Argenté Scintillant",
+        "ankamaId": 20286,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Promesse d'Argent :\n• Lorsque le porteur descend sous les 20% de sa vie, il est soigné de 30% de sa vie et gagne 20% de dommages finaux pendant 1 tour au début de son prochain tour (1 fois par combat).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Droiture de Fallanster",
+        "ankamaId": 20357,
+        "typeName": "Bouclier",
+        "slot": "shield",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Droiture de Fallanster :\n• Lorsque le porteur termine son tour en ligne de vue d'un ennemi, il pose un glyphe-aura dans un carré de taille 1 qui réduit les dommages subis par les alliés de 10% jusqu'au début de son prochain tour. Le glyphe est dissipé au prochain tour ou s'il est déplacé.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Trompe-la-Mort",
+        "ankamaId": 20358,
+        "typeName": "Bouclier",
+        "slot": "shield",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Trompe-la-Mort :\n• Lorsque le porteur a plus de 50% de sa vie, ses dommages finaux sont augmentés de 7%, mais il perd 10% de sa vie à chaque début de tour.\n• Lorsqu'il a moins de 50% de sa vie, les dommages qu'il subit sont réduits de 20%.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Couronne de Brâm Barbe-Monde",
+        "ankamaId": 20359,
+        "typeName": "Chapeau",
+        "slot": "hat",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Roi sous la Montagne :\n• Lorsque le porteur effectue ou subit une tentative de retrait de PA ou PM, il gagne 2% de dommages finaux pendant 2 tours (cumulable 5 fois).\n• Les effets ne peuvent pas être déclenchés si le porteur est à la fois l'attaquant et la cible.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Diadème de Ganymède",
+        "ankamaId": 20360,
+        "typeName": "Chapeau",
+        "slot": "hat",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Sagesse de Ganymède :\n• Le porteur gagne 2 PA les tours pairs, et perd 1 PA et 1 PM les tours impairs.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Bravoure de Rykke Errel",
+        "ankamaId": 20361,
+        "typeName": "Cape",
+        "slot": "cape",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Bravoure de Rykke Errel :\n• Lorsque le porteur subit une attaque à distance, il gagne 10% de son niveau en bouclier et perd 1% de dommages à distance pendant 1 tour par case d'éloignement avec son attaquant (11 cases maximum).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Noblesse de Jahash Jurgen",
+        "ankamaId": 20362,
+        "typeName": "Cape",
+        "slot": "cape",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Assimilation Élémentaire :\n• Lorsque le porteur subit des dommages dans un élément, il gagne 4% de résistance dans cet élément pendant 2 tours (cumulable 5 fois, partagé entre les éléments).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Bottes de Mille Lieues",
+        "ankamaId": 20363,
+        "typeName": "Bottes",
+        "slot": "boots",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Mille Lieues :\n• Le porteur gagne 2 PM les tours impairs.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Bottes du Cul Botté",
+        "ankamaId": 20364,
+        "typeName": "Bottes",
+        "slot": "boots",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Les Culs Bottés :\n• À chaque début et fin de tour, le porteur repousse de 2 cases les entités à son contact.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Audace de Dodge",
+        "ankamaId": 20365,
+        "typeName": "Ceinture",
+        "slot": "belt",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Audace de Dodge :\n• À chaque début de tour, le porteur se téléporte ou échange de position sur une case adjacente aléatoire et gagne 1 PM et 10% Critique, ou n'est pas déplacé et gagne 40 de Fuite et de Dommages Poussée, pendant 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Courage de Dame Jhessica",
+        "ankamaId": 20366,
+        "typeName": "Ceinture",
+        "slot": "belt",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Courage de Dame Jhessica :\n• À chaque fin de tour, le porteur retire 60 de Fuite aux ennemis à son contact et gagne 1% de dommages aux sorts pour chaque ennemi touché pendant 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Cacao",
+        "ankamaId": 20987,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Bénédiction chocolatée :\n• Lorsque le porteur est attaqué à distance en étant au contact d'un ennemi, il gagne 35% de son niveau en bouclier pendant 1 tour au début de son prochain tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prytek Mate",
+        "ankamaId": 21451,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 550% de son niveau en bouclier au premier tour, puis 200% au deuxième tour, et 100% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prytek Brillante",
+        "ankamaId": 21452,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 150% de son niveau en bouclier au premier tour, puis 450% au deuxième tour et 150% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prytek Iridescente",
+        "ankamaId": 21453,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 100% de son niveau en bouclier au premier tour, puis 200% au deuxième tour et 350% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Sprynt",
+        "ankamaId": 21995,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur est Intaclable tant qu'il n'a pas occasionné de dommages.\nS'il en occasionne, la durée de l'état passe à 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Pryssion Mate",
+        "ankamaId": 21996,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 10% de dommages finaux pour gagner 1 PA pendant 3 tours.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Pryssion Brillante",
+        "ankamaId": 21997,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 35% de dommages finaux pour gagner 2 PA pendant 2 tours.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Pryssion Iridescente",
+        "ankamaId": 21998,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 50% de dommages finaux pour gagner 3 PA pendant 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Surpryz",
+        "ankamaId": 22001,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 100% de Critique au premier tour, puis 35% au deuxième tour, et 15% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prynyang",
+        "ankamaId": 22004,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 10% de résistance pour gagner 10% de dommages finaux au premier tour, puis gagne 3% de dommages finaux et de résistance au deuxième tour, et sacrifie 10% de dommages finaux pour gagner 10% de résistance au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Ratrapry",
+        "ankamaId": 22007,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 1 PM pendant 1 tour pour chaque combattant ennemi à plus de 9 cases de lui au début des 3 premiers tours de jeu (cumulable 3 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prygen",
+        "ankamaId": 22010,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Soigne 60% des dommages ennemis subis au premier tour, puis 30% au deuxième tour, et 10% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prycipithon Mate",
+        "ankamaId": 22011,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 2 PA au premier tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prycipithon Brillante",
+        "ankamaId": 22012,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 2 PM pour gagner 3 PA au premier tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prycipithon Iridescente",
+        "ankamaId": 22013,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur sacrifie 4 PM pour gagner 4 PA au premier tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Espryt",
+        "ankamaId": 22014,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 100 de Retrait au premier tour, puis 50 au deuxième tour, et 25 au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Korprys",
+        "ankamaId": 22015,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 200 d'Esquive au premier tour, puis 100 au deuxième tour, et 50 au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Caraprys",
+        "ankamaId": 22018,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur donne 15% de résistances à ses invocations au premier tour, puis 10% au deuxième tour, et 5% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prysmaru",
+        "ankamaId": 22019,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur devient invisible pendant 1 tour au début de son premier tour de jeu.\nL'invisibilité ne se dissipe pas lorsqu'il attaque, mais elle est retirée s'il subit des dommages.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prysmenvout",
+        "ankamaId": 22020,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur réduit la durée des effets actifs sur lui de 4 tours au début de son premier tour de jeu.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Supprys",
+        "ankamaId": 22021,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur augmente les soins reçus par ses combattants alliés de 10% pendant son tour de jeu au premier tour, puis de 35% au deuxième tour, et de 50% au troisième tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Aprybou",
+        "ankamaId": 22022,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 200% de son niveau en bouclier jusqu'à la fin du combat au début du premier tour de jeu de chaque combattant ennemi qui joue avant lui.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Pryximite",
+        "ankamaId": 22023,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur gagne 2% de dommages en mêlée pendant 3 tours pour chaque combattant ennemi à 3 cases ou moins de lui au début et à la fin de son premier tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prymune",
+        "ankamaId": 22024,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur réduit tout type de dommages subis de 80% au premier tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Prysantor",
+        "ankamaId": 22025,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur est dans l'état Pesanteur tant qu'il n'a pas subi de dommages.\nS'il en subit, la durée de l'état passe à 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Pestilence de Corruption",
+        "ankamaId": 22412,
+        "typeName": "Cape",
+        "slot": "cape",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Nuée Pestilentielle :\n• Lorsque le porteur remonte à 90% de sa vie, il applique un poison de début de tour de 18 dans son meilleur élément d'attaque sur les entités à 2 cases ou moins de lui pendant 2 tours (cumulable 1 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Étreinte de Servitude",
+        "ankamaId": 22429,
+        "typeName": "Ceinture",
+        "slot": "belt",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Fers de la Tyrannie :\n• À chaque fin de tour, le porteur attire les entités à 3 cases ou moins alignés à lui. S'il n'y a aucune entité à son contact, il devient Indéplaçable jusqu'au début de son prochain tour. L'état est retiré s'il subit des dommages.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Domakuro",
+        "ankamaId": 23237,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Rivière d'Encre :\n• À chaque fin de tour sur les 4 premiers tours, le porteur et ses invocations gagnent jusqu'à 16 Dommages jusqu'à la fin du combat.\n• Ce bonus est réduit à chaque fois que le porteur attaque un ennemi durant son tour :\n • Aucune attaque : 16 Dommages.\n • 1 attaque : 8 Dommages.\n • 2 attaques et plus : 0 Dommages.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dorigami",
+        "ankamaId": 23408,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Tigre de Papier :\n• À chaque début de tour sur les 5 premiers tours, le porteur gagne 100% de son niveau en bouclier pendant 1 tour.\n• Sur ces 5 premiers tours, si le porteur achève un ennemi durant son tour de jeu, il gagne un bouclier pendant 2 tours selon la nature de l'ennemi :\n • Invocation : 100% de son niveau en bouclier (cumulable 4 fois).\n • Combattant : 300% de son niveau en bouclier (cumulable 2 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus du Cauchemar",
+        "ankamaId": 26066,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Éternel Cauchemar :\n• Bouclier Bontarien : lorsque le porteur est désenvoûté ou entravé, il gagne 100% de son niveau en bouclier pour 1 tour.\n• Puissance Brâkmarienne : lorsque le porteur occasionne ou subit des dommages de poussée, il gagne 100 de Puissance pour 1 tour. \n• Œil du Cauchemar : si le porteur déclenche les 2 effets dans le même tour, les dommages qu'il occasionne et subit sont augmentés de 10% pendant 1 tour.\n• Les effets ne peuvent être déclenchés qu'une seule fois par tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Verdoyant",
+        "ankamaId": 29135,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": null,
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofus Sylvestre",
+        "ankamaId": 29136,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Garde Champêtre :\n• Le porteur gagne 8 de Puissance pendant 2 tours pour chaque PM qu'il utilise.\n• S'il n'a utilisé aucun PM durant son tour, il est soigné de 8% de sa vie.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Jyfus",
+        "ankamaId": 30356,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": null,
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Dofoozbz",
+        "ankamaId": 31794,
+        "typeName": "Dofus",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Éclosion Explosive :\n• Lorsqu'une invocation du porteur est attaquée, le porteur gagne 1% de dommages finaux pendant 2 tours (cumulable 10 fois).\n• Si elle est achevée par un ennemi, le porteur occasionne 10 dommages dans son meilleur élément aux ennemis dans un cercle de taille 2 autour d'elle.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Ardeur d'Oto Mustam",
+        "ankamaId": 32114,
+        "typeName": "Chapeau",
+        "slot": "hat",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Ardeur de la Cité Sombre :\n• À chaque début de tour, le porteur et ses alliés gagnent 1% de dommages finaux pendant 1 tour pour chaque combattant ennemi en vie (cumulable 4 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Bouclier Miroir",
+        "ankamaId": 32115,
+        "typeName": "Bouclier",
+        "slot": "shield",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Reflet Aveuglant :\n• Le porteur réduit et renvoie 75% des dommages initiaux de la première attaque alliée subie à l'ennemi le plus proche de lui dans sa ligne de vue (une fois par tour).\n• À chaque fin de tour, il retire 4 de Portée pendant 1 tour à tous les ennemis dans sa ligne de vue et les dévoile s'ils sont invisibles (cumulable 1 fois).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Amour d'Helséphine",
+        "ankamaId": 32118,
+        "typeName": "Amulette",
+        "slot": "amulet",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Amour d'Helséphine :\n• Lorsque le porteur applique du bouclier ou occasionne des dommages en mêlée, il soigne ses alliés de 8% de leur vie à 3 cases ou moins autour de lui (une fois par tour).",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Ponctualité d'Henual",
+        "ankamaId": 32119,
+        "typeName": "Anneau",
+        "slot": "ring",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Ponctualité d'Henual :\n• Lorsque le porteur subit une tentative de retrait de PA ou de PM, il est téléporté à sa position précédente, une fois maximum pour chaque type de retrait.",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Clairvoyance de Mériana",
+        "ankamaId": 32121,
+        "typeName": "Bottes",
+        "slot": "boots",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Clairvoyance de Mériana :\n• Lorsque le porteur occasionne des dommages élémentaires, il gagne du Retrait selon l'élément pendant 2 tours (cumulable 8 fois, partagé entre les effets) :\n • Terre & Eau : 5 Retrait PM\n • Feu & Air : 5 Retrait PA",
+            "reason": "meta-effect"
+          }
+        ]
+      },
+      {
+        "name": "Indeprys",
+        "ankamaId": 32164,
+        "typeName": "Prysmaradite",
+        "slot": "dofus",
+        "effects": [
+          {
+            "status": "meta",
+            "name": "-special spell-",
+            "formatted": "Le porteur est Indéplaçable tant qu'il n'a pas subi de dommages. S'il en subit, la durée de l'état passe à 1 tour.",
+            "reason": "meta-effect"
+          }
+        ]
+      }
+    ],
+    "excludedInternalOrNonPlayer": [
+      {
+        "name": "Surpuissant Chacha de Combat (MJ)",
+        "ankamaId": 6894,
+        "typeName": "Familier"
+      },
+      {
+        "name": "Petit Chacha de Combat (MJ)",
+        "ankamaId": 6895,
+        "typeName": "Familier"
+      },
+      {
+        "name": "Le Diviseur (MJ)",
+        "ankamaId": 7913,
+        "typeName": "Anneau"
+      },
+      {
+        "name": "Fers Fu",
+        "ankamaId": 27995,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta",
+        "ankamaId": 27996,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Espem",
+        "ankamaId": 27997,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Age",
+        "ankamaId": 27998,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Repem",
+        "ankamaId": 27999,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Repo",
+        "ankamaId": 28000,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Ta",
+        "ankamaId": 28001,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Espem",
+        "ankamaId": 28002,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Age",
+        "ankamaId": 28003,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Repem",
+        "ankamaId": 28004,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Repo",
+        "ankamaId": 28005,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Espem",
+        "ankamaId": 28006,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Age",
+        "ankamaId": 28007,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Repem",
+        "ankamaId": 28008,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Repo",
+        "ankamaId": 28009,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Espem Age",
+        "ankamaId": 28010,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Esrepem",
+        "ankamaId": 28011,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Espem Repo",
+        "ankamaId": 28012,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Age Repem",
+        "ankamaId": 28013,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Age Repo",
+        "ankamaId": 28014,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Repem Repo",
+        "ankamaId": 28015,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Taespem",
+        "ankamaId": 28016,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Taage",
+        "ankamaId": 28017,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Tarepem",
+        "ankamaId": 28018,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Tarepo",
+        "ankamaId": 28019,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Espemage",
+        "ankamaId": 28020,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Esrepem",
+        "ankamaId": 28021,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Espemrepo",
+        "ankamaId": 28022,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Agerepem",
+        "ankamaId": 28023,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Agerepo",
+        "ankamaId": 28024,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Fu Repemrepo",
+        "ankamaId": 28025,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Espemage",
+        "ankamaId": 28026,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Esrepem",
+        "ankamaId": 28027,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Espemrepo",
+        "ankamaId": 28028,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Agerepem",
+        "ankamaId": 28029,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Agerepo",
+        "ankamaId": 28030,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Ta Repempo",
+        "ankamaId": 28031,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Age Esrepem",
+        "ankamaId": 28032,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Espem Agerepo",
+        "ankamaId": 28033,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Esrepem Repo",
+        "ankamaId": 28034,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Fers Age Repemrepo",
+        "ankamaId": 28035,
+        "typeName": "Fers de Percepteur"
+      },
+      {
+        "name": "Tunique Ta",
+        "ankamaId": 28036,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo",
+        "ankamaId": 28037,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Espa",
+        "ankamaId": 28038,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Cri",
+        "ankamaId": 28039,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Repa",
+        "ankamaId": 28040,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Docri",
+        "ankamaId": 28041,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Tafo",
+        "ankamaId": 28042,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Espa",
+        "ankamaId": 28043,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Cri",
+        "ankamaId": 28044,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Repa",
+        "ankamaId": 28045,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Docri",
+        "ankamaId": 28046,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Espa",
+        "ankamaId": 28047,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Cri",
+        "ankamaId": 28048,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Repa",
+        "ankamaId": 28049,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Docri",
+        "ankamaId": 28050,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Espa Cri",
+        "ankamaId": 28051,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Esrepa",
+        "ankamaId": 28052,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Espa Docri",
+        "ankamaId": 28053,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Crirepa",
+        "ankamaId": 28054,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Crido",
+        "ankamaId": 28055,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Repa Docri",
+        "ankamaId": 28056,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Foespa",
+        "ankamaId": 28057,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Focri",
+        "ankamaId": 28058,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Forepa",
+        "ankamaId": 28059,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Fodocri",
+        "ankamaId": 28060,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Espacri",
+        "ankamaId": 28061,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Esrepa",
+        "ankamaId": 28062,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Espadocri",
+        "ankamaId": 28063,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Crirepa",
+        "ankamaId": 28064,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Crido",
+        "ankamaId": 28065,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Ta Repadocri",
+        "ankamaId": 28066,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Espacri",
+        "ankamaId": 28067,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Esrepa",
+        "ankamaId": 28068,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Espadocri",
+        "ankamaId": 28069,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Crirepa",
+        "ankamaId": 28070,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Crido",
+        "ankamaId": 28071,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Fo Repadocri",
+        "ankamaId": 28072,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Escrirepa",
+        "ankamaId": 28073,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Escrido",
+        "ankamaId": 28074,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Esrepa Docri",
+        "ankamaId": 28075,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Tunique Crido Repa",
+        "ankamaId": 28076,
+        "typeName": "Tunique de Percepteur"
+      },
+      {
+        "name": "Bannières Ina",
+        "ankamaId": 28077,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem",
+        "ankamaId": 28078,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So",
+        "ankamaId": 28079,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Dopo",
+        "ankamaId": 28080,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Vi",
+        "ankamaId": 28081,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Récri",
+        "ankamaId": 28082,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Repem",
+        "ankamaId": 28083,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine So",
+        "ankamaId": 28084,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Dopo",
+        "ankamaId": 28085,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Vi",
+        "ankamaId": 28086,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Récri",
+        "ankamaId": 28087,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem So",
+        "ankamaId": 28088,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Dopo",
+        "ankamaId": 28089,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Vi",
+        "ankamaId": 28090,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Récri",
+        "ankamaId": 28091,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Dopo",
+        "ankamaId": 28092,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Vi",
+        "ankamaId": 28093,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Récri",
+        "ankamaId": 28094,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Dopo Vi",
+        "ankamaId": 28095,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Dopo Récri",
+        "ankamaId": 28096,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Vi Récri",
+        "ankamaId": 28097,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Repemso",
+        "ankamaId": 28098,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Repemdopo",
+        "ankamaId": 28099,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Repemvi",
+        "ankamaId": 28100,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Repemrécri",
+        "ankamaId": 28101,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Sodopo",
+        "ankamaId": 28102,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Sovi",
+        "ankamaId": 28103,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Sorécri",
+        "ankamaId": 28104,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Dopovi",
+        "ankamaId": 28105,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Doporécri",
+        "ankamaId": 28106,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Ine Virécri",
+        "ankamaId": 28107,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Sodopo",
+        "ankamaId": 28108,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Sovi",
+        "ankamaId": 28109,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Sorécri",
+        "ankamaId": 28110,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Dopovi",
+        "ankamaId": 28111,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Doporécri",
+        "ankamaId": 28112,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Repem Virécri",
+        "ankamaId": 28113,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Dopovi",
+        "ankamaId": 28114,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Doporécri",
+        "ankamaId": 28115,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières So Virécri",
+        "ankamaId": 28116,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Bannières Dopo Virécri",
+        "ankamaId": 28117,
+        "typeName": "Bannière de Percepteur"
+      },
+      {
+        "name": "Poignards Fu",
+        "ankamaId": 28118,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha",
+        "ankamaId": 28119,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cri",
+        "ankamaId": 28120,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Repa",
+        "ankamaId": 28121,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Docri",
+        "ankamaId": 28122,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Dopo",
+        "ankamaId": 28123,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Cha",
+        "ankamaId": 28124,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Cri",
+        "ankamaId": 28125,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Repa",
+        "ankamaId": 28126,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Docri",
+        "ankamaId": 28127,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Dopo",
+        "ankamaId": 28128,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Cri",
+        "ankamaId": 28129,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Repa",
+        "ankamaId": 28130,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Docri",
+        "ankamaId": 28131,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Dopo",
+        "ankamaId": 28132,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cri Repa",
+        "ankamaId": 28133,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Crido",
+        "ankamaId": 28134,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cridopo",
+        "ankamaId": 28135,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Repa Docri",
+        "ankamaId": 28136,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Repa Dopo",
+        "ankamaId": 28137,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Docripo",
+        "ankamaId": 28138,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Chacri",
+        "ankamaId": 28139,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Charepa",
+        "ankamaId": 28140,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Chadocri",
+        "ankamaId": 28141,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Chadopo",
+        "ankamaId": 28142,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Crirepa",
+        "ankamaId": 28143,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Crido",
+        "ankamaId": 28144,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Cridopo",
+        "ankamaId": 28145,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Repadocri",
+        "ankamaId": 28146,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Repadopo",
+        "ankamaId": 28147,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Fu Docripo",
+        "ankamaId": 28148,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Crirepa",
+        "ankamaId": 28149,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Crido",
+        "ankamaId": 28150,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Cridopo",
+        "ankamaId": 28151,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Repadocir",
+        "ankamaId": 28152,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Repadopo",
+        "ankamaId": 28153,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cha Docripo",
+        "ankamaId": 28154,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Repa Crido",
+        "ankamaId": 28155,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cri Repadopo",
+        "ankamaId": 28156,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Cri Dopo",
+        "ankamaId": 28157,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Poignards Repa Docripo",
+        "ankamaId": 28158,
+        "typeName": "Poignards de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem",
+        "ankamaId": 28159,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa",
+        "ankamaId": 28160,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So",
+        "ankamaId": 28161,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Vi",
+        "ankamaId": 28162,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Récri",
+        "ankamaId": 28163,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Répo",
+        "ankamaId": 28164,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Pa",
+        "ankamaId": 28165,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem So",
+        "ankamaId": 28166,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Vi",
+        "ankamaId": 28167,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Récri",
+        "ankamaId": 28168,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Répo",
+        "ankamaId": 28169,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa So",
+        "ankamaId": 28170,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Vi",
+        "ankamaId": 28171,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Récri",
+        "ankamaId": 28172,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Répo",
+        "ankamaId": 28173,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Sovi",
+        "ankamaId": 28174,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So Récri",
+        "ankamaId": 28175,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So Répo",
+        "ankamaId": 28176,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Vi Récri",
+        "ankamaId": 28177,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Vi Répo",
+        "ankamaId": 28178,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Ré Cripo",
+        "ankamaId": 28179,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Paso",
+        "ankamaId": 28180,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Pavi",
+        "ankamaId": 28181,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Parécri",
+        "ankamaId": 28182,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Parépo",
+        "ankamaId": 28183,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Sovi",
+        "ankamaId": 28184,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Sorécri",
+        "ankamaId": 28185,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Sorépo",
+        "ankamaId": 28186,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Virécri",
+        "ankamaId": 28187,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Virépo",
+        "ankamaId": 28188,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espem Récripo",
+        "ankamaId": 28189,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Sovi",
+        "ankamaId": 28190,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Sorécri",
+        "ankamaId": 28191,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Sorépo",
+        "ankamaId": 28192,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Virécri",
+        "ankamaId": 28193,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Virépo",
+        "ankamaId": 28194,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Espa Récripo",
+        "ankamaId": 28195,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So Virécri",
+        "ankamaId": 28196,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So Virépo",
+        "ankamaId": 28197,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses So Récripo",
+        "ankamaId": 28198,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Cuirasses Vi Récripo",
+        "ankamaId": 28199,
+        "typeName": "Cuirasses de Percepteur"
+      },
+      {
+        "name": "Coffres Propse",
+        "ankamaId": 28200,
+        "typeName": "Coffres de Percepteur"
+      },
+      {
+        "name": "Coffres Gapa",
+        "ankamaId": 28201,
+        "typeName": "Coffres de Percepteur"
+      },
+      {
+        "name": "Coffres Ini",
+        "ankamaId": 28202,
+        "typeName": "Coffres de Percepteur"
+      },
+      {
+        "name": "Sacoches Pod",
+        "ankamaId": 28203,
+        "typeName": "Sacoches de Percepteur"
+      },
+      {
+        "name": "Sacoches Gapem",
+        "ankamaId": 28204,
+        "typeName": "Sacoches de Percepteur"
+      },
+      {
+        "name": "Sacoches Po",
+        "ankamaId": 28205,
+        "typeName": "Sacoches de Percepteur"
+      }
+    ],
     "recognizedPassives": [
       {
         "name": "Dofus Nébuleux",
@@ -72,7 +2083,7 @@
       }
     ],
     "snapshotBySlot": {
-      "companion": 144,
+      "companion": 142,
       "dofus": 266,
       "weapon": 84,
       "hat": 58,
