@@ -98,6 +98,17 @@ test('Prynyang applies final-damage and all-element resistance trades per turn',
   assert.deepEqual([t3.resEarth, t3.resFire, t3.resWater, t3.resAir], [10, 10, 10, 10]);
 });
 
+test('Ratrapry grants one temporary MP per far enemy, capped at three on each of T1-T3', () => {
+  const ratrapry = passiveFor(22007);
+  assert.equal(applyPassiveModifiers({}, [ratrapry], { turn: 1, farEnemiesOver9: 2 }).stats.mp, 2);
+  assert.equal(applyPassiveModifiers({}, [ratrapry], { turn: 2, farEnemiesOver9: 9 }).stats.mp, 3);
+  assert.equal(applyPassiveModifiers({}, [ratrapry], { turn: 4, farEnemiesOver9: 3 }).stats.mp, undefined);
+  assert.deepEqual(
+    applyPassiveModifiers({}, [ratrapry], { turn: 1 }).unresolved[0].missingKeys,
+    ['farEnemiesOver9']
+  );
+});
+
 test('Prycipithon variants grant T1 AP and preserve their MP sacrifices', () => {
   const matte = applyPassiveModifiers({}, [passiveFor(22011)], { turn: 1 }).stats;
   assert.equal(matte.ap, 2);
@@ -111,4 +122,17 @@ test('Prycipithon variants grant T1 AP and preserve their MP sacrifices', () => 
   assert.equal(iridescent.ap, 4);
   assert.equal(iridescent.mp, -4);
   assert.equal(applyPassiveModifiers({}, [passiveFor(22013)], { turn: 2 }).stats.ap, undefined);
+});
+
+test('Pryximite adds 2% melee damage for every nearby-enemy trigger at start and end of T1 through T3', () => {
+  const pryximite = passiveFor(22023);
+  const context = { pryximiteNearbyEnemiesStartT1: 2, pryximiteNearbyEnemiesEndT1: 3 };
+  assert.equal(applyPassiveModifiers({}, [pryximite], { turn: 1, ...context }).stats.meleeDamagePct, 10);
+  assert.equal(applyPassiveModifiers({}, [pryximite], { turn: 2, ...context }).stats.meleeDamagePct, 10);
+  assert.equal(applyPassiveModifiers({}, [pryximite], { turn: 3, ...context }).stats.meleeDamagePct, 10);
+  assert.equal(applyPassiveModifiers({}, [pryximite], { turn: 4, ...context }).stats.meleeDamagePct, undefined);
+  assert.deepEqual(
+    applyPassiveModifiers({}, [pryximite], { turn: 1 }).unresolved[0].missingKeys.sort(),
+    ['pryximiteNearbyEnemiesEndT1', 'pryximiteNearbyEnemiesStartT1']
+  );
 });
