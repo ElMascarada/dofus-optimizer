@@ -28,8 +28,15 @@ jobs:
           for (const name of ['spells', 'spell_levels', 'breeds']) {
             const data = JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8'));
             console.log(`=== ${name} ===`);
-            console.log('kind', Array.isArray(data) ? 'array' : typeof data, 'length', Array.isArray(data) ? data.length : Object.keys(data).length);
-            const sample = Array.isArray(data) ? data[0] : data[Object.keys(data)[0]];
-            console.log(JSON.stringify(sample, null, 2).slice(0, 12000));
+            console.log('top-level keys', Object.keys(data));
+            for (const [key, value] of Object.entries(data)) {
+              const kind = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
+              const length = Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : null;
+              console.log('field', key, 'kind', kind, 'length', length, 'value', length === null ? value : '');
+            }
+            const candidate = Object.values(data).find((value) => Array.isArray(value) && value.length)
+              ?? Object.values(data).find((value) => value && typeof value === 'object' && Object.keys(value).length);
+            const sample = Array.isArray(candidate) ? candidate[0] : candidate?.[Object.keys(candidate || {})[0]];
+            console.log('sample', JSON.stringify(sample, null, 2).slice(0, 20000));
           }
           NODE
