@@ -117,12 +117,24 @@ function aggregateTurnScores(perTurn, turnMode) {
   return score;
 }
 
+function exactBaseApMpMismatches(stats = {}, constraints = {}) {
+  const mismatches = {};
+  for (const key of ['ap', 'mp']) {
+    const target = Number(constraints?.[key] || 0);
+    if (!Number.isFinite(target) || target <= 0) continue;
+    const actual = stat(stats, key);
+    if (actual !== target) mismatches[key] = { actual, target };
+  }
+  return mismatches;
+}
+
 export function evaluateTurnConstraints({ stats, items = [], constraints = {}, selections = [], turnMode = 'sum', scenario = {} }) {
   const perTurn = {};
   const deficitsByTurn = {};
   const requiredApByTurn = {};
   const unresolvedPassiveContexts = new Set();
   const explicitApByTurn = scenario?.requiredApByTurn || {};
+  const baseApMpMismatches = exactBaseApMpMismatches(stats, constraints);
 
   for (const turn of selectedTurnsForMode(turnMode)) {
     const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
@@ -144,9 +156,12 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
   }
 
   return {
-    meets: Object.keys(deficitsByTurn).length === 0 && unresolvedPassiveContexts.size === 0,
+    meets: Object.keys(baseApMpMismatches).length === 0
+      && Object.keys(deficitsByTurn).length === 0
+      && unresolvedPassiveContexts.size === 0,
     perTurn,
     deficitsByTurn,
+    baseApMpMismatches,
     requiredApByTurn,
     unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort()
   };
