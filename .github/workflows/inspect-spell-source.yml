@@ -21,22 +21,25 @@ jobs:
           curl -LfsS "$BASE/spells.json" -o /tmp/spells.json
           curl -LfsS "$BASE/spell_levels.json" -o /tmp/spell_levels.json
           curl -LfsS "$BASE/breeds.json" -o /tmp/breeds.json
-      - name: Print compact schema samples
+      - name: Print object/reference map samples
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
+          function describe(value, depth = 0) {
+            if (depth > 3 || value == null || typeof value !== 'object') return value;
+            if (Array.isArray(value)) return { kind: 'array', length: value.length, sample: value.length ? describe(value[0], depth + 1) : null };
+            const keys = Object.keys(value);
+            return {
+              kind: 'object',
+              keys: keys.slice(0, 20),
+              sampleEntries: Object.fromEntries(keys.slice(0, 3).map((key) => [key, describe(value[key], depth + 1)]))
+            };
+          }
           for (const name of ['spells', 'spell_levels', 'breeds']) {
             const data = JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8'));
-            console.log(`=== ${name} ===`);
-            console.log('top-level keys', Object.keys(data));
-            for (const [key, value] of Object.entries(data)) {
-              const kind = Array.isArray(value) ? 'array' : value === null ? 'null' : typeof value;
-              const length = Array.isArray(value) ? value.length : value && typeof value === 'object' ? Object.keys(value).length : null;
-              console.log('field', key, 'kind', kind, 'length', length, 'value', length === null ? value : '');
-            }
-            const candidate = Object.values(data).find((value) => Array.isArray(value) && value.length)
-              ?? Object.values(data).find((value) => value && typeof value === 'object' && Object.keys(value).length);
-            const sample = Array.isArray(candidate) ? candidate[0] : candidate?.[Object.keys(candidate || {})[0]];
-            console.log('sample', JSON.stringify(sample, null, 2).slice(0, 20000));
+            console.log(`=== ${name} objectsById ===`);
+            console.log(JSON.stringify(describe(data.objectsById), null, 2).slice(0, 30000));
+            console.log(`=== ${name} references ===`);
+            console.log(JSON.stringify(describe(data.references), null, 2).slice(0, 30000));
           }
           NODE
