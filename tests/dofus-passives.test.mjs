@@ -57,3 +57,58 @@ test('Trompe-la-Mort exposes HP-dependent offensive and defensive branches', () 
   assert.equal(applyPassiveModifiers({}, [trompe], { turn: 1, hpPct: 80 }).stats.finalDamagePct, 7);
   assert.equal(applyPassiveModifiers({}, [trompe], { turn: 1, hpPct: 40 }).stats.incomingDamageReductionPct, 20);
 });
+
+test('Pryssion variants trade final damage for temporary AP on their exact turns', () => {
+  const matteT3 = applyPassiveModifiers({}, [passiveFor(21996)], { turn: 3 }).stats;
+  assert.equal(matteT3.ap, 1);
+  assert.equal(matteT3.finalDamagePct, -10);
+  assert.equal(applyPassiveModifiers({}, [passiveFor(21996)], { turn: 4 }).stats.ap, undefined);
+
+  const brightT2 = applyPassiveModifiers({}, [passiveFor(21997)], { turn: 2 }).stats;
+  assert.equal(brightT2.ap, 2);
+  assert.equal(brightT2.finalDamagePct, -35);
+  assert.equal(applyPassiveModifiers({}, [passiveFor(21997)], { turn: 3 }).stats.ap, undefined);
+
+  const iridescentT1 = applyPassiveModifiers({}, [passiveFor(21998)], { turn: 1 }).stats;
+  assert.equal(iridescentT1.ap, 3);
+  assert.equal(iridescentT1.finalDamagePct, -50);
+  assert.equal(applyPassiveModifiers({}, [passiveFor(21998)], { turn: 2 }).stats.ap, undefined);
+});
+
+test('Surpryz applies its deterministic critical bonuses on T1, T2 and T3', () => {
+  const surpryz = passiveFor(22001);
+  assert.equal(applyPassiveModifiers({}, [surpryz], { turn: 1 }).stats.crit, 100);
+  assert.equal(applyPassiveModifiers({}, [surpryz], { turn: 2 }).stats.crit, 35);
+  assert.equal(applyPassiveModifiers({}, [surpryz], { turn: 3 }).stats.crit, 15);
+  assert.equal(applyPassiveModifiers({}, [surpryz], { turn: 4 }).stats.crit, undefined);
+});
+
+test('Prynyang applies final-damage and all-element resistance trades per turn', () => {
+  const prynyang = passiveFor(22004);
+  const t1 = applyPassiveModifiers({}, [prynyang], { turn: 1 }).stats;
+  assert.equal(t1.finalDamagePct, 10);
+  assert.deepEqual([t1.resEarth, t1.resFire, t1.resWater, t1.resAir], [-10, -10, -10, -10]);
+
+  const t2 = applyPassiveModifiers({}, [prynyang], { turn: 2 }).stats;
+  assert.equal(t2.finalDamagePct, 3);
+  assert.deepEqual([t2.resEarth, t2.resFire, t2.resWater, t2.resAir], [3, 3, 3, 3]);
+
+  const t3 = applyPassiveModifiers({}, [prynyang], { turn: 3 }).stats;
+  assert.equal(t3.finalDamagePct, -10);
+  assert.deepEqual([t3.resEarth, t3.resFire, t3.resWater, t3.resAir], [10, 10, 10, 10]);
+});
+
+test('Prycipithon variants grant T1 AP and preserve their MP sacrifices', () => {
+  const matte = applyPassiveModifiers({}, [passiveFor(22011)], { turn: 1 }).stats;
+  assert.equal(matte.ap, 2);
+  assert.equal(matte.mp, undefined);
+
+  const bright = applyPassiveModifiers({}, [passiveFor(22012)], { turn: 1 }).stats;
+  assert.equal(bright.ap, 3);
+  assert.equal(bright.mp, -2);
+
+  const iridescent = applyPassiveModifiers({}, [passiveFor(22013)], { turn: 1 }).stats;
+  assert.equal(iridescent.ap, 4);
+  assert.equal(iridescent.mp, -4);
+  assert.equal(applyPassiveModifiers({}, [passiveFor(22013)], { turn: 2 }).stats.ap, undefined);
+});
