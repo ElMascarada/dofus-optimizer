@@ -44,32 +44,43 @@ export function statsForTurn(baseStats, items, turn, scenario = {}) {
   return statsForTurnDetailed(baseStats, items, turn, scenario).stats;
 }
 
-export function spellExpectedDamage(spell, stats, turn = 1) {
-  const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
+function spellRawTotals(spell, stats) {
   let nonCrit = 0;
   let crit = 0;
-
   for (const hit of spell.hits || []) {
     const element = hit.element || 'earth';
     const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
     const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
     const normalBase = midpoint(hit.normal);
     const critBase = midpoint(hit.crit ?? hit.normal);
-
     nonCrit += normalBase * (1 + characteristic / 100) + flat;
     crit += critBase * (1 + characteristic / 100) + flat + stat(stats, 'critDamage');
   }
+  return { nonCrit, crit };
+}
 
-  let expected = nonCrit * (1 - critChance) + crit * critChance;
+function damageMultiplier(spell, stats, turn) {
   let specificPct = stat(stats, 'spellDamagePct');
   if (spell.distance === 'melee') specificPct += stat(stats, 'meleeDamagePct');
   if (spell.distance === 'ranged') specificPct += stat(stats, 'rangedDamagePct');
-  expected *= 1 + specificPct / 100;
-
-  // Final damage is a separate stage from spell/melee/ranged damage.
   const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
-  expected *= 1 + finalPct / 100;
-  return expected;
+  return (1 + specificPct / 100) * (1 + finalPct / 100);
+}
+
+export function spellExpectedDamage(spell, stats, turn = 1) {
+  const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
+  const totals = spellRawTotals(spell, stats);
+  const expected = totals.nonCrit * (1 - critChance) + totals.crit * critChance;
+  return expected * damageMultiplier(spell, stats, turn);
+}
+
+// Safe upper bound used only by branch-and-bound. It deliberately allows each
+// spell to choose whichever of its normal/critical outcomes is larger instead
+// of assuming one shared achievable critical chance. That can overestimate a
+// build, but it can never prune away a real optimum.
+export function spellDamageUpperBound(spell, stats, turn = 1) {
+  const totals = spellRawTotals(spell, stats);
+  return Math.max(totals.nonCrit, totals.crit) * damageMultiplier(spell, stats, turn);
 }
 
 function selectedTurns(mode) {
@@ -77,6 +88,15 @@ function selectedTurns(mode) {
   if (mode === 't2') return [2];
   if (mode === 't3') return [3];
   return [1, 2, 3];
+}
+
+function aggregateTurnScores(perTurn, turnMode) {
+  const values = Object.values(perTurn);
+  let score = values[0] || 0;
+  if (turnMode === 'sum') score = values.reduce((a, b) => a + b, 0);
+  if (turnMode === 'average') score = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+  if (turnMode === 'min') score = Math.min(...values);
+  return score;
 }
 
 export function evaluateObjective({ stats, items = [], selections = [], turnMode = 'sum', scenario = {} }) {
@@ -100,13 +120,26 @@ export function evaluateObjective({ stats, items = [], selections = [], turnMode
     perTurn[turn] = score;
   }
 
-  const values = Object.values(perTurn);
-  let score = values[0] || 0;
-  if (turnMode === 'sum') score = values.reduce((a, b) => a + b, 0);
-  if (turnMode === 'average') score = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
-  if (turnMode === 'min') score = Math.min(...values);
+  return {
+    score: aggregateTurnScores(perTurn, turnMode),
+    perTurn,
+    unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort()
+  };
+}
 
-  return { score, perTurn, unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort() };
+export function evaluateObjectiveUpperBound({ stats, selections = [], turnMode = 'sum' }) {
+  const perTurn = {};
+  for (const turn of selectedTurns(turnMode)) {
+    let score = 0;
+    for (const selection of selections || []) {
+      if (!selection?.enabled) continue;
+      const casts = Math.max(0, Number(selection.casts?.[turn] ?? 1));
+      const weight = Math.max(0, Number(selection.weight ?? 1));
+      score += spellDamageUpperBound(selection.spell, stats, turn) * casts * weight;
+    }
+    perTurn[turn] = score;
+  }
+  return { score: aggregateTurnScores(perTurn, turnMode), perTurn };
 }
 
 export function estimateElementValues(selections = [], referenceStats = {}) {
