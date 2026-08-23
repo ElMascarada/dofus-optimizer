@@ -5,10 +5,8 @@ import { estimateElementValues, evaluateObjectiveUpperBound } from './spells.js'
 import { optimizeCharacteristics } from './characteristics.js';
 import { FM_ELIGIBLE_SLOTS, optimizeFm } from './fm.js';
 import {
-  countSetBonuses,
   itemConditionCompatibleWithHardConstraints,
   itemConditionsAreValid,
-  selectedItemConditionsCouldStillBeValid,
   specialSlotRulesAreValid
 } from './build-legality.js';
 import {
@@ -102,7 +100,8 @@ function buildGroups(items, slotRules, keys, nonMonotoneKeys, constraints, selec
   groups.sort((a, b) => {
     const aMulti = a.count > 1 ? 1 : 0;
     const bMulti = b.count > 1 ? 1 : 0;
-    if (aMulti !== bMulti) return aMulti - bMulti;
+    if (aMulti !== bMulti) return bMulti - aMulti;
+    if (aMulti && bMulti && a.count !== b.count) return b.count - a.count;
     return a.candidates.length - b.candidates.length || a.id.localeCompare(b.id);
   });
 
@@ -268,7 +267,6 @@ export function optimizeBuild({
         nodes: 0,
         pruned: 0,
         prunedConstraints: 0,
-        prunedConditions: 0,
         prunedScore: 0,
         prunedSpecial: 0,
         impossible: true,
@@ -297,7 +295,6 @@ export function optimizeBuild({
   let nodes = 0;
   let visited = 0;
   let prunedConstraints = 0;
-  let prunedConditions = 0;
   let prunedScore = 0;
   let prunedSpecial = 0;
   let rejectedConditions = 0;
@@ -310,16 +307,12 @@ export function optimizeBuild({
     objectiveSuffixBounded[index] = objectiveSuffixBounded[index + 1] && groups[index].objectiveCaps.bounded;
   }
 
-  function totalPruned() {
-    return prunedConstraints + prunedConditions + prunedScore + prunedSpecial;
-  }
-
   function reportProgress() {
     if (!onProgress || nodes % 5000 !== 0) return;
     onProgress({
       nodes,
       visited,
-      pruned: totalPruned(),
+      pruned: prunedConstraints + prunedScore + prunedSpecial,
       best: results[0]?.score || 0,
       threshold: results.length >= limit ? results[results.length - 1].score : null
     });
@@ -351,20 +344,6 @@ export function optimizeBuild({
 
     if (!canStillMeetConstraints(rawStats, constraints, remainingStatic, setUpper, charUpper, fmUpper)) {
       prunedConstraints++;
-      return false;
-    }
-
-    const optimisticFinalStats = emptyStats();
-    sumInto(optimisticFinalStats, rawStats, remainingStatic, setUpper, charUpper, fmUpper);
-    const currentSetBonus = countSetBonuses(selectedItems);
-    if (!selectedItemConditionsCouldStillBeValid(selectedItems, {
-      constraints,
-      characterLevel: character.level,
-      upperStats: optimisticFinalStats,
-      currentSetBonus,
-      maxSetBonus: currentSetBonus + remainingPicks
-    })) {
-      prunedConditions++;
       return false;
     }
 
@@ -482,14 +461,14 @@ export function optimizeBuild({
   }
 
   visitGroup(0);
+  const pruned = prunedConstraints + prunedScore + prunedSpecial;
   return {
     results,
     diagnostics: {
       visited,
       nodes,
-      pruned: totalPruned(),
+      pruned,
       prunedConstraints,
-      prunedConditions,
       prunedScore,
       prunedSpecial,
       rejectedConditions,
