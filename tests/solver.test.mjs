@@ -77,7 +77,7 @@ test('huge six-Dofus space materializes only its exact Pareto frontier and keeps
     character: noPoints,
     topN: 1
   });
-  assert.equal(output.results.length, 1);
+  assert.equal(output.results.length, 1, JSON.stringify(output.diagnostics));
   assert.deepEqual(output.results[0].items.map((entry) => entry.id), ['d-0', 'd-1', 'd-2', 'd-3', 'd-4', 'd-5']);
   const group = output.diagnostics.groups[0];
   assert.equal(group.theoreticalChoicesBefore, '1422630723360');
