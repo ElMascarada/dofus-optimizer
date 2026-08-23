@@ -1,0 +1,47 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  filterNonCombatMetadata,
+  normalizeSourceCondition,
+  normalizeSourceEquipment,
+  patchedElements
+} from '../js/dofus-source-rules.js';
+
+function effect(id, min, { active = false } = {}) {
+  return { int_minimum: min, int_maximum: min, ignore_int_min: false, ignore_int_max: true, type: { id, is_active: active, is_meta: false }, formatted: String(min) };
+}
+
+test('current source aliases map to canonical effect names', () => {
+  assert.deepEqual(patchedElements(['% Critical', 'Heal', 'Pod', 'reflected damage']), ['Critical', 'Heals', 'Pods', 'Reflect']);
+});
+
+test('known non-combat metadata is explicitly filtered', () => {
+  const elements = ['Exchangeable::', 'Emote', 'Power'];
+  const filtered = filterNonCombatMetadata([effect(0, 1), effect(1, 1), effect(2, 50)], elements);
+  assert.equal(filtered.ignored.length, 2);
+  assert.equal(filtered.kept.length, 1);
+});
+
+test('Set bonus source condition becomes supported', () => {
+  const elements = [];
+  elements[12] = 'Set bonus';
+  const result = normalizeSourceCondition({ is_operand: true, condition: { operator: '<', int_value: 2, element: { id: 12 } } }, elements);
+  assert.equal(result.status, 'supported');
+  assert.equal(result.node.stat, 'setBonus');
+});
+
+test('Prysmaradite uses Dofus slot and stays uncertified while temporal effect is pending', () => {
+  const elements = [];
+  elements[1] = 'Critical';
+  const item = normalizeSourceEquipment({
+    ankama_id: 22001,
+    name: 'Surpryz',
+    level: 200,
+    type: { name: 'Prysmaradite' },
+    effects: [effect(1, 10), effect(1, 1, { active: true })]
+  }, elements);
+  assert.equal(item.slot, 'dofus');
+  assert.equal(item.slotSubtype, 'prysmaradite');
+  assert.equal(item.certification.temporalEffectsPending, true);
+  assert.equal(item.certification.certified, false);
+});
