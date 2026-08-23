@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION = '0.2.0';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
@@ -12,7 +12,7 @@ export const SLOT_RULES = [
   { id: 'weapon', label: 'Arme', count: 1 },
   { id: 'shield', label: 'Bouclier', count: 1 },
   { id: 'companion', label: 'Familier / monture', count: 1 },
-  { id: 'dofus', label: 'Dofus / trophées', count: 2 }
+  { id: 'dofus', label: 'Dofus / trophées', count: 6 }
 ];
 
 export const BASE_CHARACTER = Object.freeze({
