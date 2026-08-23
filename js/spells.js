@@ -22,7 +22,14 @@ function midpoint(range) {
   return Number(range || 0);
 }
 
-export function statsForTurn(baseStats, items, turn) {
+function scenarioContextForTurn(scenario = {}, turn = 1) {
+  const shared = { ...scenario };
+  delete shared.turns;
+  delete shared.defaults;
+  return { ...(scenario.defaults || {}), ...shared, ...(scenario.turns?.[turn] || {}), turn };
+}
+
+export function statsForTurnDetailed(baseStats, items, turn, scenario = {}) {
   const stats = cloneStats(baseStats);
   const passives = [];
   for (const item of items) {
@@ -30,7 +37,11 @@ export function statsForTurn(baseStats, items, turn) {
     if (bonus) addStats(stats, bonus);
     passives.push(...(item.passives || []));
   }
-  return applyPassiveModifiers(stats, passives, { turn }).stats;
+  return applyPassiveModifiers(stats, passives, scenarioContextForTurn(scenario, turn));
+}
+
+export function statsForTurn(baseStats, items, turn, scenario = {}) {
+  return statsForTurnDetailed(baseStats, items, turn, scenario).stats;
 }
 
 export function spellExpectedDamage(spell, stats, turn = 1) {
@@ -68,12 +79,17 @@ function selectedTurns(mode) {
   return [1, 2, 3];
 }
 
-export function evaluateObjective({ stats, items = [], selections = [], turnMode = 'sum' }) {
+export function evaluateObjective({ stats, items = [], selections = [], turnMode = 'sum', scenario = {} }) {
   const turns = selectedTurns(turnMode);
   const perTurn = {};
+  const unresolvedPassiveContexts = new Set();
 
   for (const turn of turns) {
-    const turnStats = statsForTurn(stats, items, turn);
+    const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
+    const turnStats = turnResult.stats;
+    for (const unresolved of turnResult.unresolved || []) {
+      for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
+    }
     let score = 0;
     for (const selection of selections) {
       if (!selection.enabled) continue;
@@ -90,7 +106,7 @@ export function evaluateObjective({ stats, items = [], selections = [], turnMode
   if (turnMode === 'average') score = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
   if (turnMode === 'min') score = Math.min(...values);
 
-  return { score, perTurn };
+  return { score, perTurn, unresolvedPassiveContexts: [...unresolvedPassiveContexts].sort() };
 }
 
 export function estimateElementValues(selections = [], referenceStats = {}) {

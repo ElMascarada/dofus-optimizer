@@ -69,13 +69,19 @@ test('normalizes and evaluates condition trees', () => {
   assert.equal(evaluateCondition(normalized.node, { earth: 99, level: 200 }), false);
 });
 
-test('equipment inclusion keeps level-200 gear plus lower-level dofus/companions', () => {
-  const hat = normalizeEquipmentItem({ ankama_id: 1, name: 'Hat', level: 199, type: { name: 'Coiffe' }, effects: [] }, elements);
-  const dofus = normalizeEquipmentItem({ ankama_id: 2, name: 'Dofus', level: 100, type: { name: 'Dofus' }, effects: [] }, elements);
-  const pet = normalizeEquipmentItem({ ankama_id: 3, name: 'Pet', level: 60, type: { name: 'Familier' }, effects: [] }, elements);
-  const level200 = normalizeEquipmentItem({ ankama_id: 4, name: 'Hat 200', level: 200, type: { name: 'Coiffe' }, effects: [] }, elements);
-  assert.equal(shouldIncludeEquipment(hat), false);
+test('equipment inclusion keeps gear from level 190 plus lower-level Dofus and companions', () => {
+  const level189 = normalizeEquipmentItem({ ankama_id: 1, name: 'Hat 189', level: 189, type: { name: 'Coiffe' }, effects: [] }, elements);
+  const level190 = normalizeEquipmentItem({ ankama_id: 2, name: 'Hat 190', level: 190, type: { name: 'Coiffe' }, effects: [] }, elements);
+  const level199 = normalizeEquipmentItem({ ankama_id: 3, name: 'Hat 199', level: 199, type: { name: 'Coiffe' }, effects: [] }, elements);
+  const dofus = normalizeEquipmentItem({ ankama_id: 4, name: 'Dofus', level: 100, type: { name: 'Dofus' }, effects: [] }, elements);
+  const trophy = normalizeEquipmentItem({ ankama_id: 5, name: 'Trophy', level: 150, type: { name: 'Trophée' }, effects: [] }, elements);
+  const pet = normalizeEquipmentItem({ ankama_id: 6, name: 'Pet', level: 60, type: { name: 'Familier' }, effects: [] }, elements);
+  const level200 = normalizeEquipmentItem({ ankama_id: 7, name: 'Hat 200', level: 200, type: { name: 'Coiffe' }, effects: [] }, elements);
+  assert.equal(shouldIncludeEquipment(level189), false);
+  assert.equal(shouldIncludeEquipment(level190), true);
+  assert.equal(shouldIncludeEquipment(level199), true);
   assert.equal(shouldIncludeEquipment(dofus), true);
+  assert.equal(shouldIncludeEquipment(trophy), true);
   assert.equal(shouldIncludeEquipment(pet), true);
   assert.equal(shouldIncludeEquipment(level200), true);
 });

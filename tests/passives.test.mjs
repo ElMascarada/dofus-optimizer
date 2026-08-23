@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyPassiveModifiers, passiveTriggerMatches } from '../js/passives.js';
+import { applyPassiveModifiers, passiveTriggerMatches, passiveTriggerState } from '../js/passives.js';
 
 const nebulous = {
   id: 'nebulous-dream',
@@ -20,4 +20,23 @@ test('Nebulous passive applies +20 final damage on odd and -10 on even turns', (
   assert.equal(applyPassiveModifiers({}, [nebulous], { turn: 1 }).stats.finalDamagePct, 20);
   assert.equal(applyPassiveModifiers({}, [nebulous], { turn: 2 }).stats.finalDamagePct, -10);
   assert.equal(applyPassiveModifiers({}, [nebulous], { turn: 3 }).stats.finalDamagePct, 20);
+});
+
+test('context triggers report missing scenario inputs instead of silently choosing a branch', () => {
+  const state = passiveTriggerState({ type: 'context_equals', key: 'enemyAdjacent', value: false }, { turn: 1 });
+  assert.equal(state.resolved, false);
+  assert.deepEqual(state.missingKeys, ['enemyAdjacent']);
+});
+
+test('scaled passive stats clamp context-provided stacks', () => {
+  const passive = { id: 'purple', rules: [{ trigger: { type: 'always' }, scaledStats: [{ stat: 'finalDamagePct', contextKey: 'stacks', multiplier: 1, min: 0, max: 10 }] }] };
+  assert.equal(applyPassiveModifiers({}, [passive], { turn: 1, stacks: 7 }).stats.finalDamagePct, 7);
+  assert.equal(applyPassiveModifiers({}, [passive], { turn: 1, stacks: 99 }).stats.finalDamagePct, 10);
+  assert.deepEqual(applyPassiveModifiers({}, [passive], { turn: 1 }).unresolved[0].missingKeys, ['stacks']);
+});
+
+test('turn cycle supports deterministic rotating item passives', () => {
+  assert.equal(passiveTriggerMatches({ type: 'turn_cycle', length: 4, position: 1 }, { turn: 1 }), true);
+  assert.equal(passiveTriggerMatches({ type: 'turn_cycle', length: 4, position: 1 }, { turn: 5 }), true);
+  assert.equal(passiveTriggerMatches({ type: 'turn_cycle', length: 4, position: 2 }, { turn: 1 }), false);
 });
