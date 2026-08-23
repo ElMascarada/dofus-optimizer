@@ -75,3 +75,30 @@ test('dynamic multi-pick group bound is optimistic and never understates a legal
     fmUpper: {}
   }), true);
 });
+
+test('dynamic hard-choice frontier prevents mutually incompatible per-item maxima from inflating the joint bound', () => {
+  const constraints = { resEarth: 40, resFire: 40 };
+  const bundles = buildConstraintBundles(constraints);
+  const groups = [{
+    id: 'dofus',
+    count: 2,
+    dynamic: true,
+    candidates: [
+      { stats: { resEarth: 40 } },
+      { stats: { resFire: 40 } }
+    ],
+    hardConstraintChoices: [
+      { stats: { resEarth: 40, resFire: 0 } },
+      { stats: { resEarth: 0, resFire: 40 } }
+    ]
+  }];
+  const future = buildFutureConstraintBundleCaps(groups, bundles);
+  assert.equal(canMeetJointConstraintBundles({
+    rawStats: {},
+    bundles,
+    futureCaps: future[0],
+    setUpper: {},
+    charUpper: {},
+    fmUpper: {}
+  }), false);
+});
