@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.10.6';
+export const APP_VERSION = '0.10.7';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
@@ -44,6 +44,8 @@ export const DEFAULT_FM = Object.freeze({
   spellDamagePct: 3,
   allowCritDamage: true,
   critDamageAmount: 8,
+  // Approximation volontaire : +1 PA / +1 PM sont ajoutés à la base permanente
+  // sans consommer les FM offensives, pour garder le solveur interactif.
   structuralExos: true
 });
 
