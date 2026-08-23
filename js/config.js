@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.10.3';
+export const APP_VERSION = '0.10.4';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
@@ -22,8 +22,6 @@ export const BASE_CHARACTER = Object.freeze({
   baseStats: { ap: 7, mp: 3, vit: 1095 }
 });
 
-// Paliers modernes communs aux quatre caractéristiques élémentaires.
-// Chaque entrée décrit combien de points de caractéristique peuvent être achetés à ce coût.
 export const ELEMENT_SOFT_CAPS = Object.freeze([
   { amount: 100, cost: 1 },
   { amount: 100, cost: 2 },
