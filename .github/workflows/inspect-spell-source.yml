@@ -1,0 +1,35 @@
+name: Inspect spell source
+
+on:
+  push:
+    branches: [feature/real-spell-catalog]
+    paths:
+      - '.github/workflows/inspect-spell-source.yml'
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download current Dofusdude release spell assets
+        run: |
+          VERSION=3.6.10.10
+          BASE="https://github.com/dofusdude/dofus3-main/releases/download/${VERSION}"
+          curl -LfsS "$BASE/spells.json" -o /tmp/spells.json
+          curl -LfsS "$BASE/spell_levels.json" -o /tmp/spell_levels.json
+          curl -LfsS "$BASE/breeds.json" -o /tmp/breeds.json
+      - name: Print compact schema samples
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          for (const name of ['spells', 'spell_levels', 'breeds']) {
+            const data = JSON.parse(fs.readFileSync(`/tmp/${name}.json`, 'utf8'));
+            console.log(`=== ${name} ===`);
+            console.log('kind', Array.isArray(data) ? 'array' : typeof data, 'length', Array.isArray(data) ? data.length : Object.keys(data).length);
+            const sample = Array.isArray(data) ? data[0] : data[Object.keys(data)[0]];
+            console.log(JSON.stringify(sample, null, 2).slice(0, 12000));
+          }
+          NODE
