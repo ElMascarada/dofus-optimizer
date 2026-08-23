@@ -20,6 +20,8 @@ jobs:
         run: npm run check
       - name: Tests
         run: npm test
+      - name: Search-space profile
+        run: node scripts/profile-real-space.mjs
       - name: Real snapshot solver smoke
         run: npm run smoke:real
         timeout-minutes: 1
