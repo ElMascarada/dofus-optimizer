@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  conditionCouldBeSatisfied,
   countSetBonuses,
+  itemConditionCompatibleWithHardConstraints,
   itemConditionsAreValid,
+  selectedItemConditionsCouldStillBeValid,
   specialSlotRulesAreValid
 } from '../js/build-legality.js';
 
@@ -34,4 +37,34 @@ test('normal stat and level equipment conditions use final build stats', () => {
   ] } };
   assert.equal(itemConditionsAreValid([item], { earth: 300 }, 200), true);
   assert.equal(itemConditionsAreValid([item], { earth: 299 }, 200), false);
+});
+
+test('hard minimum constraint rejects an item whose upper condition can never coexist', () => {
+  const item = { conditions: { kind: 'condition', stat: 'ap', operator: 'lt', value: 12 } };
+  assert.equal(itemConditionCompatibleWithHardConstraints(item, { ap: 12 }, 200), false);
+  assert.equal(itemConditionCompatibleWithHardConstraints(item, { ap: 11 }, 200), true);
+});
+
+test('partial set-bonus condition prunes as soon as its lower bound is already illegal', () => {
+  const trophy = { conditions: { kind: 'condition', stat: 'setBonus', operator: 'lt', value: 2 } };
+  assert.equal(selectedItemConditionsCouldStillBeValid([trophy], {
+    constraints: {},
+    currentSetBonus: 2,
+    maxSetBonus: 5,
+    upperStats: {}
+  }), false);
+  assert.equal(selectedItemConditionsCouldStillBeValid([trophy], {
+    constraints: {},
+    currentSetBonus: 1,
+    maxSetBonus: 5,
+    upperStats: {}
+  }), true);
+});
+
+test('condition intervals only reject branches proven impossible', () => {
+  const condition = { kind: 'condition', stat: 'earth', operator: 'gte', value: 500 };
+  assert.equal(conditionCouldBeSatisfied(condition, { earth: { min: 0, max: 499 } }), false);
+  assert.equal(conditionCouldBeSatisfied(condition, { earth: { min: 0, max: 500 } }), true);
+  assert.equal(conditionCouldBeSatisfied({ ...condition, operator: 'lt', value: 500 }, { earth: { min: 499, max: 900 } }), true);
+  assert.equal(conditionCouldBeSatisfied({ ...condition, operator: 'lt', value: 500 }, { earth: { min: 500, max: 900 } }), false);
 });
