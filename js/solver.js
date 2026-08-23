@@ -67,6 +67,7 @@ export function optimizeBuild({
   topN = 10,
   slotRules = SLOT_RULES,
   character = BASE_CHARACTER,
+  scenario = {},
   onProgress = null
 }) {
   const groups = buildGroups(items, slotRules);
@@ -105,9 +106,11 @@ export function optimizeBuild({
         items: selectedItems,
         selections,
         turnMode,
-        policy: fmPolicy
+        policy: fmPolicy,
+        scenario
       });
 
+      if (fm.objective.unresolvedPassiveContexts?.length) return;
       if (!meetsConstraints(fm.stats, constraints)) return;
 
       insertTop(results, {
