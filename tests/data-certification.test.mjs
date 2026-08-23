@@ -31,22 +31,25 @@ test('snapshot excludes otherwise-certified items linked to unsafe or missing se
   assert.deepEqual(selectSnapshotItems(items, sets).map((item) => item.id), ['free', 'safe']);
 });
 
-test('coverage keeps unknown player slot types visible, ignores collectors, and keeps timestamp stable', () => {
+test('coverage includes level 190+ player gear and keeps Dofus/companions exempt from the level floor', () => {
   const items = [
     { id: 'unknown', level: 200, slot: null, typeName: 'Prysmaradite' },
-    { id: 'old-hat', level: 199, slot: 'hat', typeName: 'Coiffe' },
+    { id: 'low-hat', level: 189, slot: 'hat', typeName: 'Coiffe' },
+    { id: 'floor-hat', level: 190, slot: 'hat', typeName: 'Coiffe' },
+    { id: 'high-hat', level: 199, slot: 'hat', typeName: 'Coiffe' },
     { id: 'dofus', level: 100, slot: 'dofus', typeName: 'Dofus' },
+    { id: 'pet', level: 60, slot: 'companion', typeName: 'Familier' },
     { id: 'collector', level: 200, slot: null, typeName: 'Fers de Percepteur' }
   ];
   const coverage = equipmentForCoverage(items);
-  assert.deepEqual(coverage.map((item) => item.id), ['unknown', 'dofus']);
+  assert.deepEqual(coverage.map((item) => item.id), ['unknown', 'floor-hat', 'high-hat', 'dofus', 'pet']);
   assert.deepEqual(collectUnknownSlotTypes(coverage), { Prysmaradite: 1 });
   assert.equal(sourceGeneratedAt({ update_stamp: '2026-08-23T00:00:00Z' }, 'fallback'), '2026-08-23T00:00:00Z');
 });
 
 test('internal GM/MJ equipment never enters player scope or snapshot', () => {
   const mjPet = { id: 'mj-pet', name: 'Surpuissant Chacha de Combat (MJ)', level: 200, slot: 'companion', typeName: 'Familier', certification: { certified: true }, setId: null };
-  const normalPet = { id: 'pet', name: 'Chacha', level: 200, slot: 'companion', typeName: 'Familier', certification: { certified: true }, setId: null };
+  const normalPet = { id: 'pet', name: 'Chacha', level: 60, slot: 'companion', typeName: 'Familier', certification: { certified: true }, setId: null };
   assert.equal(isInternalOrNonPlayerItem(mjPet), true);
   assert.equal(isPlayerEquipmentScope(mjPet), false);
   assert.deepEqual(selectSnapshotItems([mjPet, normalPet], []).map((item) => item.id), ['pet']);
