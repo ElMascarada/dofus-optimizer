@@ -8,11 +8,11 @@
   "elements": 273,
   "items": {
     "total": 1110,
-    "certified": 1025,
+    "certified": 1042,
     "unknownSlot": 0,
-    "unmappedEffects": 31,
+    "unmappedEffects": 1,
     "activeEffects": 348,
-    "metaEffects": 71,
+    "metaEffects": 68,
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
@@ -27,15 +27,14 @@
       "shield": 46
     },
     "unknownEffectNames": {
-      "Exchangeable:": 30,
       "Add a temporary spell": 1
     },
     "unknownConditionNames": {},
-    "certifiedPct": 92.34,
+    "certifiedPct": 93.87,
     "unknownSlotTypes": {},
-    "snapshotCertified": 1019,
+    "snapshotCertified": 1036,
     "excludedByUncertifiedSet": 6,
-    "ignoredEffects": 50,
+    "ignoredEffects": 83,
     "activeEffectNames": {
       "Water steal (Active)": 38,
       "Steals MP (Active)": 4,
@@ -58,8 +57,7 @@
       "Advances by cell (Active)": 1
     },
     "metaEffectNames": {
-      "-special spell-": 68,
-      "Title:": 3
+      "-special spell-": 68
     },
     "temporalPending": [
       {
@@ -128,48 +126,6 @@
             "status": "meta",
             "name": "-special spell-",
             "formatted": "Blanc Ivoire :\n• Le porteur réduit de 50% les dommages d'une attaque sur 5. Les effets d'interception et de partage de dommages sont incompatibles.",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Chercheur d'Ogrines",
-        "ankamaId": 10657,
-        "typeName": "Familier",
-        "slot": "companion",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "Title:",
-            "formatted": "Titre : Farfouilleur d'Otomaï",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Chapeau Potin",
-        "ankamaId": 13194,
-        "typeName": "Chapeau",
-        "slot": "hat",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "Title:",
-            "formatted": "Titre : Commère des Miches",
-            "reason": "meta-effect"
-          }
-        ]
-      },
-      {
-        "name": "Cape Reski",
-        "ankamaId": 13197,
-        "typeName": "Cape",
-        "slot": "cape",
-        "effects": [
-          {
-            "status": "meta",
-            "name": "Title:",
-            "formatted": "Titre : Trouffion des Neiges",
             "reason": "meta-effect"
           }
         ]
@@ -2062,14 +2018,14 @@
       }
     ],
     "snapshotBySlot": {
-      "cape": 67,
-      "companion": 142,
-      "dofus": 266,
+      "dofus": 277,
+      "cape": 68,
+      "companion": 145,
       "weapon": 121,
       "boots": 79,
-      "ring": 79,
+      "ring": 80,
       "belt": 62,
-      "hat": 88,
+      "hat": 89,
       "amulet": 71,
       "shield": 44
     }
