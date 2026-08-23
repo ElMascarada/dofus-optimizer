@@ -164,6 +164,24 @@ function insertSeedResult(results, result, limit) {
   if (results.length > limit) results.length = limit;
 }
 
+function expandWithHardChoices(beam, group, rankOptions, dynamicBaseWidth, dynamicBeamWidth) {
+  const expanded = [];
+  const bases = beam.slice(0, dynamicBaseWidth);
+  for (const state of bases) {
+    const selectedIds = new Set(state.items.map((item) => item.id));
+    for (const choice of group.hardConstraintChoices || []) {
+      if ((choice.items || []).some((item) => selectedIds.has(item.id))) continue;
+      const items = [...state.items, ...(choice.items || [])];
+      if (!specialSlotRulesAreValid(items)) continue;
+      expanded.push({ items, rank: rankState(items, rankOptions) });
+    }
+  }
+  return {
+    beam: trimBeam(expanded, dynamicBeamWidth),
+    generated: expanded.length
+  };
+}
+
 export function findSeedResults({
   groups = [],
   baseStats = {},
@@ -207,10 +225,18 @@ export function findSeedResults({
     if (!beam.length) break;
   }
 
-  // Dynamic multi-pick groups (currently the six Dofus/trophy slots) are expanded as
-  // a small best-first beam only for the incumbent. The exact solver still keeps its
-  // full dynamic Pareto search, so no candidate is permanently lost here.
+  // For constrained searches, a dynamic multi-pick group can expose a compact exact
+  // Pareto frontier on the requested hard stats. Use it directly for the seed. This
+  // avoids guessing six trophies/Dofus independently while remaining heuristic-only:
+  // the exact solver still owns the full offensive dynamic search afterwards.
   for (const group of dynamicGroups) {
+    if (group.hardConstraintChoices?.length) {
+      const expanded = expandWithHardChoices(beam, group, rankOptions, dynamicBaseWidth, dynamicBeamWidth);
+      generated += expanded.generated;
+      beam = expanded.beam;
+      continue;
+    }
+
     const candidates = shortlistDynamicCandidates(group, constraints, classifications);
     let dynamicBeam = beam.slice(0, dynamicBaseWidth).map((state) => ({ ...state, lastIndex: -1 }));
     for (let pick = 0; pick < Number(group.count || 0); pick++) {
@@ -255,7 +281,10 @@ export function findSeedResults({
         id: group.id,
         count: group.count,
         candidates: group.candidates?.length || 0,
-        shortlisted: shortlistDynamicCandidates(group, constraints, classifications).length
+        hardConstraintChoices: group.hardConstraintChoices?.length || 0,
+        shortlisted: group.hardConstraintChoices?.length
+          ? group.hardConstraintChoices.length
+          : shortlistDynamicCandidates(group, constraints, classifications).length
       }))
     }
   };
