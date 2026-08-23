@@ -3,14 +3,14 @@
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
 - Included items: 1110
-- Self-certified items in coverage scope: 1025 (92.34%)
-- Snapshot-certified items: 1019
+- Self-certified items in coverage scope: 1042 (93.87%)
+- Snapshot-certified items: 1036
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
-- Unmapped passive effects: 31
+- Unmapped passive effects: 1
 - Active effects intentionally excluded from stats: 348
-- Meta effects: 71
-- Explicitly ignored non-combat metadata: 50
+- Meta effects: 68
+- Explicitly ignored non-combat metadata: 83
 - Items with unmapped conditions: 0
 - Explicitly excluded internal/non-player items: 214
 - Sets: 160/161 certified
@@ -34,7 +34,6 @@
 
 ## Unknown effect names
 
-- Exchangeable:: 30
 - Add a temporary spell: 1
 
 ## Unknown condition names
@@ -44,7 +43,6 @@
 ## Meta effect names
 
 - -special spell-: 68
-- Title:: 3
 
 ## Active effect names
 
@@ -86,9 +84,6 @@
 - Dofus Tacheté (#7112; Dofus): meta:-special spell-
 - Dofus Ébène (#7114; Dofus): meta:-special spell-
 - Dofus Ivoire (#7115; Dofus): meta:-special spell-
-- Chercheur d'Ogrines (#10657; Familier): meta:Title:
-- Chapeau Potin (#13194; Chapeau): meta:Title:
-- Cape Reski (#13197; Cape): meta:Title:
 - Dofus des Veilleurs (#16061; Dofus): meta:-special spell-
 - Dokoko (#17078; Dofus): meta:-special spell-
 - Dofus Forgelave (#19398; Dofus): meta:-special spell-

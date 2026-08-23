@@ -22,6 +22,15 @@ test('known non-combat metadata is explicitly filtered', () => {
   assert.equal(filtered.kept.length, 1);
 });
 
+test('Exchangeable colon variants and cosmetic titles are ignored metadata', () => {
+  const elements = ['Exchangeable:', 'Exchangeable::', 'Title:', 'Power'];
+  const filtered = filterNonCombatMetadata([
+    effect(0, 1), effect(1, 1), effect(2, 1), effect(3, 50)
+  ], elements);
+  assert.deepEqual(filtered.ignored.map((entry) => elements[entry.type.id]), ['Exchangeable:', 'Exchangeable::', 'Title:']);
+  assert.equal(filtered.kept.length, 1);
+});
+
 test('Set bonus source condition becomes supported', () => {
   const elements = [];
   elements[12] = 'Set bonus';
