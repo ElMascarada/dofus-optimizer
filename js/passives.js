@@ -9,6 +9,10 @@ function hasContextValue(context, key) {
   return contextValue(context, key) !== undefined;
 }
 
+function ignoredPassiveIds(context = {}) {
+  return new Set(Array.isArray(context.ignoredPassiveIds) ? context.ignoredPassiveIds.map(String) : []);
+}
+
 function compare(actual, operator, expected) {
   if (operator === 'eq') return actual === expected;
   if (operator === 'neq') return actual !== expected;
@@ -96,7 +100,14 @@ export function applyPassiveModifiers(baseStats = {}, passives = [], context = {
   const stats = cloneStats(baseStats);
   const applied = [];
   const unresolved = [];
+  const ignored = [];
+  const ignoredIds = ignoredPassiveIds(context);
+
   for (const passive of passives || []) {
+    if (ignoredIds.has(String(passive.id))) {
+      ignored.push({ passiveId: passive.id });
+      continue;
+    }
     for (const rule of passive.rules || []) {
       const trigger = passiveTriggerState(rule.trigger, context);
       if (!trigger.resolved) {
@@ -113,7 +124,7 @@ export function applyPassiveModifiers(baseStats = {}, passives = [], context = {
       applied.push({ passiveId: passive.id, ruleId: rule.id || null, stats: { ...resolved.stats } });
     }
   }
-  return { stats, applied, unresolved };
+  return { stats, applied, unresolved, ignored };
 }
 
 export function itemPassivesForTurn(items = [], turn = 1, context = {}) {
