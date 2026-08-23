@@ -9,7 +9,7 @@
 - Unknown slots: 0
 - Unmapped passive effects: 31
 - Active effects intentionally excluded from stats: 248
-- Meta effects: 77
+- Meta effects: 76
 - Explicitly ignored non-combat metadata: 47
 - Items with unmapped conditions: 0
 - Sets: 106/107 certified
@@ -39,3 +39,42 @@
 ## Unknown condition names
 
 - none
+
+## Meta effect names
+
+- -special spell-: 75
+- Title:: 1
+
+## Active effect names
+
+- Water steal (Active): 27
+- Fire damage (Active): 27
+- Water damage (Active): 25
+- Air Damage (Active): 21
+- Neutral damage (Active): 21
+- Fire steal (Active): 19
+- Earth damage (Active): 18
+- Air steal (Active): 18
+- Neutral steal (Active): 14
+- Earth steal (Active): 11
+- AP (Active): 11
+- Pushes back cell (Active): 8
+- MP (Active): 7
+- best-element damage (Active): 6
+- Fire heals (Active): 5
+- Steals MP (Active): 4
+- Attracts by cell (Active): 3
+- best-element steal (Active): 2
+- Advances by cell (Active): 1
+
+## Recognized temporal passives
+
+- Dofus Nébuleux (#8698): nebulous-dream
+
+## Temporal items pending
+
+- none
+
+## Uncertified sets
+
+- Malédiction de Cire Momore

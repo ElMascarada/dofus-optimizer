@@ -12,7 +12,7 @@
     "unknownSlot": 0,
     "unmappedEffects": 31,
     "activeEffects": 248,
-    "metaEffects": 77,
+    "metaEffects": 76,
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
@@ -35,11 +35,61 @@
     "unknownSlotTypes": {},
     "snapshotCertified": 809,
     "excludedByUncertifiedSet": 6,
-    "ignoredEffects": 47
+    "ignoredEffects": 47,
+    "activeEffectNames": {
+      "Water steal (Active)": 27,
+      "Steals MP (Active)": 4,
+      "Fire damage (Active)": 27,
+      "Fire steal (Active)": 19,
+      "Air Damage (Active)": 21,
+      "Water damage (Active)": 25,
+      "Neutral damage (Active)": 21,
+      "Earth damage (Active)": 18,
+      "Earth steal (Active)": 11,
+      "Air steal (Active)": 18,
+      "Fire heals (Active)": 5,
+      "AP (Active)": 11,
+      "Neutral steal (Active)": 14,
+      "Pushes back cell (Active)": 8,
+      "best-element damage (Active)": 6,
+      "best-element steal (Active)": 2,
+      "MP (Active)": 7,
+      "Attracts by cell (Active)": 3,
+      "Advances by cell (Active)": 1
+    },
+    "metaEffectNames": {
+      "-special spell-": 75,
+      "Title:": 1
+    },
+    "temporalPending": [],
+    "recognizedPassives": [
+      {
+        "name": "Dofus Nébuleux",
+        "ankamaId": 8698,
+        "passives": [
+          "nebulous-dream"
+        ]
+      }
+    ],
+    "snapshotBySlot": {
+      "companion": 144,
+      "dofus": 266,
+      "weapon": 84,
+      "hat": 58,
+      "ring": 48,
+      "boots": 52,
+      "amulet": 50,
+      "belt": 38,
+      "cape": 43,
+      "shield": 26
+    }
   },
   "sets": {
     "total": 107,
     "certified": 106,
-    "uncertified": 1
+    "uncertified": 1,
+    "uncertifiedNames": [
+      "Malédiction de Cire Momore"
+    ]
   }
 }
