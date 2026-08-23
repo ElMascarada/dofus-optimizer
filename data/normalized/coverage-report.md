@@ -3,13 +3,13 @@
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
 - Included items: 1110
-- Self-certified items in coverage scope: 1052 (94.77%)
-- Snapshot-certified items: 1046
+- Self-certified items in coverage scope: 1054 (94.95%)
+- Snapshot-certified items: 1048
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 1
 - Active effects intentionally excluded from stats: 348
-- Meta effects: 58
+- Meta effects: 56
 - Explicitly ignored non-combat metadata: 83
 - Items with unmapped conditions: 0
 - Explicitly excluded internal/non-player items: 214
@@ -42,7 +42,7 @@
 
 ## Meta effect names
 
-- -special spell-: 58
+- -special spell-: 56
 
 ## Active effect names
 
@@ -76,6 +76,7 @@
 - Dofus Nébuleux (#8698): nebulous-dream
 - Dofus Abyssal (#18043): descent-to-abyss
 - Trompe-la-Mort (#20358): cheat-death
+- Sprynt (#21995): sprynt
 - Pryssion Mate (#21996): pryssion-matte
 - Pryssion Brillante (#21997): pryssion-bright
 - Pryssion Iridescente (#21998): pryssion-iridescent
@@ -85,6 +86,7 @@
 - Prycipithon Mate (#22011): prycipithon-matte
 - Prycipithon Brillante (#22012): prycipithon-bright
 - Prycipithon Iridescente (#22013): prycipithon-iridescent
+- Prysmenvout (#22020): prysmenvout
 - Pryximite (#22023): pryximite
 
 ## Temporal items pending
@@ -112,13 +114,11 @@
 - Prytek Mate (#21451; Prysmaradite): meta:-special spell-
 - Prytek Brillante (#21452; Prysmaradite): meta:-special spell-
 - Prytek Iridescente (#21453; Prysmaradite): meta:-special spell-
-- Sprynt (#21995; Prysmaradite): meta:-special spell-
 - Prygen (#22010; Prysmaradite): meta:-special spell-
 - Espryt (#22014; Prysmaradite): meta:-special spell-
 - Korprys (#22015; Prysmaradite): meta:-special spell-
 - Caraprys (#22018; Prysmaradite): meta:-special spell-
 - Prysmaru (#22019; Prysmaradite): meta:-special spell-
-- Prysmenvout (#22020; Prysmaradite): meta:-special spell-
 - Supprys (#22021; Prysmaradite): meta:-special spell-
 - Aprybou (#22022; Prysmaradite): meta:-special spell-
 - Prymune (#22024; Prysmaradite): meta:-special spell-
