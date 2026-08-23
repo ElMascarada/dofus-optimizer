@@ -83,6 +83,12 @@ const ITEM_PASSIVE_RULES = new Map([
       { id: 'at-or-below-half-hp', trigger: { type: 'context_compare', key: 'hpPct', operator: 'lte', value: 50 }, stats: { incomingDamageReductionPct: 20 } }
     ]
   }],
+  [21995, {
+    id: 'sprynt',
+    label: 'Sprynt',
+    consumeDynamicEffects: true,
+    rules: []
+  }],
   [21996, {
     id: 'pryssion-matte',
     label: 'Pryssion Mate',
@@ -174,6 +180,12 @@ const ITEM_PASSIVE_RULES = new Map([
     rules: [
       { id: 'turn-1', trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 4, mp: -4 } }
     ]
+  }],
+  [22020, {
+    id: 'prysmenvout',
+    label: 'Prysmenvout',
+    consumeDynamicEffects: true,
+    rules: []
   }],
   [22023, {
     id: 'pryximite',

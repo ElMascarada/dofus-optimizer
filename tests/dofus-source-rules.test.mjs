@@ -7,8 +7,8 @@ import {
   patchedElements
 } from '../js/dofus-source-rules.js';
 
-function effect(id, min, { active = false } = {}) {
-  return { int_minimum: min, int_maximum: min, ignore_int_min: false, ignore_int_max: true, type: { id, is_active: active, is_meta: false }, formatted: String(min) };
+function effect(id, min, { active = false, meta = false } = {}) {
+  return { int_minimum: min, int_maximum: min, ignore_int_min: false, ignore_int_max: true, type: { id, is_active: active, is_meta: meta }, formatted: String(min) };
 }
 
 test('current source aliases map to canonical effect names', () => {
@@ -39,20 +39,59 @@ test('Set bonus source condition becomes supported', () => {
   assert.equal(result.node.stat, 'setBonus');
 });
 
-test('unmodeled Prysmaradite uses Dofus slot and stays uncertified while temporal effect is pending', () => {
+test('still-unmodeled Prysmaradite uses Dofus slot and stays uncertified while temporal effect is pending', () => {
   const elements = [];
-  elements[1] = 'Critical';
+  elements[1] = 'Vitality';
   const item = normalizeSourceEquipment({
-    ankama_id: 21995,
-    name: 'Sprynt',
+    ankama_id: 22010,
+    name: 'Prygen',
     level: 200,
     type: { name: 'Prysmaradite' },
-    effects: [effect(1, 10), effect(1, 1, { active: true })]
+    effects: [effect(1, 200), effect(1, 1, { active: true })]
   }, elements);
   assert.equal(item.slot, 'dofus');
   assert.equal(item.slotSubtype, 'prysmaradite');
   assert.equal(item.certification.temporalEffectsPending, true);
   assert.equal(item.certification.certified, false);
+});
+
+test('Sprynt keeps its fixed PM/range stats and consumes its known nonnumeric Intaclable passive', () => {
+  const elements = [];
+  elements[1] = 'MP';
+  elements[2] = 'Range';
+  elements[3] = '-special spell-';
+  const item = normalizeSourceEquipment({
+    ankama_id: 21995,
+    name: 'Sprynt',
+    level: 200,
+    type: { name: 'Prysmaradite' },
+    effects: [effect(1, 1), effect(2, -1), effect(3, 0, { meta: true })]
+  }, elements);
+  assert.equal(item.certification.certified, true);
+  assert.equal(item.certification.temporalEffectsPending, undefined);
+  assert.equal(item.stats.mp, 1);
+  assert.equal(item.stats.range, -1);
+  assert.equal(item.passives[0].id, 'sprynt');
+  assert.equal(item.passives[0].rules.length, 0);
+  assert.equal(item.source.recognizedPassiveEffects.length, 1);
+});
+
+test('Prysmenvout keeps its fixed 80 power while acknowledging its T1 dispel passive', () => {
+  const elements = [];
+  elements[1] = 'Power';
+  elements[2] = '-special spell-';
+  const item = normalizeSourceEquipment({
+    ankama_id: 22020,
+    name: 'Prysmenvout',
+    level: 200,
+    type: { name: 'Prysmaradite' },
+    effects: [effect(1, 80), effect(2, 0, { meta: true })]
+  }, elements);
+  assert.equal(item.certification.certified, true);
+  assert.equal(item.stats.power, 80);
+  assert.equal(item.passives[0].id, 'prysmenvout');
+  assert.equal(item.passives[0].rules.length, 0);
+  assert.equal(item.source.recognizedPassiveEffects.length, 1);
 });
 
 test('Nébuleux consumes its dynamic source effect and becomes certified with a structured passive', () => {
