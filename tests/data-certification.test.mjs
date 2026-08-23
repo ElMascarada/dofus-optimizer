@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   collectUnknownSlotTypes,
   equipmentForCoverage,
+  isInternalOrNonPlayerItem,
+  isPlayerEquipmentScope,
   isSolverSafeSet,
   selectSnapshotItems,
   sourceGeneratedAt
@@ -17,10 +19,10 @@ test('set active effects remain unsafe until temporal rules exist', () => {
 
 test('snapshot excludes otherwise-certified items linked to unsafe or missing sets', () => {
   const items = [
-    { id: 'free', certification: { certified: true }, setId: null },
-    { id: 'safe', certification: { certified: true }, setId: 'set-safe' },
-    { id: 'unsafe', certification: { certified: true }, setId: 'set-unsafe' },
-    { id: 'missing', certification: { certified: true }, setId: 'set-missing' }
+    { id: 'free', level: 200, slot: 'hat', certification: { certified: true }, setId: null },
+    { id: 'safe', level: 200, slot: 'hat', certification: { certified: true }, setId: 'set-safe' },
+    { id: 'unsafe', level: 200, slot: 'hat', certification: { certified: true }, setId: 'set-unsafe' },
+    { id: 'missing', level: 200, slot: 'hat', certification: { certified: true }, setId: 'set-missing' }
   ];
   const sets = [
     { id: 'set-safe', certification: { certified: true, coverage: [{ active: 0 }] } },
@@ -40,4 +42,12 @@ test('coverage keeps unknown player slot types visible, ignores collectors, and 
   assert.deepEqual(coverage.map((item) => item.id), ['unknown', 'dofus']);
   assert.deepEqual(collectUnknownSlotTypes(coverage), { Prysmaradite: 1 });
   assert.equal(sourceGeneratedAt({ update_stamp: '2026-08-23T00:00:00Z' }, 'fallback'), '2026-08-23T00:00:00Z');
+});
+
+test('internal GM/MJ equipment never enters player scope or snapshot', () => {
+  const mjPet = { id: 'mj-pet', name: 'Surpuissant Chacha de Combat (MJ)', level: 200, slot: 'companion', typeName: 'Familier', certification: { certified: true }, setId: null };
+  const normalPet = { id: 'pet', name: 'Chacha', level: 200, slot: 'companion', typeName: 'Familier', certification: { certified: true }, setId: null };
+  assert.equal(isInternalOrNonPlayerItem(mjPet), true);
+  assert.equal(isPlayerEquipmentScope(mjPet), false);
+  assert.deepEqual(selectSnapshotItems([mjPet, normalPet], []).map((item) => item.id), ['pet']);
 });
