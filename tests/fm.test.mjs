@@ -57,7 +57,7 @@ test('FM never applies to Dofus, trophies or companions', () => {
   assert.equal(result.critItems + result.spellPctItems, 1);
 });
 
-test('structural exos add +1 AP and +1 MP on two different items and consume two offensive FM slots', () => {
+test('structural exos add free +1 AP and +1 MP without consuming offensive FM slots', () => {
   const result = optimizeFm({
     baseStats: { earth: 1000, ap: 11, mp: 5 },
     items: [
@@ -79,11 +79,8 @@ test('structural exos add +1 AP and +1 MP on two different items and consume two
   assert.equal(result.stats.ap, 12);
   assert.equal(result.stats.mp, 6);
   assert.equal(result.structuralExos, 2);
-  assert.equal(result.spellPctItems, 1);
-  const ap = result.assignments.find((entry) => entry.type === 'exoAp');
-  const mp = result.assignments.find((entry) => entry.type === 'exoMp');
-  assert.ok(ap);
-  assert.ok(mp);
-  assert.notEqual(ap.itemId, mp.itemId);
+  assert.equal(result.spellPctItems, 3);
+  assert.equal(result.assignments.filter((entry) => entry.type === 'exoAp').length, 0);
+  assert.equal(result.assignments.filter((entry) => entry.type === 'exoMp').length, 0);
   assert.equal(result.assignments.find((entry) => entry.itemId === 'dofus').type, 'none');
 });
