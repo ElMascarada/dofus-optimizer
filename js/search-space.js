@@ -1,5 +1,6 @@
 import { FM_ELIGIBLE_SLOTS } from './fm.js';
-import { stat } from './stats.js';
+import { applyPassiveModifiers } from './passives.js';
+import { addStats, stat } from './stats.js';
 
 const OBJECTIVE_COMMON_STATS = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
@@ -60,35 +61,80 @@ export function relevantStatKeys({ items = [], selections = [], constraints = {}
   return { keys: [...keys].sort(), nonMonotoneKeys: conditionInfo.nonMonotone };
 }
 
-export function passiveUpperStats(item = {}) {
+function addPositive(target, key, value, mode = 'sum') {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) return;
+  if (mode === 'max') target[key] = Math.max(Number(target[key] || 0), number);
+  else target[key] = Number(target[key] || 0) + number;
+}
+
+function selectedTurnsForMode(mode) {
+  if (mode === 't1') return [1];
+  if (mode === 't2') return [2];
+  if (mode === 't3') return [3];
+  return [1, 2, 3];
+}
+
+function scenarioContextForTurn(scenario = {}, turn = 1) {
+  const shared = { ...scenario };
+  delete shared.turns;
+  delete shared.defaults;
+  return { ...(scenario.defaults || {}), ...shared, ...(scenario.turns?.[turn] || {}), turn };
+}
+
+function staticPassiveUpperStats(item = {}) {
   const stats = {};
   let bounded = true;
-  const addPositive = (key, value) => {
-    const number = Number(value);
-    if (Number.isFinite(number) && number > 0) stats[key] = (stats[key] || 0) + number;
-  };
 
   for (const passive of item.passives || []) {
     for (const rule of passive.rules || []) {
-      for (const [key, value] of Object.entries(rule.stats || {})) addPositive(key, value);
+      for (const [key, value] of Object.entries(rule.stats || {})) addPositive(stats, key, value);
       for (const scaled of rule.scaledStats || []) {
         if (!Number.isFinite(scaled.max)) {
           bounded = false;
           continue;
         }
         const amount = Number(scaled.max) * Number(scaled.multiplier ?? 1) + Number(scaled.offset ?? 0);
-        addPositive(scaled.stat, amount);
+        addPositive(stats, scaled.stat, amount);
       }
     }
   }
 
   for (const bonus of Object.values(item.turnBonuses || {})) {
-    for (const [key, value] of Object.entries(bonus || {})) addPositive(key, value);
+    for (const [key, value] of Object.entries(bonus || {})) addPositive(stats, key, value);
   }
   return { stats, bounded };
 }
 
-export function optimisticItemStats(item = {}, { includePassives = false } = {}) {
+function scenarioPassiveUpperStats(item = {}, { turnMode = 'sum', scenario = {} } = {}) {
+  const stats = {};
+  const passives = item.passives || [];
+
+  for (const turn of selectedTurnsForMode(turnMode)) {
+    const result = applyPassiveModifiers({}, passives, scenarioContextForTurn(scenario, turn));
+    if (result.unresolved?.length) return null;
+
+    const turnStats = { ...result.stats };
+    addStats(turnStats, item.turnBonuses?.[turn] || {});
+    for (const [key, value] of Object.entries(turnStats)) addPositive(stats, key, value, 'max');
+  }
+
+  return { stats, bounded: true };
+}
+
+export function passiveUpperStats(item = {}, { turnMode = null, scenario = null } = {}) {
+  if (turnMode && scenario !== null) {
+    const scenarioBound = scenarioPassiveUpperStats(item, { turnMode, scenario });
+    if (scenarioBound) return scenarioBound;
+  }
+  return staticPassiveUpperStats(item);
+}
+
+export function optimisticItemStats(item = {}, {
+  includePassives = false,
+  turnMode = null,
+  scenario = null
+} = {}) {
   const result = {};
   for (const [key, value] of Object.entries(item.stats || {})) {
     const number = Number(value);
@@ -96,7 +142,7 @@ export function optimisticItemStats(item = {}, { includePassives = false } = {})
   }
   let bounded = true;
   if (includePassives) {
-    const passive = passiveUpperStats(item);
+    const passive = passiveUpperStats(item, { turnMode, scenario });
     bounded = passive.bounded;
     for (const [key, value] of Object.entries(passive.stats)) result[key] = (result[key] || 0) + value;
   }
@@ -213,7 +259,11 @@ function topSums(values, limit) {
   return sums;
 }
 
-export function buildSuffixCaps(candidates = [], count = 1, keys = [], { includePassives = false } = {}) {
+export function buildSuffixCaps(candidates = [], count = 1, keys = [], {
+  includePassives = false,
+  turnMode = null,
+  scenario = null
+} = {}) {
   const n = candidates.length;
   const caps = Object.fromEntries(keys.map((key) => [key, new Array(n + 1)]));
   const tops = Object.fromEntries(keys.map((key) => [key, []]));
@@ -221,7 +271,7 @@ export function buildSuffixCaps(candidates = [], count = 1, keys = [], { include
 
   for (const key of keys) caps[key][n] = new Array(count + 1).fill(0);
   for (let index = n - 1; index >= 0; index--) {
-    const optimistic = optimisticItemStats(candidates[index], { includePassives });
+    const optimistic = optimisticItemStats(candidates[index], { includePassives, turnMode, scenario });
     bounded = bounded && optimistic.bounded;
     for (const key of keys) {
       tops[key] = insertTop(tops[key], Number(optimistic.stats[key] || 0), count);
