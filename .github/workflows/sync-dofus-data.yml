@@ -12,9 +12,12 @@ on:
       - 'js/dofus-passives.js'
       - 'js/dofus-source-rules.js'
       - 'js/dofusdude-normalizer.js'
+      - 'js/dofus-spell-normalizer.js'
       - 'js/passives.js'
       - 'scripts/sync-dofusdude.mjs'
+      - 'scripts/sync-spells.mjs'
       - 'scripts/normalize-dofusdude.mjs'
+      - 'scripts/normalize-spells.mjs'
       - 'package.json'
 
 permissions:
@@ -41,13 +44,22 @@ jobs:
           npm run check
           npm test
       - name: Show coverage summary
-        run: cat data/normalized/coverage-report.md
-      - name: Commit changed snapshot
+        run: |
+          cat data/normalized/coverage-report.md
+          echo
+          cat data/normalized/spell-coverage-report.md
+      - name: Commit changed snapshots
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/normalized/dofus-data.json data/normalized/coverage-report.json data/normalized/coverage-report.md
+          git add \
+            data/normalized/dofus-data.json \
+            data/normalized/coverage-report.json \
+            data/normalized/coverage-report.md \
+            data/normalized/spell-data.json \
+            data/normalized/spell-coverage-report.json \
+            data/normalized/spell-coverage-report.md
           if git diff --cached --quiet; then
             echo "Dofus data is already current."
             exit 0
