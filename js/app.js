@@ -23,6 +23,24 @@ let activeRequestId = 0;
 let latestPartialResults = [];
 let latestProgress = null;
 
+function activeTurnsForMode(mode = $('#turn-mode')?.value || 'sum') {
+  if (mode === 't1') return [1];
+  if (mode === 't2') return [2];
+  if (mode === 't3') return [3];
+  return [1, 2, 3];
+}
+
+function syncTurnInputs() {
+  const allowed = new Set(activeTurnsForMode());
+  for (const row of document.querySelectorAll('.spell-row')) {
+    for (const turn of [1, 2, 3]) {
+      const input = row.querySelector(`.cast-t${turn}`);
+      if (!input) continue;
+      input.disabled = !allowed.has(turn);
+    }
+  }
+}
+
 function renderSpellRows() {
   if (!spellData || !breedSelect.value) {
     visibleSpells = [];
@@ -44,10 +62,12 @@ function renderSpellRows() {
       </div>
     `;
   }).join('') || '<div class="empty">Aucun sort offensif certifié pour cette classe.</div>';
+  syncTurnInputs();
 }
 
 function readSelections() {
   const selections = [];
+  const allowed = new Set(activeTurnsForMode());
   for (const row of document.querySelectorAll('.spell-row')) {
     const sourceSpell = visibleSpells.find((spell) => spell.id === row.dataset.spellId);
     if (!sourceSpell) continue;
@@ -56,9 +76,9 @@ function readSelections() {
       enabled: row.querySelector('.spell-enabled').checked,
       weight: Math.max(0, Number(row.querySelector('.spell-weight').value || 0)),
       casts: {
-        1: Math.max(0, Number(row.querySelector('.cast-t1').value || 0)),
-        2: Math.max(0, Number(row.querySelector('.cast-t2').value || 0)),
-        3: Math.max(0, Number(row.querySelector('.cast-t3').value || 0))
+        1: allowed.has(1) ? Math.max(0, Number(row.querySelector('.cast-t1').value || 0)) : 0,
+        2: allowed.has(2) ? Math.max(0, Number(row.querySelector('.cast-t2').value || 0)) : 0,
+        3: allowed.has(3) ? Math.max(0, Number(row.querySelector('.cast-t3').value || 0)) : 0
       }
     });
   }
@@ -112,18 +132,20 @@ function renderResult(build, rank) {
     let fmText = '';
     if (fm?.type === 'critDamage') fmText = `+${fm.value} Do Crit`;
     if (fm?.type === 'spellDamagePct') fmText = `+${fm.value}% Do sorts`;
+    if (fm?.type === 'exoAp') fmText = 'Exo +1 PA';
+    if (fm?.type === 'exoMp') fmText = 'Exo +1 PM';
     const subtype = item.slotSubtype === 'prysmaradite' ? ' · Prysmaradite' : '';
     return `<li><span>${item.name}${subtype}</span><small>${fmText}</small></li>`;
   }).join('');
 
+  const turnRows = activeTurnsForMode()
+    .map((turn) => `<span>T${turn} <b>${fmt(build.perTurn?.[turn])}</b></span>`)
+    .join('');
+
   return `
     <article class="result-card">
       <header><span class="rank">#${rank}</span><strong>${fmt(build.score)}</strong><small>score objectif</small></header>
-      <div class="turns">
-        <span>T1 <b>${fmt(build.perTurn[1])}</b></span>
-        <span>T2 <b>${fmt(build.perTurn[2])}</b></span>
-        <span>T3 <b>${fmt(build.perTurn[3])}</b></span>
-      </div>
+      <div class="turns">${turnRows}</div>
       <div class="stats-grid">
         <span>PA <b>${fmt(build.stats.ap)}</b></span><span>PM <b>${fmt(build.stats.mp)}</b></span>
         <span>PO <b>${fmt(build.stats.range)}</b></span><span>Vita <b>${fmt(build.stats.vit)}</b></span>
@@ -179,7 +201,7 @@ function handleWorkerMessage(event, requestId) {
     if (Array.isArray(progress.partialResults) && progress.partialResults.length) {
       latestPartialResults = progress.partialResults;
     }
-    const seedLabel = progress.seeded ? 'base rapide · ' : '';
+    const seedLabel = progress.seeded ? 'base panoplies · ' : '';
     diagnostics.textContent = `${seedLabel}${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · ${Number(progress.pruned || 0).toLocaleString('fr-FR')} branches coupées · meilleur ${fmt(progress.best)}`;
     return;
   }
@@ -228,9 +250,10 @@ function runSolver() {
   });
 
   const ap = scenario.requiredApByTurn;
+  const comboText = activeTurnsForMode().map((turn) => `${ap[turn]} PA T${turn}`).join(' · ');
   optimizeButton.textContent = 'Arrêter le calcul';
-  results.innerHTML = '<div class="empty">Recherche en cours : base rapide puis optimisation exacte…</div>';
-  diagnostics.textContent = `Combo demandé : ${ap[1]} PA T1 · ${ap[2]} PA T2 · ${ap[3]} PA T3`;
+  results.innerHTML = '<div class="empty">Recherche en cours : bases de panoplies puis optimisation exacte…</div>';
+  diagnostics.textContent = `Combo demandé : ${comboText}`;
 
   worker.postMessage({
     type: 'optimize',
@@ -243,7 +266,8 @@ function runSolver() {
       fmPolicy: {
         spellDamagePct: readNumber('fm-spell'),
         allowCritDamage: $('#fm-crit').checked,
-        critDamageAmount: 8
+        critDamageAmount: 8,
+        structuralExos: true
       },
       turnMode: $('#turn-mode').value,
       scenario,
@@ -268,6 +292,7 @@ function initDefaults() {
   $('#fm-crit').checked = DEFAULT_FM.allowCritDamage;
   $('#turn-mode').innerHTML = TURN_MODES.map(([value, label]) => `<option value="${value}">${label}</option>`).join('');
   $('#turn-mode').value = 'sum';
+  $('#turn-mode').addEventListener('change', syncTurnInputs);
 }
 
 function initBreedSelect() {
