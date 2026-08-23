@@ -36,10 +36,10 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   mp: 6,
   range: 0,
   vit: 0,
-  resEarth: 40,
-  resFire: 40,
-  resWater: 40,
-  resAir: 40
+  resEarth: 0,
+  resFire: 0,
+  resWater: 0,
+  resAir: 0
 });
 
 export const DEFAULT_FM = Object.freeze({
