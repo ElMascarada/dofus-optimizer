@@ -45,3 +45,16 @@ test('Prysmaradite uses Dofus slot and stays uncertified while temporal effect i
   assert.equal(item.certification.temporalEffectsPending, true);
   assert.equal(item.certification.certified, false);
 });
+
+test('Nébuleux consumes its dynamic source effect and becomes certified with a structured passive', () => {
+  const item = normalizeSourceEquipment({
+    ankama_id: 8698,
+    name: 'Dofus Nébuleux',
+    level: 180,
+    type: { name: 'Dofus' },
+    effects: [{ type: { id: 42, is_active: false, is_meta: true, name: 'Rêve Nébuleux' }, formatted: 'Rêve Nébuleux' }]
+  }, []);
+  assert.equal(item.certification.certified, true);
+  assert.equal(item.passives[0].id, 'nebulous-dream');
+  assert.equal(item.source.recognizedPassiveEffects.length, 1);
+});
