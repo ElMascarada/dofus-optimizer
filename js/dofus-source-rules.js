@@ -82,12 +82,20 @@ export function normalizeSourceCondition(node, elements = []) {
   return { status: 'unmapped', node: null, unmapped: [{ reason: 'unknown-condition-shape' }] };
 }
 
-function finalizeNonWeaponActiveCertification(item) {
-  const activeCount = (item.source?.effects || []).filter((effect) => effect.status === 'active').length;
-  if (item.slot !== 'weapon' && activeCount > 0) {
+function finalizeNonWeaponDynamicCertification(item) {
+  const dynamicEffects = (item.source?.effects || []).filter((effect) => effect.status === 'active' || effect.status === 'meta');
+  if (item.slot !== 'weapon' && dynamicEffects.length > 0) {
     item.certification.effectsCertified = false;
     item.certification.certified = false;
     item.certification.temporalEffectsPending = true;
+    item.source.pendingDynamicEffects = dynamicEffects.map((effect) => ({
+      status: effect.status,
+      name: effect.name || null,
+      formatted: effect.formatted || null,
+      reason: effect.reason || null
+    }));
+  } else {
+    item.source.pendingDynamicEffects = [];
   }
   return item;
 }
@@ -111,14 +119,14 @@ export function normalizeSourceEquipment(rawItem, elements = [], options = {}) {
   item.source.ignoredEffects = filtered.ignored.map((effect) => ({ name: effectName(effect, elements), formatted: effect.formatted || null }));
   item.source.recognizedPassiveEffects = passiveExtraction.consumed;
   item.source.unmappedConditions = conditionResult.unmapped;
-  return finalizeNonWeaponActiveCertification(item);
+  return finalizeNonWeaponDynamicCertification(item);
 }
 
 export function normalizeSourceMount(rawMount, elements = [], options = {}) {
   const filtered = filterNonCombatMetadata(rawMount?.effects, elements);
   const mount = normalizeMount({ ...rawMount, effects: filtered.kept }, patchedElements(elements), options);
   mount.source.ignoredEffects = filtered.ignored.map((effect) => ({ name: effectName(effect, elements), formatted: effect.formatted || null }));
-  return finalizeNonWeaponActiveCertification(mount);
+  return finalizeNonWeaponDynamicCertification(mount);
 }
 
 export function normalizeSourceSet(rawSet, elements = [], options = {}) {
