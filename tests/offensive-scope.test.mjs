@@ -74,3 +74,39 @@ test('Dofus that only supplies an equipment prerequisite remains available', () 
   assert.equal(scope.byId.get('intel-trophy').role, 'prerequisite');
   assert.ok(offensiveDofusPool(items, scope.byId).some((item) => item.id === 'intel-trophy'));
 });
+
+test('critical chance is offensive only through its real expected-damage gain', () => {
+  const critSpell = {
+    id: 'crit-test',
+    name: 'Crit test',
+    distance: 'ranged',
+    baseCritPct: 10,
+    hits: [{ element: 'earth', normal: [100, 100], crit: [140, 140] }]
+  };
+  const critSelections = [{ enabled: true, weight: 1, spell: critSpell, casts: { 1: 1, 2: 1, 3: 1 } }];
+  const items = [
+    { id: 'crit-item', slot: 'dofus', stats: { crit: 20 }, conditions: null },
+    { id: 'utility-item', slot: 'dofus', stats: { prospecting: 30 }, conditions: null }
+  ];
+  const scope = buildCandidateClassifications(items, [], critSelections, 'sum', {});
+  const crit = scope.byId.get('crit-item');
+  const utility = scope.byId.get('utility-item');
+  assert.equal(crit.role, 'offensive');
+  assert.ok(crit.offensiveDelta > 0);
+  assert.ok(crit.priority > utility.priority);
+  assert.ok(offensiveDofusPool(items, scope.byId).some((item) => item.id === 'crit-item'));
+});
+
+test('critical chance is not artificially favored when a spell has no critical damage gain', () => {
+  const flatCritSpell = {
+    id: 'no-crit-gain',
+    name: 'No crit gain',
+    distance: 'ranged',
+    baseCritPct: 10,
+    hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }]
+  };
+  const flatSelections = [{ enabled: true, weight: 1, spell: flatCritSpell, casts: { 1: 1, 2: 1, 3: 1 } }];
+  const item = { id: 'crit-only', slot: 'dofus', stats: { crit: 20 }, conditions: null };
+  const scope = buildCandidateClassifications([item], [], flatSelections, 'sum', {});
+  assert.equal(scope.byId.get('crit-only').role, 'neutral');
+});
