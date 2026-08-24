@@ -1,0 +1,36 @@
+.spell-support-badge {
+  padding: 3px 6px;
+  border-radius: 999px;
+  border: 1px solid #295d45;
+  color: var(--good);
+  background: rgba(123,216,167,.08);
+  font-size: .62rem;
+  font-weight: 800;
+}
+
+#combat-spell-summary {
+  margin-top: 12px;
+  color: var(--accent-2);
+  font-weight: 700;
+}
+
+#objective-mode,
+#combat-element,
+#combat-target-mode,
+#combat-metric {
+  font-weight: 650;
+}
+
+.combat-objective-controls[hidden],
+#manual-objective-controls[hidden] {
+  display: none !important;
+}
+
+.spell-row:has(.spell-enabled:disabled) {
+  opacity: .72;
+}
+
+.spell-row:has(.spell-enabled:disabled) .spell-enabled,
+.spell-row:has(.spell-enabled:disabled) input[type="number"] {
+  cursor: not-allowed;
+}
