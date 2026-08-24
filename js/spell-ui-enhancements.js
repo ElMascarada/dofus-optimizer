@@ -13,7 +13,38 @@ const ELEMENT_TEXT = {
   air: 'air'
 };
 
+const COMBAT_STAT_LABELS = {
+  power: 'Puissance',
+  crit: 'Critiques',
+  critDamage: 'Do Crit',
+  damage: 'Dommages',
+  damageEarth: 'Do Terre',
+  damageFire: 'Do Feu',
+  damageWater: 'Do Eau',
+  damageAir: 'Do Air',
+  spellDamagePct: '% Do sorts',
+  meleeDamagePct: '% Do mêlée',
+  rangedDamagePct: '% Do distance',
+  finalDamagePct: '% dommages finaux',
+  finalDamageTakenPct: '% dommages subis',
+  ap: 'PA',
+  mp: 'PM',
+  earth: 'Terre',
+  fire: 'Feu',
+  water: 'Eau',
+  air: 'Air'
+};
+
+const PERCENT_COMBAT_STATS = new Set([
+  'spellDamagePct',
+  'meleeDamagePct',
+  'rangedDamagePct',
+  'finalDamagePct',
+  'finalDamageTakenPct'
+]);
+
 let spellMetaById = new Map();
+let spellMetaByName = new Map();
 
 function normalized(value = '') {
   return String(value)
@@ -191,6 +222,51 @@ function parseFrenchNumber(value = '') {
   return Number(String(value).replace(/\s/g, '').replace(',', '.').replace(/[^0-9.-]/g, '')) || 0;
 }
 
+function signed(value) {
+  const number = Number(value || 0);
+  return `${number >= 0 ? '+' : ''}${new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(number)}`;
+}
+
+function combatModifierText(modifier = {}) {
+  const pieces = [];
+  for (const [stat, rawValue] of Object.entries(modifier.stats || {})) {
+    const value = Number(rawValue || 0);
+    if (!Number.isFinite(value) || value === 0) continue;
+    const label = COMBAT_STAT_LABELS[stat] || stat;
+    const suffix = PERCENT_COMBAT_STATS.has(stat) ? '%' : '';
+    pieces.push(`${signed(value)}${suffix} ${label}`);
+  }
+  if (!pieces.length) return '';
+  const scope = modifier.scope === 'target' ? 'cible · ' : '';
+  const duration = Math.max(1, Number(modifier.durationTurns || 1));
+  return `${scope}${pieces.join(' · ')} · ${duration} tour${duration > 1 ? 's' : ''}`;
+}
+
+function spellForCombatRow(row) {
+  const name = row.querySelector('strong')?.textContent?.trim();
+  if (!name) return null;
+  return spellMetaByName.get(normalized(name)) || null;
+}
+
+function decorateCombatEffects(plan) {
+  for (const row of plan.querySelectorAll('.combat-sequence-row')) {
+    if (row.dataset.effectDetailed === '1') continue;
+    row.dataset.effectDetailed = '1';
+    const spell = spellForCombatRow(row);
+    const details = (spell?.combatModifiers || []).map(combatModifierText).filter(Boolean);
+    if (!details.length) continue;
+
+    const generic = row.querySelector('.combat-buff-tag');
+    if (generic) generic.textContent = details.join(' | ');
+    else {
+      const detail = document.createElement('small');
+      detail.className = 'combat-buff-tag';
+      detail.textContent = details.join(' | ');
+      row.appendChild(detail);
+    }
+  }
+}
+
 function enhanceCombatPlan(modalContent) {
   const plan = modalContent.querySelector('.combat-plan-section');
   const layout = modalContent.querySelector('.build-detail-layout');
@@ -201,7 +277,7 @@ function enhanceCombatPlan(modalContent) {
     const title = plan.querySelector('h3');
     if (title) title.textContent = 'Tour idéal — rotation réelle';
     const explanation = plan.querySelector('.spell-damage-heading p');
-    if (explanation) explanation.textContent = `${explanation.textContent} · seuls les sorts listés ici sont réellement lancés`;
+    if (explanation) explanation.textContent = `${explanation.textContent} · les dégâts de chaque sort sont recalculés avec les buffs/debuffs déjà lancés avant lui`;
 
     for (const block of plan.querySelectorAll('.combat-turn-block')) {
       const header = block.querySelector('header');
@@ -215,6 +291,8 @@ function enhanceCombatPlan(modalContent) {
       header.appendChild(chip);
     }
   }
+
+  if (plan) decorateCombatEffects(plan);
 
   if (plan && layout && layout.previousElementSibling !== plan) {
     layout.insertAdjacentElement('beforebegin', plan);
@@ -256,8 +334,10 @@ async function loadSpellMetadata() {
     if (!response.ok) return;
     const data = await response.json();
     spellMetaById = new Map((data.spells || []).map((spell) => [String(spell.id), spell]));
+    spellMetaByName = new Map((data.spells || []).map((spell) => [normalized(spell.name), spell]));
   } catch {
     spellMetaById = new Map();
+    spellMetaByName = new Map();
   }
   refreshSpellUi();
 }

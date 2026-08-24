@@ -36,18 +36,18 @@
           <h2>2. Objectif de calcul</h2>
           <label class="field">Mode
             <select id="objective-mode">
+              <option value="combat" selected>Optimisation automatique · meilleur tour</option>
               <option value="manual">Benchmark / combo manuel</option>
-              <option value="combat">Optimisation automatique</option>
             </select>
           </label>
 
           <label class="field">Tour(s) à optimiser<select id="turn-mode"></select></label>
 
-          <div id="manual-objective-controls">
-            <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés.</p>
+          <div id="manual-objective-controls" hidden>
+            <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés. Il ne cherche pas une rotation optimale.</p>
           </div>
 
-          <div id="combat-objective-controls" class="combat-objective-controls" hidden>
+          <div id="combat-objective-controls" class="combat-objective-controls">
             <div class="form-grid">
               <label class="field">Élément
                 <select id="combat-element">
@@ -74,7 +74,7 @@
             </div>
             <label class="toggle"><input id="combat-allow-support" type="checkbox" checked><span>Autoriser les sorts de buff / support</span></label>
             <p id="combat-spell-summary" class="hint"></p>
-            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible.</p>
+            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible. La fiche du stuff affiche ensuite la séquence exacte de chaque tour.</p>
           </div>
 
           <label class="field">Variété du Top 10
@@ -134,8 +134,8 @@
     </div>
   </main>
 
-  <script type="module" src="js/app-experimental.js?v=20260824-2"></script>
-  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-4"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-2').catch(() => {});</script>
+  <script type="module" src="js/app-experimental.js?v=20260824-3"></script>
+  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-5"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-4').catch(() => {});</script>
 </body>
 </html>

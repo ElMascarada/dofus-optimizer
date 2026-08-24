@@ -51,11 +51,11 @@ const strongPower = Array.from({ length: 4 }, (_, index) => item(`power-${index}
 const air50 = item('air-50', 'dofus', { air: 50 });
 const cawotte = item('cawotte', 'dofus', { wisdom: 60 }, { typeName: 'Dofus' });
 
-function evaluate(items) {
+function evaluate(items, usedSelections = selections) {
   return evaluateCompleteBuild({
     items,
     sets: [],
-    selections,
+    selections: usedSelections,
     constraints,
     fmPolicy,
     turnMode: 't1',
@@ -90,4 +90,41 @@ test('refiner compares companion + Dofus together with real expected crit damage
   assert.ok(!bestIds.has('cawotte'), 'zero-impact Dofus should not survive offensive refinement');
   assert.equal(output.results[0].stats.ap, 12);
   assert.equal(output.results[0].stats.mp, 6);
+});
+
+test('refiner keeps a non-crit path when crit is already capped and chooses stats instead', () => {
+  const guaranteedSpell = {
+    ...spell,
+    id: 'guaranteed-crit-benchmark',
+    baseCritPct: 100
+  };
+  const guaranteedSelections = [{
+    enabled: true,
+    weight: 1,
+    spell: guaranteedSpell,
+    casts: { 1: 1, 2: 0, 3: 0 }
+  }];
+
+  const source = evaluate(
+    [...skeleton, statPet, ...weakDofus.slice(0, 5), cawotte],
+    guaranteedSelections
+  );
+  assert.ok(source);
+
+  const output = refineOffensiveSlots({
+    results: [source],
+    items: [...skeleton, statPet, critPet, ...weakDofus, ocre, pourpre, ...strongPower, air50, cawotte],
+    sets: [],
+    selections: guaranteedSelections,
+    constraints,
+    fmPolicy,
+    turnMode: 't1',
+    scenario: { requiredApByTurn: {} },
+    topN: 3
+  });
+
+  assert.ok(output.results.length > 0);
+  const bestIds = new Set(output.results[0].items.map((entry) => entry.id));
+  assert.ok(bestIds.has('stat-pet'), 'raw +crit must not displace useful stats once crit is capped');
+  assert.ok(!bestIds.has('crit-pet'), 'crit-only companion should have no marginal value at 100% crit');
 });
