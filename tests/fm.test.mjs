@@ -40,6 +40,21 @@ test('FM auto picks % spell damage when it is stronger', () => {
   assert.equal(result.spellPctItems, 1);
 });
 
+test('Aucun disables both spell damage FM and crit damage FM', () => {
+  const result = optimizeFm({
+    baseStats: { earth: 0, crit: 100 },
+    items: [{ id: 'a', slot: 'hat', stats: {} }],
+    selections: [{ enabled: true, weight: 1, spell: critSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: { spellDamagePct: 0, allowCritDamage: true, critDamageAmount: 8 }
+  });
+  assert.equal(result.critItems, 0);
+  assert.equal(result.spellPctItems, 0);
+  assert.equal(result.stats.spellDamagePct || 0, 0);
+  assert.equal(result.stats.critDamage || 0, 0);
+  assert.equal(result.assignments[0].type, 'none');
+});
+
 test('FM never applies to Dofus, trophies or companions', () => {
   const result = optimizeFm({
     baseStats: { earth: 0 },
