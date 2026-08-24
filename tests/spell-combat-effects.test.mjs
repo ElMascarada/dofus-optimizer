@@ -69,6 +69,46 @@ test('does not turn a negative Power effect into a player buff', () => {
   assert.equal(result.ignored[0].reason, 'negative');
 });
 
+test('recognizes Ankama formatted leading minus as a malus', () => {
+  const result = extractDeterministicCombatModifiers(
+    [effect(5000, 100)],
+    registry('-#1{{~1~2 à -}}#2 Puissance'),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 0);
+  assert.equal(result.ignored[0].reason, 'negative');
+});
+
+test('never reinterprets a direct elemental hit as a temporary flat-damage buff', () => {
+  const direct = effect(99, 30, { duration: 0, diceNum: 30, value: 0 });
+  const result = extractDeterministicCombatModifiers(
+    [direct],
+    registry('#1{{~1~2 à }}#2 dommages Feu', 99),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 0);
+  assert.equal(result.ignored[0].reason, 'direct-damage');
+});
+
+test('an instant stat-looking line is not assumed to be a persistent buff', () => {
+  const result = extractDeterministicCombatModifiers(
+    [effect(5000, 150, { duration: 0 })],
+    registry('#1{{~1~2 à }}#2 Puissance'),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 0);
+  assert.equal(result.ignored[0].reason, 'instant-effect');
+});
+
+test('does not confuse AP/MP dodge or reduction text with an AP/MP gain', () => {
+  const dodge = extractDeterministicCombatModifiers(
+    [effect(5000, 20)],
+    registry('-#1{{~1~2 à -}}#2 Esquive PM'),
+    { minRange: 0 }
+  );
+  assert.equal(dodge.modifiers.length, 0);
+});
+
 test('detects explicit area metadata without assuming every spell is AoE', () => {
   assert.equal(spellAreaHint([{ zoneSize: 2 }]), true);
   assert.equal(spellAreaHint([{ zoneShape: 'C', zoneSize: 0 }]), true);
