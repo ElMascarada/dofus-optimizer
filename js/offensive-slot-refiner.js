@@ -94,6 +94,14 @@ function itemProfile(item, referenceStats, baseItems, baseline, selections, turn
   };
 }
 
+function usefulOffensiveProfile(profile) {
+  const gain = Number(profile?.gain);
+  return (Number.isFinite(gain) && gain > 0.001)
+    || Number(profile?.ap || 0) !== 0
+    || Number(profile?.mp || 0) !== 0
+    || Number(profile?.prysma || 0) > 0;
+}
+
 function uniqueProfiles(groups, limit) {
   const seen = new Set();
   const output = [];
@@ -138,20 +146,28 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
   const profiles = items
     .filter((item) => item.slot === 'dofus')
     .map((item) => itemProfile(item, referenceStats, baseItems, baseline, selections, turnMode, scenario));
-  const byGain = [...profiles].sort((a, b) => b.gain - a.gain);
-  const current = profiles.filter((profile) => currentIds.has(String(profile.item.id)));
+
+  // This phase exists to maximize damage while satisfying permanent PA/PM.
+  // A Dofus/trophy that changes neither damage nor PA/PM must not survive just
+  // because it is a "real Dofus" or happened to be present in the seed build.
+  // Keep a sparse-data fallback so synthetic/small datasets can still form six
+  // slots when fewer than six relevant candidates exist.
+  const usefulProfiles = profiles.filter(usefulOffensiveProfile);
+  const candidates = usefulProfiles.length >= 6 ? usefulProfiles : profiles;
+  const byGain = [...candidates].sort((a, b) => b.gain - a.gain);
+  const current = candidates.filter((profile) => currentIds.has(String(profile.item.id)));
   const realDofus = byGain
     .filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus'))
     .slice(0, 20);
   return uniqueProfiles([
     current,
     byGain.slice(0, 26),
-    topBy(profiles, (p) => num(p.item.stats, 'power'), 10),
-    topBy(profiles, (p) => num(p.item.stats, 'crit'), 10),
-    topBy(profiles, (p) => num(p.item.stats, 'critDamage'), 10),
-    topBy(profiles, (p) => num(p.item.stats, 'damage'), 10),
-    topBy(profiles, (p) => p.ap, 8),
-    topBy(profiles, (p) => p.mp, 8),
+    topBy(candidates, (p) => num(p.item.stats, 'power'), 10),
+    topBy(candidates, (p) => num(p.item.stats, 'crit'), 10),
+    topBy(candidates, (p) => num(p.item.stats, 'critDamage'), 10),
+    topBy(candidates, (p) => num(p.item.stats, 'damage'), 10),
+    topBy(candidates, (p) => p.ap, 8),
+    topBy(candidates, (p) => p.mp, 8),
     realDofus
   ], DOFUS_POOL_LIMIT);
 }
