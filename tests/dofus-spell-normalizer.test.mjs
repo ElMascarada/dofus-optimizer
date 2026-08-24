@@ -91,6 +91,7 @@ function baseSource({ effects, criticalEffect, criticalHitProbability = 20 }) {
         criticalEffect: { Array: criticalEffect }
       }
     ]),
+    variantsPayload: payload('SpellVariantData', []),
     breedsPayload: payload('BreedData', [{
       id: 1,
       sortIndex: 1,
@@ -123,6 +124,58 @@ test('normalizes the highest level-200 direct spell with paired critical damage'
   assert.equal(spell.baseCritPct, 20);
   assert.deepEqual(spell.distanceOptions, ['melee', 'ranged']);
   assert.deepEqual(spell.hits, [{ element: 'earth', normal: [29, 33], crit: [35, 40] }]);
+});
+
+test('adds offensive spells referenced only by the class variant dataset', () => {
+  const source = baseSource({
+    effects: [damage(97, 29, 33)],
+    criticalEffect: [damage(97, 35, 40)]
+  });
+  source.translationsPayload.entries['921279'] = 'Variante Offensive';
+  source.spellsPayload.references.RefIds.push({
+    rid: 99,
+    type: { class: 'SpellData' },
+    data: {
+      id: 12984,
+      nameId: 921279,
+      iconId: 12146,
+      order: 2,
+      spellLevels: { Array: [41051] }
+    }
+  });
+  source.levelsPayload.references.RefIds.push({
+    rid: 99,
+    type: { class: 'SpellLevelData' },
+    data: {
+      id: 41051,
+      spellId: 12984,
+      grade: 3,
+      minPlayerLevel: 150,
+      apCost: 4,
+      criticalHitProbability: 10,
+      minRange: 3,
+      range: 6,
+      maxCastPerTurn: 2,
+      maxCastPerTarget: 2,
+      effects: { Array: [damage(99, 40, 44)] },
+      criticalEffect: { Array: [damage(99, 46, 50)] }
+    }
+  });
+  source.variantsPayload = payload('SpellVariantData', [{
+    id: 501,
+    breedId: 1,
+    spellIds: { Array: [12983, 12984] }
+  }]);
+
+  const catalog = normalizeDofusSpellCatalog(source);
+  assert.equal(catalog.spells.length, 2);
+  assert.deepEqual(catalog.breeds[0].spellIds, ['spell-12983', 'spell-12984']);
+  assert.equal(catalog.breeds[0].sourceSpellCount, 2);
+  assert.equal(catalog.coverage.variantSpellRefs, 1);
+  const variant = catalog.spells.find((spell) => spell.id === 'spell-12984');
+  assert.equal(variant.name, 'Variante Offensive');
+  assert.equal(variant.isVariant, true);
+  assert.deepEqual(variant.distanceOptions, ['ranged']);
 });
 
 test('supports fixed-element life steal as damage while ignoring its healing side', () => {
