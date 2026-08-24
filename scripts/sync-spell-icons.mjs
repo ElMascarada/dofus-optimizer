@@ -13,10 +13,8 @@ const catalog = JSON.parse(await readFile(catalogPath, 'utf8'));
 const version = String(catalog?.gameVersion?.version || '').trim();
 if (!version) throw new Error('Cannot sync spell icons: missing game version in spell-data.json');
 
-const iconIds = [...new Set((catalog.spells || [])
-  .map((spell) => Number(spell?.iconId || 0))
-  .filter((id) => Number.isInteger(id) && id > 0))]
-  .sort((a, b) => a - b);
+const spells = (catalog.spells || []).filter((spell) => Number(spell?.iconId || 0) > 0);
+const iconIds = [...new Set(spells.map((spell) => Number(spell.iconId)))].sort((a, b) => a - b);
 
 await rm(tempDir, { recursive: true, force: true });
 await mkdir(tempDir, { recursive: true });
@@ -43,8 +41,10 @@ async function collectPngFiles(directory) {
   return files;
 }
 
-// Dofusdude has changed the internal archive layout between releases. Discover
-// the numeric spell icon files recursively instead of hard-coding one folder.
+// Dofusdude packages spell PNGs by the real spell Ankama id, while our UI keeps
+// a separate iconId. Discover the archive recursively, resolve the source by the
+// best available spell identifier, then materialize the file under iconId.png so
+// the browser has one stable local asset key.
 const discovered = await collectPngFiles(fileURLToPath(extractedDir));
 const sourceById = new Map();
 for (const source of discovered) {
@@ -54,15 +54,44 @@ for (const source of discovered) {
   if (!sourceById.has(id)) sourceById.set(id, source);
 }
 
+function numericSpellId(spell) {
+  const match = String(spell?.id || '').match(/(\d+)$/);
+  return match ? Number(match[1]) : 0;
+}
+
+function candidateSourceIds(spell) {
+  return [...new Set([
+    Number(spell?.iconId || 0),
+    Number(spell?.ankamaId || 0),
+    numericSpellId(spell),
+    Number(spell?.levelId || 0)
+  ].filter((id) => Number.isInteger(id) && id > 0))];
+}
+
+const matchCounts = {
+  iconId: spells.filter((spell) => sourceById.has(Number(spell.iconId || 0))).length,
+  ankamaId: spells.filter((spell) => sourceById.has(Number(spell.ankamaId || 0))).length,
+  normalizedId: spells.filter((spell) => sourceById.has(numericSpellId(spell))).length,
+  levelId: spells.filter((spell) => sourceById.has(Number(spell.levelId || 0))).length
+};
+console.log(`Archive id matches: ${JSON.stringify(matchCounts)}`);
+
 let copied = 0;
+const copiedTargets = new Set();
 const missing = [];
-for (const iconId of iconIds) {
-  const source = sourceById.get(iconId);
+for (const spell of spells) {
+  const targetId = Number(spell.iconId || 0);
+  if (!(targetId > 0) || copiedTargets.has(targetId)) continue;
+
+  const sourceId = candidateSourceIds(spell).find((id) => sourceById.has(id));
+  const source = sourceId ? sourceById.get(sourceId) : null;
   if (!source) {
-    missing.push(iconId);
+    missing.push({ iconId: targetId, ankamaId: Number(spell.ankamaId || 0), name: spell.name || spell.id });
     continue;
   }
-  await copyFile(source, new URL(`${iconId}.png`, outputDir));
+
+  await copyFile(source, new URL(`${targetId}.png`, outputDir));
+  copiedTargets.add(targetId);
   copied++;
 }
 
@@ -70,7 +99,12 @@ const actual = (await readdir(outputDir)).filter((name) => name.endsWith('.png')
 await rm(tempDir, { recursive: true, force: true });
 
 if (actual !== copied) throw new Error(`Spell icon sync mismatch: copied=${copied}, actual=${actual}`);
-if (copied === 0) throw new Error(`Spell icon sync produced no files; archive contained ${discovered.length} PNG files`);
+if (copied === 0) {
+  const sample = [...sourceById.keys()].slice(0, 20).join(', ');
+  throw new Error(`Spell icon sync produced no files; archive contained ${discovered.length} PNG files; sample ids: ${sample}`);
+}
 
 console.log(`Spell icons: ${copied}/${iconIds.length} copied for Dofus ${version} (${discovered.length} PNG files discovered).`);
-if (missing.length) console.warn(`Missing spell icons (${missing.length}): ${missing.slice(0, 20).join(', ')}${missing.length > 20 ? '…' : ''}`);
+if (missing.length) {
+  console.warn(`Missing spell icons (${missing.length}): ${missing.slice(0, 20).map((entry) => `${entry.iconId}/${entry.ankamaId} ${entry.name}`).join(' | ')}${missing.length > 20 ? '…' : ''}`);
+}
