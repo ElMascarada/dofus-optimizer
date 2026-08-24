@@ -1,17 +1,34 @@
 import { ELEMENT_SOFT_CAPS } from './config.js';
 import { cloneStats } from './stats.js';
 
-function segmentsForElement(element, maxPoints = 995) {
+function segmentsForElement(element, maxPoints = 995, alreadyBought = 0) {
   const segments = [];
   let remainingBudget = maxPoints;
+  let skip = Math.max(0, Number(alreadyBought || 0));
   for (const cap of ELEMENT_SOFT_CAPS) {
     const amount = Number.isFinite(cap.amount) ? cap.amount : Math.floor(remainingBudget / cap.cost);
     if (amount <= 0) continue;
-    segments.push({ element, amount, cost: cap.cost });
+    const skipped = Math.min(skip, amount);
+    skip -= skipped;
+    const available = amount - skipped;
+    if (available > 0) segments.push({ element, amount: available, cost: cap.cost });
     remainingBudget -= amount * cap.cost;
     if (remainingBudget <= 0) break;
   }
   return segments;
+}
+
+function characteristicCost(amount = 0) {
+  let remaining = Math.max(0, Math.floor(Number(amount || 0)));
+  let cost = 0;
+  for (const cap of ELEMENT_SOFT_CAPS) {
+    if (remaining <= 0) break;
+    const capacity = Number.isFinite(cap.amount) ? cap.amount : remaining;
+    const buy = Math.min(remaining, capacity);
+    cost += buy * cap.cost;
+    remaining -= buy;
+  }
+  return remaining > 0 ? Infinity : cost;
 }
 
 export function optimizeCharacteristics(baseStats, options) {
@@ -20,7 +37,8 @@ export function optimizeCharacteristics(baseStats, options) {
     scrolled = {},
     elementValues = {},
     minimumVitality = 0,
-    baseVitality = 0
+    baseVitality = 0,
+    minimumStats = {}
   } = options;
 
   const stats = cloneStats(baseStats);
@@ -39,8 +57,26 @@ export function optimizeCharacteristics(baseStats, options) {
     budget -= vitSpend;
   }
 
+  // Reserve characteristic points for equipment conditions before optimizing
+  // damage. Equipment stats and scroll are already present in `stats`, while
+  // soft-cap costs apply only to the points actually invested here.
+  let requirementsSatisfied = true;
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    const target = Math.max(0, Number(minimumStats?.[element] || 0));
+    const missing = Math.max(0, Math.ceil(target - Number(stats[element] || 0)));
+    if (!missing) continue;
+    const cost = characteristicCost(missing);
+    if (!Number.isFinite(cost) || cost > budget) {
+      requirementsSatisfied = false;
+      continue;
+    }
+    allocation[element] += missing;
+    stats[element] = (stats[element] || 0) + missing;
+    budget -= cost;
+  }
+
   const allSegments = ['earth', 'fire', 'water', 'air']
-    .flatMap((element) => segmentsForElement(element, points))
+    .flatMap((element) => segmentsForElement(element, points, allocation[element]))
     .map((segment, order) => ({
       ...segment,
       order,
@@ -62,5 +98,5 @@ export function optimizeCharacteristics(baseStats, options) {
     budget = 0;
   }
 
-  return { stats, allocation, remainingPoints: budget };
+  return { stats, allocation, remainingPoints: budget, requirementsSatisfied };
 }

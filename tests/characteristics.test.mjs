@@ -24,3 +24,32 @@ test('can reserve points for a vitality constraint first', () => {
   });
   assert.equal(result.allocation.vit >= 105, true);
 });
+
+test('reserves elemental points required by an equipped item before maximizing damage', () => {
+  const result = optimizeCharacteristics({ fire: 150 }, {
+    points: 995,
+    scrolled: { earth: 100, fire: 100, water: 100, air: 100 },
+    elementValues: { earth: 10, fire: 0, water: 0, air: 0 },
+    minimumStats: { fire: 301 },
+    minimumVitality: 0,
+    baseVitality: 1095
+  });
+
+  assert.equal(result.requirementsSatisfied, true);
+  assert.equal(result.allocation.fire, 51);
+  assert.equal(result.stats.fire, 301);
+  assert.ok(result.allocation.earth > 0);
+});
+
+test('reports an impossible characteristic requirement instead of pretending it was satisfied', () => {
+  const result = optimizeCharacteristics({}, {
+    points: 100,
+    scrolled: {},
+    elementValues: { earth: 10 },
+    minimumStats: { fire: 250 },
+    minimumVitality: 0,
+    baseVitality: 0
+  });
+
+  assert.equal(result.requirementsSatisfied, false);
+});

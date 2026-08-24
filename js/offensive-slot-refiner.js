@@ -8,9 +8,9 @@ import { evaluateCompleteBuild } from './complete-build-evaluator.js';
 import { isPrysmaradite } from './build-legality.js';
 
 const OFFENSIVE_SLOTS = new Set(['companion', 'dofus']);
-const COMPANION_LIMIT = 18;
-const DOFUS_POOL_LIMIT = 48;
-const DOFUS_COMBO_LIMIT = 42;
+const COMPANION_LIMIT = 24;
+const DOFUS_POOL_LIMIT = 56;
+const DOFUS_COMBO_LIMIT = 48;
 const MAX_SKELETONS = 8;
 
 function num(stats, key) {
@@ -123,6 +123,24 @@ function topBy(profiles, getter, limit = 8) {
     .slice(0, limit);
 }
 
+function topByAnyElement(profiles, limit = 8) {
+  return topBy(profiles, (profile) => Math.max(
+    num(profile.item.stats, 'earth'),
+    num(profile.item.stats, 'fire'),
+    num(profile.item.stats, 'water'),
+    num(profile.item.stats, 'air')
+  ), limit);
+}
+
+function topByAnyElementDamage(profiles, limit = 8) {
+  return topBy(profiles, (profile) => Math.max(
+    num(profile.item.stats, 'damageEarth'),
+    num(profile.item.stats, 'damageFire'),
+    num(profile.item.stats, 'damageWater'),
+    num(profile.item.stats, 'damageAir')
+  ), limit);
+}
+
 function companionPool(items, referenceStats, skeleton, selections, turnMode, scenario, currentIds) {
   const baseline = objectiveScore(referenceStats, skeleton, selections, turnMode, scenario);
   const profiles = items
@@ -132,10 +150,15 @@ function companionPool(items, referenceStats, skeleton, selections, turnMode, sc
   const current = profiles.filter((profile) => currentIds.has(String(profile.item.id)));
   return uniqueProfiles([
     current,
-    byGain.slice(0, 12),
+    byGain.slice(0, 14),
     topBy(profiles, (p) => num(p.item.stats, 'crit'), 8),
     topBy(profiles, (p) => num(p.item.stats, 'critDamage'), 8),
     topBy(profiles, (p) => num(p.item.stats, 'power'), 8),
+    topBy(profiles, (p) => num(p.item.stats, 'spellDamagePct'), 8),
+    topBy(profiles, (p) => num(p.item.stats, 'meleeDamagePct'), 6),
+    topBy(profiles, (p) => num(p.item.stats, 'rangedDamagePct'), 6),
+    topByAnyElement(profiles, 8),
+    topByAnyElementDamage(profiles, 8),
     topBy(profiles, (p) => p.ap, 4),
     topBy(profiles, (p) => p.mp, 4)
   ], COMPANION_LIMIT);
@@ -147,11 +170,9 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
     .filter((item) => item.slot === 'dofus')
     .map((item) => itemProfile(item, referenceStats, baseItems, baseline, selections, turnMode, scenario));
 
-  // This phase exists to maximize damage while satisfying permanent PA/PM.
-  // A Dofus/trophy that changes neither damage nor PA/PM must not survive just
-  // because it is a "real Dofus" or happened to be present in the seed build.
-  // Keep a sparse-data fallback so synthetic/small datasets can still form six
-  // slots when fewer than six relevant candidates exist.
+  // Keep multiple offensive families even if a temporary 100%-crit effect makes
+  // one static seed look attractive. The final combat pass will decide their
+  // actual marginal value on the real rotation.
   const usefulProfiles = profiles.filter(usefulOffensiveProfile);
   const candidates = usefulProfiles.length >= 6 ? usefulProfiles : profiles;
   const byGain = [...candidates].sort((a, b) => b.gain - a.gain);
@@ -161,11 +182,16 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
     .slice(0, 20);
   return uniqueProfiles([
     current,
-    byGain.slice(0, 26),
+    byGain.slice(0, 28),
     topBy(candidates, (p) => num(p.item.stats, 'power'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'crit'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'critDamage'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'damage'), 10),
+    topBy(candidates, (p) => num(p.item.stats, 'spellDamagePct'), 10),
+    topBy(candidates, (p) => num(p.item.stats, 'meleeDamagePct'), 8),
+    topBy(candidates, (p) => num(p.item.stats, 'rangedDamagePct'), 8),
+    topByAnyElement(candidates, 10),
+    topByAnyElementDamage(candidates, 10),
     topBy(candidates, (p) => p.ap, 8),
     topBy(candidates, (p) => p.mp, 8),
     realDofus
@@ -201,7 +227,6 @@ function keepComboDiversity(states, limit) {
 
 function dofusCombinations(profiles, count = 6) {
   if (profiles.length < count) return [];
-  // Stable order gives each combination one canonical construction path.
   const ordered = [...profiles].sort((a, b) => String(a.item.id).localeCompare(String(b.item.id)));
   let states = [{ items: [], score: 0, ap: 0, mp: 0, prysma: 0, next: 0 }];
   for (let pick = 0; pick < count; pick++) {
@@ -223,10 +248,10 @@ function dofusCombinations(profiles, count = 6) {
         });
       }
     }
-    states = keepComboDiversity(nextStates, pick === count - 1 ? 420 : 520);
+    states = keepComboDiversity(nextStates, pick === count - 1 ? 460 : 560);
     if (!states.length) break;
   }
-  return keepComboDiversity(states, 420);
+  return keepComboDiversity(states, 460);
 }
 
 function selectFinalCombos(combos, fixedItems, setsById, constraints) {

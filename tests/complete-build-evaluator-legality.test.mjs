@@ -47,3 +47,26 @@ test('turn feasibility is diagnostic and does not delete a benchmark build', () 
   assert.ok(evaluation.result);
   assert.ok(evaluation.result.warnings.includes('base-ap-mp') || evaluation.result.warnings.includes('turn-constraints'));
 });
+
+test('an elemental item condition can be satisfied by reallocating characteristic points', () => {
+  const conditional = {
+    id: 'fire-condition-item',
+    slot: 'hat',
+    stats: { fire: 150, earth: 80 },
+    conditions: { kind: 'condition', stat: 'fire', operator: 'gt', value: 300 }
+  };
+
+  const evaluation = evaluateCompleteBuild({
+    items: [conditional],
+    sets: [],
+    selections,
+    constraints: {},
+    fmPolicy,
+    turnMode: 't1'
+  });
+
+  assert.ok(evaluation.result, `expected build to be repaired, got ${evaluation.reason}`);
+  assert.equal(evaluation.result.itemConditionsSatisfied, true);
+  assert.ok(evaluation.result.characteristics.fire >= 51);
+  assert.ok(evaluation.result.stats.fire > 300);
+});
