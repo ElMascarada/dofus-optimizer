@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.10.7';
+export const APP_VERSION = '0.10.8';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
@@ -15,11 +15,14 @@ export const SLOT_RULES = [
   { id: 'dofus', label: 'Dofus / trophées', count: 6 }
 ];
 
+// Approximation volontaire pour l'optimiseur : les deux exos structurels usuels
+// (+1 PA et +1 PM) sont intégrés directement à la base du personnage. Ils ne
+// consomment donc aucun slot de FM offensive dans le solveur.
 export const BASE_CHARACTER = Object.freeze({
   level: 200,
   characteristicPoints: 995,
   scrolled: { earth: 100, fire: 100, water: 100, air: 100 },
-  baseStats: { ap: 7, mp: 3, vit: 1095 }
+  baseStats: { ap: 8, mp: 4, vit: 1095 }
 });
 
 export const ELEMENT_SOFT_CAPS = Object.freeze([
@@ -44,9 +47,7 @@ export const DEFAULT_FM = Object.freeze({
   spellDamagePct: 3,
   allowCritDamage: true,
   critDamageAmount: 8,
-  // Approximation volontaire : +1 PA / +1 PM sont ajoutés à la base permanente
-  // sans consommer les FM offensives, pour garder le solveur interactif.
-  structuralExos: true
+  structuralExos: false
 });
 
 export const TURN_MODES = [
