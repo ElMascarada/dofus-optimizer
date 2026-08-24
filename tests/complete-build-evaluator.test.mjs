@@ -78,7 +78,7 @@ test('manual benchmark rejects a requested turn that cannot actually be cast', (
 
   assert.equal(evaluation.result, null);
   assert.equal(evaluation.reason, 'turn-constraints');
-  assert.equal(evaluation.turnConstraints.deficitsByTurn[1].ap.missing, 3);
+  assert.equal(evaluation.turnConstraints.deficitsByTurn[1].ap, 3);
 });
 
 test('automatic combat scoring does not mistake synthetic enabled spells for a 15 AP requested turn', () => {
