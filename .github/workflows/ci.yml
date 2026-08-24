@@ -16,6 +16,30 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Inspect variable spell source
+        run: |
+          node --input-type=module <<'NODE'
+          const url = 'https://github.com/dofusdude/dofus3-main/releases/download/3.6.10.10/spell_levels.json';
+          const response = await fetch(url);
+          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+          const raw = await response.json();
+          const wanted = new Set([41327, 41355, 41764, 85268]);
+          const found = [];
+          function walk(value, path = '$') {
+            if (Array.isArray(value)) {
+              value.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+              return;
+            }
+            if (!value || typeof value !== 'object') return;
+            const ids = [value.id, value.ankama_id, value.ankamaId].map(Number);
+            if (ids.some((id) => wanted.has(id))) found.push({ path, value });
+            for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
+          }
+          walk(raw);
+          console.log('RAW_VARIABLE_SPELLS_BEGIN');
+          console.log(JSON.stringify(found, null, 2));
+          console.log('RAW_VARIABLE_SPELLS_END');
+          NODE
       - name: Syntax check
         run: npm run check
       - name: Tests
