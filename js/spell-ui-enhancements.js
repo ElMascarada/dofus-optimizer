@@ -54,6 +54,11 @@ function remoteSpellIconUrl(iconId, scale = '2x') {
   return id ? `https://api.dofusdu.de/dofus3/v1/img/spell/${scale}/${id}.png` : '';
 }
 
+function legacyRemoteSpellIconUrl(iconId) {
+  const id = Number(iconId || 0);
+  return id ? `https://api.dofusdu.de/dofus3/v1/img/spell/${id}-96.png` : '';
+}
+
 function spellIconIdFromImage(img) {
   const fromDataset = Number(img?.dataset?.spellIconId || 0);
   if (fromDataset > 0) return fromDataset;
@@ -77,17 +82,21 @@ function attachIconFallback(img, iconId) {
   img.dataset.spellIconId = String(id);
   if (img.dataset.spellIconFallback === 'ready') return;
   img.dataset.spellIconFallback = 'ready';
-  img.dataset.fallbackStage = 'local';
   img.addEventListener('error', () => {
-    const stage = img.dataset.fallbackStage || 'local';
-    if (stage === 'local') {
-      img.dataset.fallbackStage = 'remote-2x';
-      img.src = remoteSpellIconUrl(id, '2x');
+    const stage = img.dataset.fallbackStage || 'remote-2x';
+    if (stage === 'remote-2x') {
+      img.dataset.fallbackStage = 'remote-legacy-96';
+      img.src = legacyRemoteSpellIconUrl(id);
       return;
     }
-    if (stage === 'remote-2x') {
+    if (stage === 'remote-legacy-96') {
       img.dataset.fallbackStage = 'remote-1x';
       img.src = remoteSpellIconUrl(id, '1x');
+      return;
+    }
+    if (stage === 'remote-1x') {
+      img.dataset.fallbackStage = 'local';
+      img.src = localSpellIconUrl(id);
       return;
     }
     img.dataset.fallbackStage = 'failed';
@@ -95,14 +104,15 @@ function attachIconFallback(img, iconId) {
   });
 }
 
-function setLocalSpellIcon(img, iconId) {
+function setPreferredSpellIcon(img, iconId) {
   const id = Number(iconId || 0);
   if (!img || !(id > 0)) return;
   img.dataset.spellIconId = String(id);
-  img.dataset.fallbackStage = 'local';
+  img.dataset.fallbackStage = 'remote-2x';
+  img.style.display = '';
   attachIconFallback(img, id);
-  const local = localSpellIconUrl(id);
-  if (img.getAttribute('src') !== local) img.src = local;
+  const preferred = remoteSpellIconUrl(id, '2x');
+  if (img.getAttribute('src') !== preferred) img.src = preferred;
 }
 
 function decorateSpellRows() {
@@ -119,9 +129,10 @@ function decorateSpellRows() {
       img.className = 'spell-selection-icon';
       img.alt = '';
       img.loading = 'lazy';
+      img.referrerPolicy = 'no-referrer';
       check.querySelector('input')?.insertAdjacentElement('afterend', img);
     }
-    setLocalSpellIcon(img, spell.iconId);
+    setPreferredSpellIcon(img, spell.iconId);
   }
 }
 
@@ -171,7 +182,8 @@ function repairRenderedSpellIcons(root = document) {
   for (const img of images) {
     const iconId = spellIconIdFromImage(img);
     if (!(iconId > 0)) continue;
-    setLocalSpellIcon(img, iconId);
+    img.referrerPolicy = 'no-referrer';
+    setPreferredSpellIcon(img, iconId);
   }
 }
 
