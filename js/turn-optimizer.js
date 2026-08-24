@@ -1,6 +1,5 @@
 import { spellDamageBreakdown } from './spells.js';
 import {
-  activeModifiersForTurn,
   applyTimedModifiers,
   combatModifierSignature,
   expireCombatModifiers,
@@ -16,6 +15,10 @@ function positiveInt(value, fallback = 1) {
   return Math.max(1, Math.floor(num(value, fallback)));
 }
 
+function baseStatsForTurn(state, turn) {
+  return state.baseStatsByTurn?.[turn] || state.baseStats || {};
+}
+
 function spellUsableOnTurn(spell, state, turn) {
   const cost = Math.max(0, num(spell.apCost, 0));
   if (cost > state.apRemaining) return false;
@@ -26,6 +29,8 @@ function spellUsableOnTurn(spell, state, turn) {
   if (castCount >= Math.min(perTurn, perTarget)) return false;
   const readyTurn = num(state.cooldowns[id], 1);
   if (readyTurn > turn) return false;
+  const initialCooldown = Math.max(0, num(spell.initialCooldown || 0));
+  if (!state.sequence.some((entry) => entry.spellId === id) && turn <= initialCooldown) return false;
   return true;
 }
 
@@ -42,7 +47,7 @@ function areaMultiplier(spell, objective = {}) {
 }
 
 function castSpell(spell, state, turn, objective) {
-  const selfStats = statsWithCombatModifiers(state.baseStats, state.modifiers, turn, 'self');
+  const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
   const hasDamage = Array.isArray(spell.hits) && spell.hits.length > 0;
   const breakdown = hasDamage ? spellDamageBreakdown(spell, selfStats, turn) : null;
   const dealt = breakdown
@@ -75,11 +80,13 @@ function castSpell(spell, state, turn, objective) {
       turn,
       spellId: spell.id,
       name: spell.name,
+      iconId: spell.iconId,
       apCost: cost,
       expectedDamage: dealt,
       selfStatsBefore: selfStats,
       critChancePct: breakdown?.critChancePct || 0,
-      areaTargets: areaMultiplier(spell, objective)
+      areaTargets: areaMultiplier(spell, objective),
+      appliedModifiers: (spell.combatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } }))
     }]
   };
 }
@@ -140,12 +147,13 @@ function optimizeSingleTurn({ spells, state, turn, objective, beamWidth = 1600, 
 
 function startTurnState(previous, turn) {
   const modifiers = expireCombatModifiers(previous.modifiers, turn);
-  const stats = statsWithCombatModifiers(previous.baseStats, modifiers, turn, 'self');
+  const turnBase = baseStatsForTurn(previous, turn);
+  const stats = statsWithCombatModifiers(turnBase, modifiers, turn, 'self');
   return {
     ...previous,
     turn,
     modifiers,
-    apRemaining: Math.max(0, num(stats.ap, previous.baseStats.ap || 0)),
+    apRemaining: Math.max(0, num(stats.ap, turnBase.ap || 0)),
     castCounts: {}
   };
 }
@@ -160,6 +168,7 @@ function finalScore(state, objective) {
 
 export function optimizeCombatSequence({
   baseStats = {},
+  baseStatsByTurn = null,
   spells = [],
   objective = {},
   beamWidth = 1600,
@@ -172,9 +181,10 @@ export function optimizeCombatSequence({
     allowSupport: objective.allowSupport !== false,
     metric: objective.metric === 'damage-per-ap' ? 'damage-per-ap' : 'total-damage'
   };
+  const firstTurnBase = baseStatsByTurn?.[1] || baseStats || {};
   const candidates = (spells || []).filter((spell) =>
     spell?.combatRelevant !== false
-    && Math.max(0, num(spell.apCost, 0)) <= Math.max(0, num(baseStats.ap, 0) + 12)
+    && Math.max(0, num(spell.apCost, 0)) <= Math.max(0, num(firstTurnBase.ap, 0) + 12)
     && ((spell.hits || []).length || (spell.combatModifiers || []).length)
   );
   if (!candidates.length) return { score: 0, totalDamage: 0, sequence: [], perTurn: {}, explored: 0 };
@@ -182,7 +192,8 @@ export function optimizeCombatSequence({
   let frontier = [{
     turn: 1,
     baseStats: { ...baseStats },
-    apRemaining: Math.max(0, num(baseStats.ap, 0)),
+    baseStatsByTurn: baseStatsByTurn ? Object.fromEntries(Object.entries(baseStatsByTurn).map(([turn, stats]) => [turn, { ...stats }])) : null,
+    apRemaining: Math.max(0, num(firstTurnBase.ap, 0)),
     modifiers: [],
     castCounts: {},
     cooldowns: {},
