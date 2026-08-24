@@ -46,6 +46,7 @@ function bySlot(items) {
 }
 
 function compactItem(item) {
+  const staticOnly = Boolean(item.certification?.temporalEffectsPending && !item.certification?.certified);
   return {
     id: item.id,
     ankamaId: item.ankamaId,
@@ -60,7 +61,9 @@ function compactItem(item) {
     passives: item.passives || [],
     conditions: item.conditions,
     conditionStatus: item.conditionStatus,
-    certified: item.certification.certified
+    certified: item.certification.certified,
+    staticOnly,
+    pendingDynamicEffects: staticOnly ? (item.source?.pendingDynamicEffects || []) : []
   };
 }
 
@@ -93,6 +96,7 @@ report.items.unknownSlotTypes = collectUnknownSlotTypes(reportItems);
 const solverSafeSets = sets.filter(isSolverSafeSet);
 const certifiedItems = selectSnapshotItems(allItems, sets);
 report.items.snapshotCertified = certifiedItems.length;
+report.items.snapshotStaticOnly = certifiedItems.filter((item) => item.certification?.temporalEffectsPending && !item.certification?.certified).length;
 report.items.excludedByUncertifiedSet = allItems.filter((item) => item.certification.certified && item.setId && !certifiedItems.includes(item)).length;
 report.sets.certified = solverSafeSets.length;
 report.sets.uncertified = sets.length - solverSafeSets.length;
@@ -143,7 +147,8 @@ const markdown = [
   `- Game version: ${version?.version || 'unknown'} (${version?.release || 'unknown'})`,
   `- Included items: ${report.items.total}`,
   `- Self-certified items in coverage scope: ${report.items.certified} (${report.items.certifiedPct}%)`,
-  `- Snapshot-certified items: ${report.items.snapshotCertified}`,
+  `- Snapshot items: ${report.items.snapshotCertified}`,
+  `- Snapshot static-only dynamic items: ${report.items.snapshotStaticOnly || 0}`,
   `- Excluded because linked set is not certified: ${report.items.excludedByUncertifiedSet}`,
   `- Unknown slots: ${report.items.unknownSlot}`,
   `- Unmapped passive effects: ${report.items.unmappedEffects}`,
@@ -200,6 +205,6 @@ const markdown = [
 ].join('\n');
 await writeFile(new URL('coverage-report.md', outDir), markdown);
 
-console.log(`Normalized ${allItems.length} included items; ${certifiedItems.length} certified (${report.items.certifiedPct}%).`);
+console.log(`Normalized ${allItems.length} included items; ${certifiedItems.length} snapshot items (${report.items.snapshotStaticOnly || 0} static-only dynamic).`);
 console.log(`Certified sets: ${report.sets.certified}/${report.sets.total}.`);
 console.log(`Coverage report: ${new URL('coverage-report.md', outDir).pathname}`);
