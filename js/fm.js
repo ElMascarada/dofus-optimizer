@@ -10,10 +10,43 @@ function offensiveAssignmentOptions(items, policy) {
   return { critEligible, forcedSpellPctItems, maxCritItems };
 }
 
+function noOffensiveFm({ baseStats, items, selections, turnMode, scenario, structuralExos }) {
+  const stats = cloneStats(baseStats);
+  if (structuralExos) {
+    stats.ap = (stats.ap || 0) + 1;
+    stats.mp = (stats.mp || 0) + 1;
+  }
+  const objective = evaluateObjective({ stats, items, selections, turnMode, scenario });
+  return {
+    stats,
+    objective,
+    critItems: 0,
+    spellPctItems: 0,
+    structuralExos: structuralExos ? 2 : 0,
+    assignments: items.map((item) => ({ itemId: item.id, type: 'none', value: 0 }))
+  };
+}
+
 export function optimizeFm({ baseStats, items, selections, turnMode, policy, scenario = {} }) {
   const forgeableItems = items.filter((item) => FM_ELIGIBLE_SLOTS.has(item.slot));
   const useStructuralExos = policy?.structuralExos === true;
-  const { critEligible, forcedSpellPctItems, maxCritItems } = offensiveAssignmentOptions(forgeableItems, policy);
+  const spellDamagePct = Math.max(0, Number(policy?.spellDamagePct || 0));
+
+  // "Aucun" means exactly that: no % Do sorts and no +8 Do Crit. The crit
+  // alternative only exists when an offensive FM percentage is selected.
+  if (spellDamagePct <= 0) {
+    return noOffensiveFm({
+      baseStats,
+      items,
+      selections,
+      turnMode,
+      scenario,
+      structuralExos: useStructuralExos
+    });
+  }
+
+  const normalizedPolicy = { ...policy, spellDamagePct };
+  const { critEligible, forcedSpellPctItems, maxCritItems } = offensiveAssignmentOptions(forgeableItems, normalizedPolicy);
   let best = null;
 
   // Performance approximation: PA/PM exos are modeled as +1 AP/+1 MP permanent
@@ -29,8 +62,8 @@ export function optimizeFm({ baseStats, items, selections, turnMode, policy, sce
     }
 
     const spellPctItems = forcedSpellPctItems.length + (critEligible.length - critItems);
-    stats.spellDamagePct = (stats.spellDamagePct || 0) + spellPctItems * policy.spellDamagePct;
-    stats.critDamage = (stats.critDamage || 0) + critItems * policy.critDamageAmount;
+    stats.spellDamagePct = (stats.spellDamagePct || 0) + spellPctItems * normalizedPolicy.spellDamagePct;
+    stats.critDamage = (stats.critDamage || 0) + critItems * Number(normalizedPolicy.critDamageAmount ?? 8);
 
     const objective = evaluateObjective({ stats, items, selections, turnMode, scenario });
     if (!best || objective.score > best.objective.score) {
@@ -43,8 +76,8 @@ export function optimizeFm({ baseStats, items, selections, turnMode, policy, sce
         structuralExos: useStructuralExos ? 2 : 0,
         assignments: items.map((item) => {
           if (!FM_ELIGIBLE_SLOTS.has(item.slot)) return { itemId: item.id, type: 'none', value: 0 };
-          if (critIds.has(item.id)) return { itemId: item.id, type: 'critDamage', value: policy.critDamageAmount };
-          return { itemId: item.id, type: 'spellDamagePct', value: policy.spellDamagePct };
+          if (critIds.has(item.id)) return { itemId: item.id, type: 'critDamage', value: Number(normalizedPolicy.critDamageAmount ?? 8) };
+          return { itemId: item.id, type: 'spellDamagePct', value: normalizedPolicy.spellDamagePct };
         })
       };
     }
