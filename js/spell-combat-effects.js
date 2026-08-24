@@ -25,6 +25,11 @@ function translationEntries(payload = {}) {
   return payload?.entries && typeof payload.entries === 'object' ? payload.entries : {};
 }
 
+// These are the direct fixed-element damage/lifesteal families already consumed
+// by the spell hit normalizer. They must never be reinterpreted as a temporary
+// +damage buff merely because a spell can be cast at range 0.
+const DIRECT_DAMAGE_EFFECT_IDS = new Set([91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 2822, 2828]);
+
 export function buildSpellEffectRegistry(effectsPayload = {}, translationsPayload = {}) {
   const translations = translationEntries(translationsPayload);
   const registry = new Map();
@@ -60,13 +65,24 @@ function deterministic(effect = {}) {
     && number(effect.random, 0) === 0;
 }
 
-function durationTurns(effect = {}) {
-  return Math.max(1, number(effect.duration, 0) || 1);
+function rawDuration(effect = {}) {
+  return Math.max(0, number(effect.duration, 0));
 }
 
-function looksNegative(description = '') {
+function durationTurns(effect = {}) {
+  return Math.max(1, rawDuration(effect));
+}
+
+function looksNegative(description = '', effect = {}) {
+  const raw = String(description).trim();
   const text = normalizeText(description);
-  return /(?:retire|reduit|diminue|malus|perd|moins|\-\{)/.test(text);
+  if (/^-/.test(raw)) return true;
+  if (/(?:retire|reduit|diminue|malus|perd|moins)/.test(text)) return true;
+  const numeric = [effect.diceNum, effect.diceSide, effect.value]
+    .map(Number)
+    .filter(Number.isFinite)
+    .filter((value) => value !== 0);
+  return numeric.length > 0 && numeric.every((value) => value < 0);
 }
 
 function selfTargetLikely(effect = {}, level = {}) {
@@ -87,8 +103,9 @@ function statFromDescription(description = '') {
   if (/\bforce\b/.test(text)) return 'earth';
   if (/\bchance\b/.test(text)) return 'water';
   if (/coup critique|critiques?/.test(text)) return 'crit';
-  if (/points? d['’ ]?action|\bpa\b/.test(text)) return 'ap';
-  if (/points? de mouvement|\bpm\b/.test(text)) return 'mp';
+  // Avoid confusing Esquive/Retrait PA/PM with actual AP/MP gains.
+  if (!/(?:esquive|retrait).*\bpa\b/.test(text) && /points? d['’ ]?action|\bpa\b/.test(text)) return 'ap';
+  if (!/(?:esquive|retrait).*\bpm\b/.test(text) && /points? de mouvement|\bpm\b/.test(text)) return 'mp';
   if (/dommages? air/.test(text)) return 'damageAir';
   if (/dommages? feu/.test(text)) return 'damageFire';
   if (/dommages? eau/.test(text)) return 'damageWater';
@@ -100,7 +117,6 @@ function statFromDescription(description = '') {
 function targetModifierFromDescription(description = '', value = 0) {
   const text = normalizeText(description);
   if (!/dommages subis/.test(text)) return null;
-  // Ankama can encode either x115% or +15%. Normalize both to +15 final taken.
   const pct = value >= 100 ? value - 100 : value;
   if (!(pct > 0)) return null;
   return { finalDamageTakenPct: pct };
@@ -132,8 +148,26 @@ export function extractDeterministicCombatModifiers(effects = [], registry = new
     const effectId = number(effect?.effectId, -1);
     const meta = registry.get(effectId);
     if (!meta?.description) continue;
+    if (DIRECT_DAMAGE_EFFECT_IDS.has(effectId)) {
+      ignored.push({ effectId, description: meta.description, reason: 'direct-damage' });
+      continue;
+    }
+
+    // A combat modifier must persist beyond the instant hit. This separates a
+    // real +Power/+damage/AP buff from a damage line whose wording contains the
+    // same stat family.
+    if (rawDuration(effect) <= 0) {
+      ignored.push({ effectId, description: meta.description, reason: 'instant-effect' });
+      continue;
+    }
+
     const value = effectValue(effect);
     if (!(value > 0)) continue;
+
+    if (looksNegative(meta.description, effect)) {
+      ignored.push({ effectId, description: meta.description, reason: 'negative' });
+      continue;
+    }
 
     const targetStats = targetModifierFromDescription(meta.description, value);
     if (targetStats) {
@@ -150,8 +184,8 @@ export function extractDeterministicCombatModifiers(effects = [], registry = new
     }
 
     const stat = statFromDescription(meta.description);
-    if (!stat || looksNegative(meta.description) || !selfTargetLikely(effect, level)) {
-      if (stat) ignored.push({ effectId, description: meta.description, reason: looksNegative(meta.description) ? 'negative' : 'not-self-targeted' });
+    if (!stat || !selfTargetLikely(effect, level)) {
+      if (stat) ignored.push({ effectId, description: meta.description, reason: 'not-self-targeted' });
       continue;
     }
 
