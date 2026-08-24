@@ -11,13 +11,14 @@ import { isPrysmaradite, specialSlotRulesAreValid } from './build-legality.js';
 const ELEMENT_DAMAGE = { earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' };
 const GENERIC_OFFENSE = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
+  'meleeDamagePct', 'rangedDamagePct',
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
 const SLOT_POOL_LIMIT = Object.freeze({
-  dofus: 44,
+  dofus: 52,
   ring: 22,
-  companion: 18,
+  companion: 22,
   weapon: 16,
   hat: 14,
   cape: 14,
@@ -28,9 +29,9 @@ const SLOT_POOL_LIMIT = Object.freeze({
 });
 
 const GROUP_CHOICE_LIMIT = Object.freeze({
-  dofus: 120,
+  dofus: 160,
   ring: 36,
-  companion: 14,
+  companion: 18,
   weapon: 12,
   hat: 12,
   cape: 12,
@@ -73,20 +74,30 @@ function itemScore(item, context) {
     selections: context.selections,
     turnMode: context.turnMode
   }).score;
+  const objectiveGain = Number.isFinite(objective)
+    ? Math.max(0, objective - Number(context.baselineObjective || 0))
+    : 0;
 
-  // PA/PM are intentionally NOT rewarded here. They are requirements used by
-  // legalityPriority(). Once a build reaches 12/6, an extra PA or PM must have
-  // zero offensive value and must not beat a Pourpre/Nébuleux/offensive trophy.
-  let score = Number.isFinite(objective) ? objective : 0;
+  // Candidate ranking must not decide that 60 Agility is intrinsically better
+  // than 80 Power, 6% spell damage or a crit package. Those interactions are
+  // resolved on complete builds. Here we only create a broad, synergy-safe pool.
+  let score = objectiveGain * 100;
   if (Number(context.constraints?.range || 0) > 0) {
     score += Math.max(0, num(stats, 'range')) * 1200;
   }
 
   if (context.targetElement) {
-    score += Math.max(0, num(stats, context.targetElement)) * 28;
-    score += Math.max(0, num(stats, ELEMENT_DAMAGE[context.targetElement])) * 36;
+    score += Math.max(0, num(stats, context.targetElement)) * 1.25;
+    score += Math.max(0, num(stats, ELEMENT_DAMAGE[context.targetElement])) * 1.5;
   }
-  for (const key of GENERIC_OFFENSE) score += Math.max(0, num(stats, key)) * 7;
+  score += Math.max(0, num(stats, 'spellDamagePct')) * 1200;
+  score += Math.max(0, num(stats, 'finalDamagePct')) * 1200;
+  score += Math.max(0, num(stats, 'finalDamagePctT1')) * 1000;
+  score += Math.max(0, num(stats, 'finalDamagePctT2')) * 1000;
+  score += Math.max(0, num(stats, 'finalDamagePctT3')) * 1000;
+  score += Math.max(0, num(stats, 'meleeDamagePct')) * 700;
+  score += Math.max(0, num(stats, 'rangedDamagePct')) * 700;
+  for (const key of ['power', 'damage', 'crit', 'critDamage']) score += Math.max(0, num(stats, key));
 
   // Keep standalone/legendary candidates competitive once a set skeleton exists.
   if (!item.setId && item.slot !== 'dofus' && item.slot !== 'companion') score += 2200;
@@ -131,18 +142,41 @@ function buildSlotPool(allItems, preferredItems, rule, context) {
   const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 10);
 
   const cap = Math.max(Number(rule.count || 0), SLOT_POOL_LIMIT[rule.id] || 14);
+
+  if (rule.id === 'companion') {
+    const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 8) : [];
+    return uniqueProfiles([
+      ...byScore.slice(0, 12),
+      ...topByStat(raw, 'power', 8),
+      ...topByStat(raw, 'crit', 8),
+      ...topByStat(raw, 'critDamage', 8),
+      ...topByStat(raw, 'damage', 8),
+      ...targetElement,
+      ...byAp,
+      ...byMp,
+      ...preferred,
+      ...conditionless,
+      ...passiveFree
+    ], cap);
+  }
+
   if (rule.id !== 'dofus') {
     return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
   }
 
-  // Dofus/trophies are the last six optimisation slots. Preserve offensive
-  // families explicitly so constraint trophies cannot crowd them out of the pool.
+  // Dofus/trophies are structural and offensive slots at the same time. Preserve
+  // every important offensive family explicitly, including multiplicative spell
+  // damage, so a raw-stat trophy cannot eject it before complete-build scoring.
   const realDofus = byScore
     .filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus'))
-    .slice(0, 16);
+    .slice(0, 18);
+  const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 10) : [];
   const targetDamage = context.targetElement ? topByStat(raw, ELEMENT_DAMAGE[context.targetElement], 10) : [];
   const offensiveReserves = [
-    ...byScore.slice(0, 18),
+    ...byScore.slice(0, 20),
+    ...topByStat(raw, 'spellDamagePct', 10),
+    ...topByStat(raw, 'meleeDamagePct', 8),
+    ...topByStat(raw, 'rangedDamagePct', 8),
     ...topByStat(raw, 'finalDamagePct', 10),
     ...topByStat(raw, 'finalDamagePctT1', 8),
     ...topByStat(raw, 'finalDamagePctT2', 8),
@@ -151,6 +185,7 @@ function buildSlotPool(allItems, preferredItems, rule, context) {
     ...topByStat(raw, 'critDamage', 10),
     ...topByStat(raw, 'crit', 10),
     ...topByStat(raw, 'damage', 10),
+    ...targetElement,
     ...targetDamage,
     ...realDofus
   ];
@@ -159,7 +194,7 @@ function buildSlotPool(allItems, preferredItems, rule, context) {
     ...offensiveReserves,
     ...byAp,
     ...byMp,
-    ...preferred.slice(0, 12),
+    ...preferred.slice(0, 16),
     ...conditionless,
     ...passiveFree,
     ...byScore
@@ -204,7 +239,7 @@ function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}
   if (count === 1) return profiles.slice(0, maxChoices).map((profile) => ({ items: [profile.item], score: profile.score }));
 
   let states = [{ items: [], score: 0, next: 0, prysma: 0, ap: 0, mp: 0 }];
-  const beamWidth = preserveApMp ? 520 : (count >= 5 ? 260 : 160);
+  const beamWidth = preserveApMp ? 620 : (count >= 5 ? 260 : 160);
   for (let pick = 0; pick < count; pick++) {
     const nextStates = [];
     const leftAfter = count - pick - 1;
@@ -234,7 +269,7 @@ function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}
       if (preserveApMp) {
         const bucket = apMpBucket(state.ap, state.mp, state.prysma);
         const used = perBucket.get(bucket) || 0;
-        if (used >= 28) continue;
+        if (used >= 36) continue;
         perBucket.set(bucket, used + 1);
       }
       seen.add(key);
@@ -309,7 +344,7 @@ function keepDiverseStates(states, context, limit = 160) {
   for (const state of states) {
     const bucket = stateBucket(state.priority, state.items);
     const used = perBucket.get(bucket) || 0;
-    if (used >= 5) continue;
+    if (used >= 10) continue;
     perBucket.set(bucket, used + 1);
     output.push(state);
     if (output.length >= limit) break;
@@ -363,6 +398,7 @@ export function searchArchitecturesV2({
     turnMode,
     scenario,
     targetElement,
+    baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
     setsById: Object.fromEntries((sets || []).map((set) => [set.id, set]))
   };
 
@@ -374,7 +410,7 @@ export function searchArchitecturesV2({
     turnMode,
     scenario,
     maxRelevantSets: 14,
-    constraintReservePerStat: 8
+    constraintReservePerStat: 4
   });
   const synergy = buildSetSynergyIndex({
     items,
@@ -453,11 +489,12 @@ export function searchArchitecturesV2({
     const missing = SLOT_RULES
       .map((rule) => ({ ...rule, missing: Number(rule.count || 0) - (counts.get(rule.id) || 0) }))
       .filter((group) => group.missing > 0)
-      // Optimise equipment/set structure first, then fill the six Dofus slots
-      // against the PA/PM deficit that actually remains.
+      // Dofus/trophies now participate in the structure before remaining gear is
+      // frozen. This lets Ocre free an AP item slot and lets that slot compete for
+      // a stronger damage piece instead of treating Dofus as leftover filler.
       .sort((a, b) => {
-        if (a.id === 'dofus' && b.id !== 'dofus') return 1;
-        if (b.id === 'dofus' && a.id !== 'dofus') return -1;
+        if (a.id === 'dofus' && b.id !== 'dofus') return -1;
+        if (b.id === 'dofus' && a.id !== 'dofus') return 1;
         return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
       });
 
@@ -477,7 +514,7 @@ export function searchArchitecturesV2({
           expandedStates++;
         }
       }
-      states = keepDiverseStates(next, context, group.id === 'dofus' ? 220 : 180);
+      states = keepDiverseStates(next, context, group.id === 'dofus' ? 260 : 220);
       if (!states.length) break;
     }
 
@@ -490,7 +527,7 @@ export function searchArchitecturesV2({
 
     const readyStates = complete.filter((state) => legalityPriority(state.items, state.heuristic, context).ready);
     legalCandidates += readyStates.length;
-    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, 48);
+    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, 64);
 
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({

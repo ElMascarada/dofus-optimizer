@@ -3,7 +3,7 @@ import { activeSpellElements } from './candidate-prefilter.js';
 import { evaluateObjectiveUpperBound } from './spells.js';
 import { optimisticItemStats } from './search-space.js';
 
-const LEVEL_200_SET_SLOTS = new Set([
+const ENDGAME_SET_SLOTS = new Set([
   'hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield'
 ]);
 
@@ -16,6 +16,7 @@ const ELEMENT_DAMAGE = {
 
 const GENERIC_OFFENSE = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
+  'meleeDamagePct', 'rangedDamagePct',
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
@@ -66,12 +67,17 @@ function scoreStats(stats, context) {
   const target = targetValue(stats, context.targetElement);
   const generic = genericValue(stats);
   const other = otherElementValue(stats, context.targetElement);
-  let score = Number.isFinite(objective) ? objective : 0;
+  const baseline = Number(context.baselineObjective || 0);
+  const objectiveGain = Number.isFinite(objective) ? Math.max(0, objective - baseline) : 0;
+
+  let score = objectiveGain * 100;
   score += Math.max(0, num(stats, 'ap')) * 50000;
   score += Math.max(0, num(stats, 'mp')) * 32000;
   score += Math.max(0, num(stats, 'range')) * 1500;
-  if (context.targetElement) score += target * 28 + generic * 7 - other * 1.5;
-  else score += generic * 5;
+  score += Math.max(0, num(stats, 'spellDamagePct')) * 1200;
+  score += Math.max(0, num(stats, 'finalDamagePct')) * 1200;
+  if (context.targetElement) score += target * 1.25 + generic - other * 0.05;
+  else score += generic;
   return { score, objective: Number.isFinite(objective) ? objective : 0, target, generic };
 }
 
@@ -205,8 +211,24 @@ export function buildSetSynergyIndex({
 } = {}) {
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
-  const context = { targetElement, selections, constraints, turnMode, scenario };
-  const eligible = items.filter((item) => item?.setId && LEVEL_200_SET_SLOTS.has(item.slot) && Number(item.level || 0) === 200);
+  const context = {
+    targetElement,
+    selections,
+    constraints,
+    turnMode,
+    scenario,
+    baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0
+  };
+
+  // Set planning must use the same certified endgame scope as the rest of the
+  // optimizer. A level-197 ring can be the best piece of a set and must not be
+  // silently excluded just because the architecture index used to require 200.
+  const eligible = items.filter((item) => {
+    if (!item?.setId || !ENDGAME_SET_SLOTS.has(item.slot)) return false;
+    const level = Number(item.level || 0);
+    return level >= 190 && level <= 200;
+  });
+
   const bySet = new Map();
   for (const item of eligible) {
     if (!bySet.has(item.setId)) bySet.set(item.setId, []);
