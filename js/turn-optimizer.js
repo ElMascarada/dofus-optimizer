@@ -1,4 +1,4 @@
-import { spellDamageBreakdown } from './spells.js';
+import { spellDamageVariants } from './spells.js';
 import {
   applyTimedModifiers,
   combatModifierSignature,
@@ -51,24 +51,13 @@ function spellUsableOnTurn(spell, state, turn) {
   return true;
 }
 
-function targetDamageMultiplier(modifiers = [], turn = 1) {
-  const targetStats = statsWithCombatModifiers({}, modifiers, turn, 'target');
-  const takenPct = num(targetStats.finalDamageTakenPct, 0);
-  return Math.max(0, 1 + takenPct / 100);
-}
-
-// Equipment melee/ranged stats intentionally remain outside the generic build
-// objective, as requested. Temporary combat buffs are different: if a class
-// spell grants +10% melee damage, the turn optimizer must be able to exploit it
-// on a spell that can actually be cast in melee. For a flexible-range spell we
-// assume the optimizer can choose the better legal positioning for that cast.
-function temporaryPositionDamageMultiplier(spell, modifiers = [], turn = 1) {
-  const temporary = statsWithCombatModifiers({}, modifiers, turn, 'self');
-  const options = Array.isArray(spell?.distanceOptions) ? spell.distanceOptions : [];
-  let bestPct = 0;
-  if (options.includes('melee')) bestPct = Math.max(bestPct, num(temporary.meleeDamagePct, 0));
-  if (options.includes('ranged')) bestPct = Math.max(bestPct, num(temporary.rangedDamagePct, 0));
-  return Math.max(0, 1 + bestPct / 100);
+function targetDamageMultiplier(state, turn = 1) {
+  const targetStats = statsWithCombatModifiers({}, state.modifiers, turn, 'target');
+  const genericTakenPct = num(targetStats.finalDamageTakenPct, 0);
+  const hupperTakenPct = state.hupperTarget?.vulnerabilityTurn === turn
+    ? num(state.hupperTarget?.vulnerabilityPct, 0)
+    : 0;
+  return Math.max(0, (1 + genericTakenPct / 100) * (1 + hupperTakenPct / 100));
 }
 
 function areaMultiplier(spell, objective = {}) {
@@ -77,14 +66,44 @@ function areaMultiplier(spell, objective = {}) {
   return positiveInt(objective.areaTargets, 2);
 }
 
-function castSpell(spell, state, turn, objective) {
-  const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
-  const hasDamage = Array.isArray(spell.hits) && spell.hits.length > 0;
-  const breakdown = hasDamage ? spellDamageBreakdown(spell, selfStats, turn) : null;
-  const dealt = breakdown
-    ? breakdown.expected
-      * temporaryPositionDamageMultiplier(spell, state.modifiers, turn)
-      * targetDamageMultiplier(state.modifiers, turn)
+function normalizedText(value = '') {
+  return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+function isHuppermageSpell(spell) {
+  return Number(spell?.breedId) === 17
+    || normalizedText(spell?.breedName).includes('huppermage')
+    || String(spell?.id || '').startsWith('spell-13') && normalizedText(spell?.breedName) === 'huppermage';
+}
+
+function isEarthFirePair(first, second) {
+  return (first === 'earth' && second === 'fire') || (first === 'fire' && second === 'earth');
+}
+
+function applyHuppermageTargetState(state, spell, variant, turn) {
+  if (!isHuppermageSpell(spell)) return state.hupperTarget;
+  const element = variant?.element;
+  if (!['earth', 'fire', 'water', 'air'].includes(element)) return state.hupperTarget;
+
+  const previous = state.hupperTarget?.turn === turn ? state.hupperTarget : {
+    turn,
+    element: null,
+    vulnerabilityPct: 0,
+    vulnerabilityTurn: turn
+  };
+  const activatesVolcanic = isEarthFirePair(previous.element, element);
+  return {
+    turn,
+    element,
+    vulnerabilityPct: Math.max(num(previous.vulnerabilityPct, 0), activatesVolcanic ? 15 : 0),
+    vulnerabilityTurn: turn
+  };
+}
+
+function castSpellVariant(spell, variant, state, turn, objective) {
+  const dealt = variant
+    ? variant.expected
+      * targetDamageMultiplier(state, turn)
       * areaMultiplier(spell, objective)
     : 0;
 
@@ -102,12 +121,14 @@ function castSpell(spell, state, turn, objective) {
   const interval = Math.max(0, num(spell.minCastInterval || spell.cooldown || 0));
   if (interval > 0) cooldowns[spell.id] = turn + interval;
 
+  const hupperTarget = applyHuppermageTargetState(state, spell, variant, turn);
   return {
     ...state,
     apRemaining,
     modifiers,
     castCounts,
     cooldowns,
+    hupperTarget,
     damage: state.damage + dealt,
     sequence: [...state.sequence, {
       turn,
@@ -116,18 +137,29 @@ function castSpell(spell, state, turn, objective) {
       iconId: spell.iconId,
       apCost: cost,
       expectedDamage: dealt,
-      selfStatsBefore: selfStats,
-      critChancePct: breakdown?.critChancePct || 0,
+      element: variant?.element || null,
+      distance: variant?.distance || null,
+      critChancePct: variant?.critChancePct || 0,
+      targetDamageMultiplier: targetDamageMultiplier(state, turn),
       areaTargets: areaMultiplier(spell, objective),
       appliedModifiers: (spell.combatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } }))
     }]
   };
 }
 
+function castSpellCandidates(spell, state, turn, objective) {
+  const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
+  const variants = (spell.hits || []).length ? spellDamageVariants(spell, selfStats, turn) : [null];
+  return variants.map((variant) => castSpellVariant(spell, variant, state, turn, objective));
+}
+
 function stateKey(state, turn) {
   const casts = Object.entries(state.castCounts || {}).sort(([a], [b]) => a.localeCompare(b)).map(([id, count]) => `${id}:${count}`).join(',');
   const cooldowns = Object.entries(state.cooldowns || {}).filter(([, ready]) => num(ready, 0) > turn).sort(([a], [b]) => a.localeCompare(b)).map(([id, ready]) => `${id}:${ready}`).join(',');
-  return `${Math.round(state.apRemaining * 100) / 100}|${combatModifierSignature(state.modifiers, turn)}|${casts}|${cooldowns}`;
+  const hupper = state.hupperTarget?.turn === turn
+    ? `${state.hupperTarget?.element || '-'}:${num(state.hupperTarget?.vulnerabilityPct, 0)}`
+    : '-:0';
+  return `${Math.round(state.apRemaining * 100) / 100}|${combatModifierSignature(state.modifiers, turn)}|${hupper}|${casts}|${cooldowns}`;
 }
 
 function supportPotential(state, turn) {
@@ -141,6 +173,7 @@ function supportPotential(state, turn) {
     + num(selfStats.finalDamagePct) * 14
     + Math.max(num(selfStats.meleeDamagePct), num(selfStats.rangedDamagePct)) * 12
     + num(targetStats.finalDamageTakenPct) * 14
+    + num(state.hupperTarget?.vulnerabilityPct, 0) * 14
     + Math.max(0, state.apRemaining) * 3;
 }
 
@@ -166,10 +199,11 @@ function optimizeSingleTurn({ spells, state, turn, objective, beamWidth = 1600, 
       for (const spell of spells) {
         if (!spellUsableOnTurn(spell, current, turn)) continue;
         if (!objective.allowSupport && !(spell.hits || []).length) continue;
-        const candidate = castSpell(spell, current, turn, objective);
-        if (candidate.apRemaining < -0.001) continue;
-        next.push(candidate);
-        expanded = true;
+        for (const candidate of castSpellCandidates(spell, current, turn, objective)) {
+          if (candidate.apRemaining < -0.001) continue;
+          next.push(candidate);
+          expanded = true;
+        }
       }
       if (!expanded) terminals.push(current);
     }
@@ -188,6 +222,7 @@ function startTurnState(previous, turn) {
     ...previous,
     turn,
     modifiers,
+    hupperTarget: { turn, element: null, vulnerabilityPct: 0, vulnerabilityTurn: turn },
     apRemaining: Math.max(0, num(stats.ap, turnBase.ap || 0)),
     castCounts: {}
   };
@@ -240,6 +275,7 @@ export function optimizeCombatSequence({
     baseStatsByTurn: baseStatsByTurn ? Object.fromEntries(Object.entries(baseStatsByTurn).map(([turn, stats]) => [turn, { ...stats }])) : null,
     apRemaining: Math.max(0, num(firstTurnBase.ap, 0)),
     modifiers: [],
+    hupperTarget: { turn: firstTurn, element: null, vulnerabilityPct: 0, vulnerabilityTurn: firstTurn },
     castCounts: {},
     cooldowns: {},
     damage: 0,
