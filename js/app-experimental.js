@@ -409,7 +409,8 @@ function handleWorkerMessage(event, requestId) {
   renderBuilds(output.results, 'Aucun build certifié ne satisfait les contraintes.');
   const fallback = output.diagnostics.fallbackUsed ? ` · fallback légal ${Number(output.diagnostics.fallbackValid || 0).toLocaleString('fr-FR')}` : '';
   const combat = output.diagnostics.combatRefine ? ` · rotations ${Number(output.diagnostics.combatRefine.evaluated || 0).toLocaleString('fr-FR')} · ${Number(output.diagnostics.combatRefine.spellPool || 0)} sorts` : '';
-  diagnostics.textContent = `${Number(output.diagnostics.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics.nodes || 0).toLocaleString('fr-FR')} nœuds · ${Number(output.diagnostics.pruned || 0).toLocaleString('fr-FR')} branches coupées${fallback}${combat}`;
+  const diversity = output.diagnostics.resultDiversity ? ` · variété ${output.diagnostics.resultDiversity.mode}` : '';
+  diagnostics.textContent = `${Number(output.diagnostics.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics.nodes || 0).toLocaleString('fr-FR')} nœuds · ${Number(output.diagnostics.pruned || 0).toLocaleString('fr-FR')} branches coupées${fallback}${combat}${diversity}`;
   setIdleState();
 }
 
@@ -474,6 +475,7 @@ function runSolver() {
       },
       turnMode: $('#turn-mode').value,
       scenario,
+      diversityMode: $('#result-diversity')?.value || 'gear',
       topN: 10
     }
   });

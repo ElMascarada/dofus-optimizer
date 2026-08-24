@@ -2,6 +2,7 @@ import { searchArchitecturesV2 } from './architecture-search-v2.js';
 import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
+import { diversifyBuilds } from './result-diversity.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
   'deep-purple',
@@ -10,6 +11,8 @@ const IGNORED_COMPLEX_DOFUS_PASSIVES = [
   'yellow-ochre',
   'descent-to-abyss'
 ];
+
+const DIVERSITY_MODES = new Set(['score', 'prysma', 'gear', 'gear-4']);
 
 function activeTurns(turnMode) {
   if (turnMode === 't1') return [1];
@@ -111,6 +114,11 @@ function mergeBuildCandidates(groups = [], limit = 60) {
   return [...seen.values()].slice(0, Math.max(1, Number(limit || 60)));
 }
 
+function diversityModeFor(payload = {}) {
+  const mode = String(payload?.diversityMode || 'gear');
+  return DIVERSITY_MODES.has(mode) ? mode : 'gear';
+}
+
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'optimize') return;
   const { requestId, payload } = event.data;
@@ -119,6 +127,7 @@ self.addEventListener('message', (event) => {
     const combatMode = payload?.objectiveMode === 'combat';
     const combatObjective = payload?.combatObjective || {};
     const turnMode = combatMode ? (combatObjective.turnMode || payload?.turnMode || 't1') : (payload?.turnMode || 'sum');
+    const diversityMode = diversityModeFor(payload);
     const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
     const rawSelections = combatMode
       ? combatGearSelections(combatSpells, combatObjective)
@@ -143,10 +152,12 @@ self.addEventListener('message', (event) => {
     };
 
     const requestedTopN = Math.max(1, Number(payload?.topN || 10));
-    // The automatic mode deliberately keeps a wider equipment bench before the
-    // sequence solver. A build that is only second-best on isolated hits may be
-    // first once AP economy and class buffs are sequenced correctly.
-    const searchTopN = combatMode ? Math.max(60, requestedTopN * 6) : requestedTopN;
+    const diversifiedSearch = diversityMode !== 'score';
+    // Keep a wider bench when the user asks for genuinely different answers.
+    // The final list is still capped to requestedTopN after rotation scoring.
+    const searchTopN = combatMode
+      ? Math.max(diversifiedSearch ? 90 : 60, requestedTopN * (diversifiedSearch ? 9 : 6))
+      : diversifiedSearch ? Math.max(50, requestedTopN * 5) : requestedTopN;
     const primary = searchArchitecturesV2({
       ...normalizedPayload,
       topN: searchTopN,
@@ -177,6 +188,7 @@ self.addEventListener('message', (event) => {
         ...normalizedPayload,
         results: output.results,
         topN: searchTopN,
+        preservePrysmaradites: combatMode || diversityMode === 'prysma',
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       output = {
@@ -190,25 +202,24 @@ self.addEventListener('message', (event) => {
     }
 
     if (combatMode && output.results?.length) {
-      // Pass 1: solve real rotations on the broad equipment bench.
-      const feedbackPlanCount = Math.min(searchTopN, Math.max(24, requestedTopN * 3));
+      // Pass 1: solve real rotations on a broad bench while reserving the best
+      // candidate for each Prysmaradite. This is what lets a +PA/-PM Prysmaradite
+      // survive long enough for its extra casts to be valued by the real solver.
+      const feedbackPlanCount = Math.min(searchTopN, Math.max(50, requestedTopN * 5));
       const firstCombat = refineCombatTurns({
         results: output.results,
         spells: combatSpells,
         combatObjective: { ...combatObjective, turnMode },
         topN: feedbackPlanCount,
+        preservePrysmaradites: true,
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
 
-      // Pass 2: rebuild the companion/Dofus/trophy objective from spells that
-      // the real rotations actually cast. This prevents a 6% final-damage
-      // trophy, Pourpre or Nébuleux from being discarded because unrelated
-      // spells in the class kit had equal synthetic weight during preselection.
       const feedbackSelections = buildCombatFeedbackSelections({
         results: firstCombat.results,
         spells: combatSpells,
         turnMode,
-        maxPlans: 8
+        maxPlans: 10
       });
 
       let finalCandidates = firstCombat.results;
@@ -219,7 +230,8 @@ self.addEventListener('message', (event) => {
           ...normalizedPayload,
           selections: feedbackSelections,
           results: firstCombat.results,
-          topN: Math.min(searchTopN, Math.max(40, requestedTopN * 4)),
+          topN: Math.min(searchTopN, Math.max(60, requestedTopN * 6)),
+          preservePrysmaradites: true,
           onProgress: (progress) => self.postMessage({
             type: 'progress',
             requestId,
@@ -233,28 +245,51 @@ self.addEventListener('message', (event) => {
         finalCandidates = mergeBuildCandidates([
           feedbackRefined.results,
           firstCombat.results
-        ], Math.min(searchTopN, Math.max(50, requestedTopN * 5)));
+        ], Math.min(searchTopN, Math.max(70, requestedTopN * 7)));
       }
 
-      // Final pass: only this score determines the displayed ranking.
+      const finalBenchCount = diversityMode === 'score'
+        ? requestedTopN
+        : Math.min(searchTopN, Math.max(60, requestedTopN * 6));
       const combat = refineCombatTurns({
         results: finalCandidates,
         spells: combatSpells,
         combatObjective: { ...combatObjective, turnMode },
-        topN: requestedTopN,
+        topN: finalBenchCount,
+        preservePrysmaradites: diversityMode === 'prysma',
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
+      const diversified = diversifyBuilds(combat.results, diversityMode, requestedTopN);
       output = {
         ...output,
-        results: combat.results,
+        results: diversified,
         diagnostics: {
           ...(output.diagnostics || {}),
           combatFeedback: feedbackDiagnostics,
-          combatRefine: { ...combat.diagnostics, spellPool: combatSpells.length, element: combatObjective.element || 'multi', turnMode }
+          resultDiversity: {
+            mode: diversityMode,
+            candidates: combat.results.length,
+            returned: diversified.length
+          },
+          combatRefine: {
+            ...combat.diagnostics,
+            spellPool: combatSpells.length,
+            element: combatObjective.element || 'multi',
+            turnMode
+          }
         }
       };
-    } else if (output.results?.length > requestedTopN) {
-      output.results = output.results.slice(0, requestedTopN);
+    } else if (output.results?.length) {
+      const diversified = diversifyBuilds(output.results, diversityMode, requestedTopN);
+      output.results = diversified;
+      output.diagnostics = {
+        ...(output.diagnostics || {}),
+        resultDiversity: {
+          mode: diversityMode,
+          candidates: Math.min(searchTopN, output.results.length),
+          returned: diversified.length
+        }
+      };
     }
 
     self.postMessage({ type: 'result', requestId, output });

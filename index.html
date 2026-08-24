@@ -76,6 +76,16 @@
             <p id="combat-spell-summary" class="hint"></p>
             <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible.</p>
           </div>
+
+          <label class="field">Variété du Top 10
+            <select id="result-diversity">
+              <option value="gear" selected>Stuffs différents · au moins 3 pièces</option>
+              <option value="prysma">Prysmaradites différentes</option>
+              <option value="gear-4">Stuffs très différents · au moins 4 pièces</option>
+              <option value="score">Performance pure · variations autorisées</option>
+            </select>
+          </label>
+          <p class="hint">Le score reste toujours celui du meilleur tour. Ce réglage change seulement la variété des builds affichés dans le Top 10.</p>
         </section>
 
         <section class="panel">
@@ -124,8 +134,8 @@
     </div>
   </main>
 
-  <script type="module" src="js/app-experimental.js?v=20260824-1"></script>
+  <script type="module" src="js/app-experimental.js?v=20260824-2"></script>
   <script type="module" src="js/spell-ui-enhancements.js?v=20260824-4"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-1').catch(() => {});</script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-2').catch(() => {});</script>
 </body>
 </html>
