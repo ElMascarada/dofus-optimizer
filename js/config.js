@@ -1,4 +1,4 @@
-export const APP_VERSION = '0.13.0-exp.1';
+export const APP_VERSION = '0.13.1';
 
 export const ELEMENTS = ['earth', 'fire', 'water', 'air'];
 
