@@ -19,6 +19,7 @@ on:
       - 'scripts/sync-spells.mjs'
       - 'scripts/normalize-dofusdude.mjs'
       - 'scripts/normalize-spells.mjs'
+      - 'scripts/sync-spell-icons.mjs'
       - 'package.json'
 
 permissions:
@@ -60,9 +61,10 @@ jobs:
             data/normalized/coverage-report.md \
             data/normalized/spell-data.json \
             data/normalized/spell-coverage-report.json \
-            data/normalized/spell-coverage-report.md
+            data/normalized/spell-coverage-report.md \
+            assets/spells
           if git diff --cached --quiet; then
-            echo "Dofus data is already current."
+            echo "Dofus data and spell icons are already current."
             exit 0
           fi
           VERSION=$(node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync('./data/normalized/dofus-data.json','utf8')); console.log(d.gameVersion?.version || 'unknown')")
