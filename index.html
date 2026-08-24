@@ -26,7 +26,7 @@
           <h2>1. Classe & sorts</h2>
           <label class="field">Classe<select id="breed-select" disabled></select></label>
           <div id="spell-list"><div class="empty">Chargement du catalogue de sorts…</div></div>
-          <p class="hint">Les variantes offensives sont signalées dans la liste. En mode meilleur tour, les sorts de support certifiés sont aussi utilisés automatiquement, même s’ils ne sont pas cochables ici.</p>
+          <p class="hint">Les variantes sont signalées dans la liste. En optimisation automatique, les sorts de support certifiés sont utilisés eux aussi sans avoir besoin de les cocher.</p>
         </section>
 
         <section class="panel">
@@ -34,17 +34,27 @@
           <label class="field">Mode
             <select id="objective-mode">
               <option value="manual">Benchmark / combo manuel</option>
-              <option value="combat">Meilleur tour automatique</option>
+              <option value="combat">Optimisation automatique</option>
             </select>
           </label>
 
+          <label class="field">Tour(s) à optimiser<select id="turn-mode"></select></label>
+
           <div id="manual-objective-controls">
-            <label class="field">Objectif de tours<select id="turn-mode"></select></label>
             <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés.</p>
           </div>
 
           <div id="combat-objective-controls" class="combat-objective-controls" hidden>
             <div class="form-grid">
+              <label class="field">Élément
+                <select id="combat-element">
+                  <option value="earth">Terre</option>
+                  <option value="fire">Feu</option>
+                  <option value="water">Eau</option>
+                  <option value="air">Air</option>
+                  <option value="multi">Multi</option>
+                </select>
+              </label>
               <label class="field">Cibles
                 <select id="combat-target-mode">
                   <option value="single">1 cible</option>
@@ -52,13 +62,6 @@
                 </select>
               </label>
               <label class="field">Cibles touchées en zone<input id="combat-area-targets" type="number" min="2" max="8" value="3"></label>
-              <label class="field">Horizon
-                <select id="combat-turns">
-                  <option value="1">1 tour</option>
-                  <option value="2">T1 + T2</option>
-                  <option value="3">T1 + T2 + T3</option>
-                </select>
-              </label>
               <label class="field">Classement
                 <select id="combat-metric">
                   <option value="total-damage">Dégâts totaux</option>
@@ -67,7 +70,8 @@
               </label>
             </div>
             <label class="toggle"><input id="combat-allow-support" type="checkbox" checked><span>Autoriser les sorts de buff / support</span></label>
-            <p class="hint">Le moteur dépense lui-même les PA et choisit l’ordre des sorts. Les buffs personnels (ex. Puissance) et vulnérabilités de cible (ex. Bond / Massacre lorsqu’ils sont certifiés) modifient les sorts lancés ensuite.</p>
+            <p id="combat-spell-summary" class="hint"></p>
+            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible.</p>
           </div>
         </section>
 
