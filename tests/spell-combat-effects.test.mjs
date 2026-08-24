@@ -59,6 +59,32 @@ test('normalizes a x115% damage-taken representation to +15%', () => {
   assert.deepEqual(result.modifiers[0].stats, { finalDamageTakenPct: 15 });
 });
 
+test('extracts a generic fixed damage buff like Furia', () => {
+  const result = extractDeterministicCombatModifiers(
+    [effect(5000, 40, { duration: 2 })],
+    registry('#1{{~1~2 à }}#2 Dommages'),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 1);
+  assert.deepEqual(result.modifiers[0].stats, { damage: 40 });
+});
+
+test('extracts temporary melee and ranged damage buffs from class spells', () => {
+  const melee = extractDeterministicCombatModifiers(
+    [effect(5000, 10, { duration: 2 })],
+    registry('#1% Dommages mêlée'),
+    { minRange: 0 }
+  );
+  assert.deepEqual(melee.modifiers[0].stats, { meleeDamagePct: 10 });
+
+  const ranged = extractDeterministicCombatModifiers(
+    [effect(5001, 10, { duration: 2 })],
+    registry('#1% Dommages distance', 5001),
+    { minRange: 0 }
+  );
+  assert.deepEqual(ranged.modifiers[0].stats, { rangedDamagePct: 10 });
+});
+
 test('does not turn a negative Power effect into a player buff', () => {
   const result = extractDeterministicCombatModifiers(
     [effect(5000, 100)],
@@ -77,6 +103,25 @@ test('recognizes Ankama formatted leading minus as a malus', () => {
   );
   assert.equal(result.modifiers.length, 0);
   assert.equal(result.ignored[0].reason, 'negative');
+});
+
+test('recognizes an Ankama minus embedded after a template separator', () => {
+  const result = extractDeterministicCombatModifiers(
+    [effect(5000, 13290, { diceNum: 13290, diceSide: 1 })],
+    registry('#1 : -#3 PA'),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 0);
+  assert.equal(result.ignored[0].reason, 'negative');
+});
+
+test('does not confuse resistance Critique with a Crit buff', () => {
+  const result = extractDeterministicCombatModifiers(
+    [effect(5000, 30)],
+    registry('#1 Résistance Critique'),
+    { minRange: 0 }
+  );
+  assert.equal(result.modifiers.length, 0);
 });
 
 test('never reinterprets a direct elemental hit as a temporary flat-damage buff', () => {
