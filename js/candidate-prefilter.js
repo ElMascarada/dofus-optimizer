@@ -15,10 +15,6 @@ const GENERIC_OFFENSE_KEYS = [
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
-const LEVEL_200_EQUIPMENT_SLOTS = new Set([
-  'hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield'
-]);
-
 const SLOT_LIMITS = Object.freeze({
   dofus: 22,
   ring: 20,
@@ -54,11 +50,6 @@ export function activeSpellElements(selections = []) {
     }
   }
   return [...elements];
-}
-
-function optimizerItemIsEligible(item) {
-  if (!LEVEL_200_EQUIPMENT_SLOTS.has(item?.slot)) return true;
-  return Number(item?.level || 0) === 200;
 }
 
 function effectiveSearchConstraints(constraints = {}) {
@@ -334,7 +325,10 @@ export function prefilterItems({
   maxRelevantSets = MAX_RELEVANT_SETS,
   constraintReservePerStat = CONSTRAINT_RESERVE_PER_STAT
 } = {}) {
-  const eligibleItems = (items || []).filter(optimizerItemIsEligible);
+  // The normalization layer is the single source of truth for the endgame item
+  // scope (currently classic equipment level 190–200, plus Dofus/trophies and
+  // companions). The optimizer must not silently narrow that certified pool.
+  const eligibleItems = items || [];
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
   const searchConstraints = effectiveSearchConstraints(constraints);
