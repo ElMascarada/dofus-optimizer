@@ -1,4 +1,4 @@
-const CACHE = 'dofus-optimizer-v0.13.6';
+const CACHE = 'dofus-optimizer-v0.13.7';
 const APP_SHELL = [
   './',
   './index.html',
@@ -37,13 +37,17 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(APP_SHELL)));
 });
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(caches.keys().then((keys) => Promise.all(
-    keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
-  )));
+  event.waitUntil(Promise.all([
+    caches.keys().then((keys) => Promise.all(
+      keys.filter((key) => key !== CACHE).map((key) => caches.delete(key))
+    )),
+    self.clients.claim()
+  ]));
 });
 
 self.addEventListener('fetch', (event) => {
