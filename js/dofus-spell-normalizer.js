@@ -35,6 +35,18 @@ function number(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function uniqueNumericIds(values = []) {
+  const seen = new Set();
+  const output = [];
+  for (const raw of values) {
+    const id = number(raw, -1);
+    if (id < 0 || seen.has(id)) continue;
+    seen.add(id);
+    output.push(id);
+  }
+  return output;
+}
+
 export function releaseRecords(payload = {}, className = null) {
   const refs = arrayField(payload?.references?.RefIds);
   return refs
@@ -205,9 +217,24 @@ function normalizeOneSpell({ spell, level, breed, translations }) {
   };
 }
 
+function variantIndex(variantsPayload = {}) {
+  const byBreed = new Map();
+  for (const variant of releaseRecords(variantsPayload)) {
+    const breedId = number(variant?.breedId ?? variant?.breed_id ?? variant?.breed?.id, -1);
+    if (breedId < 0) continue;
+    const spellIds = uniqueNumericIds(arrayField(variant?.spellIds ?? variant?.spell_ids ?? variant?.spells));
+    if (!spellIds.length) continue;
+    if (!byBreed.has(breedId)) byBreed.set(breedId, new Set());
+    const target = byBreed.get(breedId);
+    for (const spellId of spellIds) target.add(spellId);
+  }
+  return byBreed;
+}
+
 export function normalizeDofusSpellCatalog({
   spellsPayload = {},
   levelsPayload = {},
+  variantsPayload = {},
   breedsPayload = {},
   effectsPayload = {},
   translationsPayload = {},
@@ -221,8 +248,9 @@ export function normalizeDofusSpellCatalog({
   const translations = translationEntries(translationsPayload);
   const spells = releaseRecords(spellsPayload, 'SpellData');
   const levels = releaseRecords(levelsPayload, 'SpellLevelData');
+  const variantsByBreed = variantIndex(variantsPayload);
   const breeds = releaseRecords(breedsPayload, 'BreedData')
-    .filter((breed) => arrayField(breed.breedSpellsId).length)
+    .filter((breed) => arrayField(breed.breedSpellsId).length || variantsByBreed.has(number(breed.id, -1)))
     .sort((a, b) => number(a.sortIndex, 0) - number(b.sortIndex, 0) || number(a.id, 0) - number(b.id, 0));
 
   const spellsById = new Map(spells.map((spell) => [number(spell.id, -1), spell]));
@@ -231,6 +259,7 @@ export function normalizeDofusSpellCatalog({
   const normalizedBreeds = [];
   const skipped = {};
   let classSpellRefs = 0;
+  let variantSpellRefs = 0;
   let offensiveCandidates = 0;
 
   for (const breed of breeds) {
@@ -238,13 +267,15 @@ export function normalizeDofusSpellCatalog({
     const breedId = `breed-${breedAnkamaId}`;
     const breedName = translations[String(breed.shortNameId)] || `Classe #${breedAnkamaId}`;
     const breedSpellIds = [];
-    let breedTotal = 0;
+    const baseSpellIds = new Set(uniqueNumericIds(arrayField(breed.breedSpellsId)));
+    const variantSpellIds = variantsByBreed.get(breedAnkamaId) || new Set();
+    const sourceSpellIds = uniqueNumericIds([...baseSpellIds, ...variantSpellIds]);
+    classSpellRefs += sourceSpellIds.length;
+    variantSpellRefs += sourceSpellIds.filter((id) => variantSpellIds.has(id) && !baseSpellIds.has(id)).length;
     let breedCertified = 0;
 
-    for (const spellIdRaw of arrayField(breed.breedSpellsId)) {
-      classSpellRefs++;
-      breedTotal++;
-      const spell = spellsById.get(number(spellIdRaw, -1));
+    for (const spellId of sourceSpellIds) {
+      const spell = spellsById.get(spellId);
       if (!spell) {
         skipped['missing-spell-record'] = (skipped['missing-spell-record'] || 0) + 1;
         continue;
@@ -260,6 +291,7 @@ export function normalizeDofusSpellCatalog({
         skipped[result.reason] = (skipped[result.reason] || 0) + 1;
         continue;
       }
+      result.spell.isVariant = variantSpellIds.has(spellId) && !baseSpellIds.has(spellId);
       normalizedSpells.push(result.spell);
       breedSpellIds.push(result.spell.id);
       breedCertified++;
@@ -270,7 +302,7 @@ export function normalizeDofusSpellCatalog({
       ankamaId: breedAnkamaId,
       name: breedName,
       spellIds: breedSpellIds,
-      sourceSpellCount: breedTotal,
+      sourceSpellCount: sourceSpellIds.length,
       certifiedSpellCount: breedCertified
     });
   }
@@ -291,6 +323,7 @@ export function normalizeDofusSpellCatalog({
     coverage: {
       breedCount: normalizedBreeds.length,
       classSpellRefs,
+      variantSpellRefs,
       offensiveCandidates,
       certified: normalizedSpells.length,
       skipped
