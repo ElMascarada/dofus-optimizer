@@ -36,15 +36,15 @@
           <h2>2. Objectif de calcul</h2>
           <label class="field">Mode
             <select id="objective-mode">
-              <option value="manual">Benchmark / combo manuel</option>
-              <option value="combat">Optimisation automatique</option>
+              <option value="combat" selected>Meilleur tour possible · automatique</option>
+              <option value="manual">Benchmark / combo imposé</option>
             </select>
           </label>
 
           <label class="field">Tour(s) à optimiser<select id="turn-mode"></select></label>
 
           <div id="manual-objective-controls">
-            <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés.</p>
+            <p class="hint">Le benchmark manuel évalue exactement les sorts et le nombre de lancers que tu imposes. Il ne cherche pas lui-même une rotation et refuse désormais les tours impossibles à lancer avec les PA disponibles.</p>
           </div>
 
           <div id="combat-objective-controls" class="combat-objective-controls" hidden>
@@ -74,7 +74,7 @@
             </div>
             <label class="toggle"><input id="combat-allow-support" type="checkbox" checked><span>Autoriser les sorts de buff / support</span></label>
             <p id="combat-spell-summary" class="hint"></p>
-            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible.</p>
+            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. Le détail exact de chaque tour est affiché en haut de la fiche du stuff final.</p>
           </div>
 
           <label class="field">Variété du Top 10
@@ -135,7 +135,8 @@
   </main>
 
   <script type="module" src="js/app-experimental.js?v=20260824-2"></script>
+  <script type="module" src="js/turn-plan-ui.js?v=20260824-1"></script>
   <script type="module" src="js/spell-ui-enhancements.js?v=20260824-4"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-2').catch(() => {});</script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-3').catch(() => {});</script>
 </body>
 </html>
