@@ -17,6 +17,18 @@ const FLAT_DAMAGE_STAT = {
   air: 'damageAir'
 };
 
+// These Huppermage spells expose one damage effect per element in Ankama data,
+// but only one elemental branch is actually resolved on a cast. Treating the
+// four effects as four simultaneous hits grossly overvalues them.
+const HUPPERMAGE_ONE_OF_ELEMENT_IDS = new Set([
+  'spell-13670', // Runification
+  'spell-13672', // Drain Élémentaire
+  'spell-13683', // Traversée
+  'spell-13710', // Manifestation
+  'spell-13724', // Surcharge Runique
+  'spell-14342' // Torrent Arcanique
+]);
+
 function midpoint(range) {
   if (Array.isArray(range)) return (Number(range[0]) + Number(range[1])) / 2;
   return Number(range || 0);
@@ -50,10 +62,31 @@ export function statsForTurn(baseStats, items, turn, scenario = {}) {
   return statsForTurnDetailed(baseStats, items, turn, scenario).stats;
 }
 
-function spellRawTotals(spell, stats) {
+export function spellHitVariants(spell) {
+  const hits = Array.isArray(spell?.hits) ? spell.hits : [];
+  if (!hits.length) return [];
+
+  const id = String(spell?.id || '');
+  if (!HUPPERMAGE_ONE_OF_ELEMENT_IDS.has(id)) {
+    const elements = [...new Set(hits.map((hit) => hit?.element).filter(Boolean))];
+    return [{ hits, element: elements.length === 1 ? elements[0] : null }];
+  }
+
+  const elemental = hits.filter((hit) => ['earth', 'fire', 'water', 'air'].includes(hit?.element));
+  const distinct = new Set(elemental.map((hit) => hit.element));
+  if (elemental.length === 4 && distinct.size === 4) {
+    return elemental.map((hit) => ({ hits: [hit], element: hit.element }));
+  }
+
+  // Safe fallback if Ankama changes the payload shape: never invent branching.
+  const elements = [...new Set(hits.map((hit) => hit?.element).filter(Boolean))];
+  return [{ hits, element: elements.length === 1 ? elements[0] : null }];
+}
+
+function spellRawTotalsForHits(hits, stats) {
   let nonCrit = 0;
   let crit = 0;
-  for (const hit of spell.hits || []) {
+  for (const hit of hits || []) {
     const element = hit.element || 'earth';
     const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
     const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
@@ -65,12 +98,12 @@ function spellRawTotals(spell, stats) {
   return { nonCrit, crit };
 }
 
-function spellRawRanges(spell, stats) {
+function spellRawRangesForHits(hits, stats) {
   let normalMin = 0;
   let normalMax = 0;
   let critMin = 0;
   let critMax = 0;
-  for (const hit of spell.hits || []) {
+  for (const hit of hits || []) {
     const element = hit.element || 'earth';
     const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
     const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
@@ -89,35 +122,71 @@ function damageSource(spell) {
   return spell?.damageSource === 'weapon' ? 'weapon' : 'spell';
 }
 
-function damageMultiplier(spell, stats, turn) {
-  // Melee / ranged modes are intentionally ignored by the optimizer. The user
-  // optimizes a spell package, not a battlefield positioning mode.
+function positionDamage(spell, stats) {
+  const options = Array.isArray(spell?.distanceOptions) ? spell.distanceOptions : [];
+  const melee = options.includes('melee');
+  const ranged = options.includes('ranged');
+
+  if (melee && !ranged) return { pct: stat(stats, 'meleeDamagePct'), distance: 'melee' };
+  if (ranged && !melee) return { pct: stat(stats, 'rangedDamagePct'), distance: 'ranged' };
+  if (melee && ranged) {
+    const meleePct = stat(stats, 'meleeDamagePct');
+    const rangedPct = stat(stats, 'rangedDamagePct');
+    return rangedPct > meleePct
+      ? { pct: rangedPct, distance: 'ranged' }
+      : { pct: meleePct, distance: 'melee' };
+  }
+  return { pct: 0, distance: null };
+}
+
+function damageMultiplierDetails(spell, stats, turn) {
   const sourcePct = damageSource(spell) === 'weapon'
     ? stat(stats, 'weaponDamagePct')
     : stat(stats, 'spellDamagePct');
+  const position = positionDamage(spell, stats);
   const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
-  return (1 + sourcePct / 100) * (1 + finalPct / 100);
+
+  // Dofus damage families are separate multiplicative layers. Do not add them
+  // together: 10% spell and 10% melee is 1.10 * 1.10, not 1.20.
+  const multiplier = (1 + sourcePct / 100)
+    * (1 + position.pct / 100)
+    * (1 + finalPct / 100);
+  return { multiplier, distance: position.distance };
 }
 
-export function spellDamageBreakdown(spell, stats, turn = 1) {
+function breakdownForHits(spell, hits, stats, turn, element = null) {
   const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
-  const totals = spellRawTotals(spell, stats);
-  const ranges = spellRawRanges(spell, stats);
-  const multiplier = damageMultiplier(spell, stats, turn);
+  const totals = spellRawTotalsForHits(hits, stats);
+  const ranges = spellRawRangesForHits(hits, stats);
+  const { multiplier, distance } = damageMultiplierDetails(spell, stats, turn);
   const expected = (totals.nonCrit * (1 - critChance) + totals.crit * critChance) * multiplier;
   return {
     expected,
     critChancePct: critChance * 100,
     normal: ranges.normal.map((value) => value * multiplier),
-    critical: ranges.critical.map((value) => value * multiplier)
+    critical: ranges.critical.map((value) => value * multiplier),
+    element,
+    distance,
+    hits
   };
 }
 
+export function spellDamageVariants(spell, stats, turn = 1) {
+  return spellHitVariants(spell).map((variant) =>
+    breakdownForHits(spell, variant.hits, stats, turn, variant.element)
+  );
+}
+
+export function spellDamageBreakdown(spell, stats, turn = 1) {
+  const variants = spellDamageVariants(spell, stats, turn);
+  if (!variants.length) {
+    return { expected: 0, critChancePct: 0, normal: [0, 0], critical: [0, 0], element: null, distance: null, hits: [] };
+  }
+  return variants.reduce((best, current) => current.expected > best.expected ? current : best);
+}
+
 export function spellExpectedDamage(spell, stats, turn = 1) {
-  const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
-  const totals = spellRawTotals(spell, stats);
-  const expected = totals.nonCrit * (1 - critChance) + totals.crit * critChance;
-  return expected * damageMultiplier(spell, stats, turn);
+  return spellDamageBreakdown(spell, stats, turn).expected;
 }
 
 // Safe upper bound used only by branch-and-bound. It deliberately allows each
@@ -125,8 +194,13 @@ export function spellExpectedDamage(spell, stats, turn = 1) {
 // of assuming one shared achievable critical chance. That can overestimate a
 // build, but it can never prune away a real optimum.
 export function spellDamageUpperBound(spell, stats, turn = 1) {
-  const totals = spellRawTotals(spell, stats);
-  return Math.max(totals.nonCrit, totals.crit) * damageMultiplier(spell, stats, turn);
+  const { multiplier } = damageMultiplierDetails(spell, stats, turn);
+  let best = 0;
+  for (const variant of spellHitVariants(spell)) {
+    const totals = spellRawTotalsForHits(variant.hits, stats);
+    best = Math.max(best, Math.max(totals.nonCrit, totals.crit) * multiplier);
+  }
+  return best;
 }
 
 export function selectedTurnsForMode(mode) {
