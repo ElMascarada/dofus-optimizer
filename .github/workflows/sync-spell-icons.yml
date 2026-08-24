@@ -1,0 +1,42 @@
+name: Sync spell icons
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/sync-spell-icons.yml'
+      - 'scripts/sync-spell-icons.mjs'
+      - 'data/normalized/spell-data.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: spell-icon-sync
+  cancel-in-progress: true
+
+jobs:
+  icons:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download local spell icons
+        run: npm run sync:spell-icons
+      - name: Commit spell icons
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/spells
+          if git diff --cached --quiet; then
+            echo "Spell icons are already current."
+            exit 0
+          fi
+          git commit -m "assets: sync spell icons"
+          git push
