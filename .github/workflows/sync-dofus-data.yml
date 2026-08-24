@@ -41,6 +41,27 @@ jobs:
           node-version: 22
       - name: Sync and normalize Dofusdude
         run: npm run sync:normalize
+      - name: Inspect raw variable spell source records
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const raw = JSON.parse(fs.readFileSync('data/raw/spell_levels.json', 'utf8'));
+          const wanted = new Set([41327, 41355, 41764, 85268]);
+          function walk(value, path = '$') {
+            if (Array.isArray(value)) {
+              value.forEach((entry, index) => walk(entry, `${path}[${index}]`));
+              return;
+            }
+            if (!value || typeof value !== 'object') return;
+            const ids = [value.id, value.ankama_id, value.ankamaId].map(Number);
+            if (ids.some((id) => wanted.has(id))) {
+              console.log(`RAW SPELL LEVEL ${path}`);
+              console.log(JSON.stringify(value, null, 2));
+            }
+            for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
+          }
+          walk(raw);
+          NODE
       - name: Run tests on normalized code
         run: |
           npm run check
