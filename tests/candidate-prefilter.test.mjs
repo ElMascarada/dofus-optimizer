@@ -10,8 +10,14 @@ const fireSpell = {
   id: 'fire',
   hits: [{ element: 'fire', normal: [10, 10] }]
 };
+const airSpell = {
+  id: 'air',
+  baseCritPct: 20,
+  hits: [{ element: 'air', normal: [100, 100], crit: [120, 120] }]
+};
 
 const earthSelections = [{ enabled: true, weight: 1, spell: earthSpell, casts: { 1: 1 } }];
+const airSelections = [{ enabled: true, weight: 1, spell: airSpell, casts: { 1: 1 } }];
 
 function ids(result) {
   return result.items.map((item) => item.id);
@@ -105,7 +111,7 @@ test('off-element set piece remains eligible when its set bonus helps the target
   assert.ok(ids(result).includes('fire-set-cape'));
 });
 
-test('large multi-pick slots are capped aggressively before exact search', () => {
+test('large multi-pick slots stay bounded before exact search', () => {
   const items = Array.from({ length: 100 }, (_, index) => ({
     id: `d-${index}`,
     slot: 'dofus',
@@ -118,8 +124,42 @@ test('large multi-pick slots are capped aggressively before exact search', () =>
     slotRules: [{ id: 'dofus', count: 6 }]
   });
 
-  assert.equal(result.items.length, 22);
-  assert.equal(result.diagnostics.slots[0].afterShortlist, 22);
+  assert.equal(result.items.length, 28);
+  assert.equal(result.diagnostics.slots[0].afterShortlist, 28);
+});
+
+test('mono Air prefilter cannot throw away Pourpre or 6% spell damage behind raw Agility trophies', () => {
+  const rawAir = Array.from({ length: 60 }, (_, index) => gear(`air-${index}`, 'dofus', { air: 120 - index }));
+  const pourpre = gear('pourpre', 'dofus', { power: 80 }, { typeName: 'Dofus' });
+  const arcaniste = gear('arcaniste', 'dofus', { spellDamagePct: 6, meleeResistancePct: -6, rangedResistancePct: -6 }, { typeName: 'Trophée' });
+  const ocre = gear('ocre', 'dofus', { ap: 1 }, { typeName: 'Dofus' });
+
+  const result = prefilterItems({
+    items: [...rawAir, pourpre, arcaniste, ocre],
+    selections: airSelections,
+    constraints: { ap: 12 },
+    slotRules: [{ id: 'dofus', count: 6 }]
+  });
+
+  assert.ok(ids(result).includes('pourpre'), '80 power must survive the shortlist');
+  assert.ok(ids(result).includes('arcaniste'), '6% spell damage must survive the shortlist');
+  assert.ok(ids(result).includes('ocre'), 'Ocre must survive as an AP structure option');
+});
+
+test('crit and crit-damage companion specialists survive mono-element prefiltering', () => {
+  const rawAir = Array.from({ length: 50 }, (_, index) => gear(`pet-air-${index}`, 'companion', { air: 160 - index }));
+  const kokulte = gear('kokulte', 'companion', { crit: 15, critDamage: 40 });
+  const kougnard = gear('kougnard', 'companion', { power: 70, critDamage: 40 });
+
+  const result = prefilterItems({
+    items: [...rawAir, kokulte, kougnard],
+    selections: airSelections,
+    constraints: {},
+    slotRules: [{ id: 'companion', count: 1 }]
+  });
+
+  assert.ok(ids(result).includes('kokulte'));
+  assert.ok(ids(result).includes('kougnard'));
 });
 
 test('a strong two-piece set is kept as a coherent block even when both items are weak alone', () => {
