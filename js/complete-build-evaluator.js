@@ -47,6 +47,12 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
         name: spell.name,
         iconId: spell.iconId,
         apCost: spell.apCost,
+        casts: {
+          1: Math.max(0, Number(selection.casts?.[1] || 0)),
+          2: Math.max(0, Number(selection.casts?.[2] || 0)),
+          3: Math.max(0, Number(selection.casts?.[3] || 0))
+        },
+        weight: Math.max(0, Number(selection.weight ?? 1)),
         averageDamage: average(entries.map((entry) => entry.expected)),
         critChancePct: average(entries.map((entry) => entry.critChancePct)),
         normal: [
@@ -60,6 +66,53 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
         perTurn
       };
     });
+}
+
+function buildRequestedTurnPlan(selections, spellBreakdowns, perTurn = {}, effectiveStatsByTurn = {}) {
+  const breakdownById = new Map((spellBreakdowns || []).map((entry) => [String(entry.id), entry]));
+  const activeTurns = Object.keys(perTurn).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
+  const sequence = [];
+
+  for (const turn of activeTurns) {
+    for (const selection of selections || []) {
+      if (!selection?.enabled || !selection?.spell || !(selection.spell.hits || []).length) continue;
+      const casts = Math.max(0, Number(selection.casts?.[turn] || 0));
+      if (!casts) continue;
+      const spell = selection.spell;
+      const breakdown = breakdownById.get(String(spell.id));
+      const perCast = Math.max(0, Number(breakdown?.perTurn?.[turn]?.expected || 0));
+      const weight = Math.max(0, Number(selection.weight ?? 1));
+      for (let cast = 0; cast < casts; cast++) {
+        sequence.push({
+          turn,
+          spellId: spell.id,
+          ankamaId: spell.ankamaId,
+          name: spell.name,
+          iconId: spell.iconId,
+          apCost: Math.max(0, Number(spell.apCost || 0)),
+          expectedDamage: perCast * weight,
+          rawExpectedDamage: perCast,
+          weight,
+          castNumber: cast + 1,
+          appliedModifiers: []
+        });
+      }
+    }
+  }
+
+  return {
+    kind: 'requested-combo',
+    objective: {
+      mode: 'manual',
+      activeTurns,
+      targetMode: 'single',
+      areaTargets: 1
+    },
+    sequence,
+    perTurn: { ...perTurn },
+    totalDamage: activeTurns.reduce((sum, turn) => sum + Number(perTurn?.[turn] || 0), 0),
+    availableApByTurn: Object.fromEntries(activeTurns.map((turn) => [turn, Number(effectiveStatsByTurn?.[turn]?.ap || 0)]))
+  };
 }
 
 export function evaluateCompleteBuild({
@@ -125,16 +178,24 @@ export function evaluateCompleteBuild({
     scenario
   });
 
-  const warnings = [];
-  if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
-    warnings.push('unresolved-passive');
+  // A displayed score must correspond to a turn the character can actually
+  // execute. Previously we kept impossible builds and only attached a
+  // `turn-constraints` warning, which could rank a 15+ PA combo on a 12 PA
+  // build. Reject it instead; temporary PA from Prysmaradites is already
+  // included in `turnConstraints`, so legal burst turns still pass.
+  if (!turnConstraints.meets) {
+    const unresolved = turnConstraints.unresolvedPassiveContexts?.length > 0;
+    return {
+      result: null,
+      reason: unresolved ? 'unresolved-passive' : 'turn-constraints',
+      warnings: unresolved ? ['unresolved-passive'] : ['turn-constraints']
+    };
   }
-  if (Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
-  if (Object.keys(turnConstraints.deficitsByTurn || {}).length) warnings.push('turn-constraints');
 
   const effectiveStatsByTurn = {};
   for (const turn of [1, 2, 3]) effectiveStatsByTurn[turn] = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
   const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
+  const combatPlan = buildRequestedTurnPlan(selections, spellBreakdowns, fm.objective.perTurn, effectiveStatsByTurn);
 
   return {
     result: {
@@ -144,6 +205,7 @@ export function evaluateCompleteBuild({
       stats: fm.stats,
       effectiveStatsByTurn,
       spellBreakdowns,
+      combatPlan,
       characteristics: charResult.allocation,
       characteristicRequirements: minimumStats,
       fm: {
@@ -153,17 +215,12 @@ export function evaluateCompleteBuild({
         assignments: fm.assignments
       },
       activeSets,
-      warnings,
+      warnings: [],
       itemConditionsSatisfied: true,
-      turnFeasible: turnConstraints.meets,
-      unresolvedPassiveContexts: [
-        ...new Set([
-          ...(fm.objective.unresolvedPassiveContexts || []),
-          ...(turnConstraints.unresolvedPassiveContexts || [])
-        ])
-      ]
+      turnFeasible: true,
+      unresolvedPassiveContexts: []
     },
     reason: null,
-    warnings
+    warnings: []
   };
 }
