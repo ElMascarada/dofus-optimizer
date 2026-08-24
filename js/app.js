@@ -224,6 +224,43 @@ function renderActiveSets(build) {
   `).join('');
 }
 
+function spellIconUrl(spell) {
+  const iconId = Number(spell?.iconId || 0);
+  if (!iconId) return '';
+  return `https://api.dofusdu.de/dofus3/v1/img/spell/${iconId}-96.png`;
+}
+
+function renderSpellDamageCards(build) {
+  const spells = Array.isArray(build.spellBreakdowns) ? build.spellBreakdowns : [];
+  if (!spells.length) return '';
+  const cards = spells.map((spell) => {
+    const iconUrl = spellIconUrl(spell);
+    const icon = iconUrl
+      ? `<span class="spell-damage-icon"><img src="${escapeHtml(iconUrl)}" alt="" loading="lazy"><span>✦</span></span>`
+      : '<span class="spell-damage-icon"><span>✦</span></span>';
+    return `
+      <details class="spell-damage-card">
+        <summary>
+          ${icon}
+          <span class="spell-damage-meta"><strong>${escapeHtml(spell.name)}</strong><small>${fmt(spell.apCost)} PA · moyenne par lancer</small></span>
+          <b class="spell-damage-average">${fmt(spell.averageDamage)}</b>
+        </summary>
+        <div class="spell-damage-expanded">
+          <div><span>Dégâts normaux</span><b>${fmt(spell.normal?.[0])} – ${fmt(spell.normal?.[1])}</b></div>
+          <div><span>Dégâts critiques</span><b>${fmt(spell.critical?.[0])} – ${fmt(spell.critical?.[1])}</b></div>
+          <div><span>Chance de critique</span><b>${fmt(spell.critChancePct)}%</b></div>
+        </div>
+      </details>
+    `;
+  }).join('');
+  return `
+    <section class="detail-section spell-damage-section">
+      <div class="spell-damage-heading"><div><h3>Dégâts moyens par sort</h3><p>Moyenne réelle par lancer, critique pondéré par sa probabilité.</p></div><small>Cliquer sur un sort pour détailler</small></div>
+      <div class="spell-damage-list">${cards}</div>
+    </section>
+  `;
+}
+
 function ensureBuildModal() {
   if (modalReady) return;
   document.body.insertAdjacentHTML('beforeend', `
@@ -296,6 +333,7 @@ function openBuildModal(build, rank) {
         <section class="detail-section"><h3>Panoplies équipées</h3>${renderActiveSets(build)}</section>
       </div>
     </div>
+    ${renderSpellDamageCards(build)}
   `;
 
   const modal = $('#build-modal');
