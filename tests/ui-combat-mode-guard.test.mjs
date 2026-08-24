@@ -5,10 +5,12 @@ import { readFile } from 'node:fs/promises';
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../service-worker.js', import.meta.url), 'utf8');
 
-test('automatic combat mode is forced before a non-explicit solve', () => {
-  assert.match(index, /manualExplicitlySelected/);
+test('primary UI exposes only the automatic combat solver', () => {
+  assert.match(index, /<option value="combat" selected>Optimisation automatique · meilleur tour<\/option>/);
+  assert.doesNotMatch(index, /<option value="manual">/);
   assert.match(index, /addEventListener\('click', forceAutomaticMode, true\)/);
   assert.match(index, /addEventListener\('pageshow', forceAutomaticMode\)/);
+  assert.match(index, /AUTO ROTATION · build 20260824-9/);
 });
 
 test('fresh service worker activates immediately', () => {
