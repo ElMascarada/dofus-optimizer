@@ -49,6 +49,7 @@ const ocre = item('ocre', 'dofus', { ap: 1 }, { typeName: 'Dofus' });
 const pourpre = item('pourpre', 'dofus', { power: 80 }, { typeName: 'Dofus' });
 const strongPower = Array.from({ length: 4 }, (_, index) => item(`power-${index}`, 'dofus', { power: 70 }));
 const air50 = item('air-50', 'dofus', { air: 50 });
+const cawotte = item('cawotte', 'dofus', { wisdom: 60 }, { typeName: 'Dofus' });
 
 function evaluate(items) {
   return evaluateCompleteBuild({
@@ -63,12 +64,14 @@ function evaluate(items) {
 }
 
 test('refiner compares companion + Dofus together with real expected crit damage', () => {
-  const source = evaluate([...skeleton, statPet, ...weakDofus]);
+  // Seed the build with a deliberately useless real Dofus to ensure current
+  // equipment does not get privileged over a strictly better offensive option.
+  const source = evaluate([...skeleton, statPet, ...weakDofus.slice(0, 5), cawotte]);
   assert.ok(source);
 
   const output = refineOffensiveSlots({
     results: [source],
-    items: [...skeleton, statPet, critPet, ...weakDofus, ocre, pourpre, ...strongPower, air50],
+    items: [...skeleton, statPet, critPet, ...weakDofus, ocre, pourpre, ...strongPower, air50, cawotte],
     sets: [],
     selections,
     constraints,
@@ -84,6 +87,7 @@ test('refiner compares companion + Dofus together with real expected crit damage
   assert.ok(bestIds.has('ocre'), 'AP should be supplied by the Dofus slot when the crit pet wins');
   assert.ok(bestIds.has('pourpre'), '80 power should be valued as 80 elemental stats');
   assert.ok(!bestIds.has('air-50'), '50 air should lose to stronger power choices when slots are limited');
+  assert.ok(!bestIds.has('cawotte'), 'zero-impact Dofus should not survive offensive refinement');
   assert.equal(output.results[0].stats.ap, 12);
   assert.equal(output.results[0].stats.mp, 6);
 });
