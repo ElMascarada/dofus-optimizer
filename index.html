@@ -62,11 +62,11 @@
 
         <section class="panel">
           <h2>5. FM offensive</h2>
-          <label class="field">% Do sorts par item
-            <select id="fm-spell"><option value="0">0 · aucun</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
+          <label class="field">FM par item
+            <select id="fm-spell"><option value="0">Aucun</option><option value="1">1% Do sorts</option><option value="2">2% Do sorts</option><option value="3" selected>3% Do sorts</option><option value="4">4% Do sorts</option></select>
           </label>
-          <label class="toggle"><input id="fm-crit" type="checkbox"><span>Autoriser +8 Do Crit si l'item n'en possède pas</span></label>
-          <p class="hint">Chaque pièce éligible compare automatiquement la FM sélectionnée et +8 Do Crit lorsque cette option est active. Choisir 0 désactive totalement les % Do sorts ajoutés.</p>
+          <label class="toggle"><input id="fm-crit" type="checkbox"><span>Comparer avec +8 Do Crit si l'item n'en possède pas</span></label>
+          <p class="hint">« Aucun » désactive toute FM offensive, y compris +8 Do Crit. Avec 1–4% sélectionné, le moteur compare la FM % Do sorts et +8 Do Crit lorsque l'option est cochée.</p>
         </section>
 
         <button id="optimize" class="primary" disabled>Optimiser le stuff</button>
