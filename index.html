@@ -135,25 +135,52 @@
   </main>
 
   <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const mode = document.getElementById('objective-mode');
-      if (!mode) return;
+    (() => {
+      let manualExplicitlySelected = false;
 
-      // Browsers may restore the previous value of a <select> across reloads.
-      // Force the primary app experience to the real combat solver on every fresh page load.
-      mode.value = 'combat';
-      mode.dispatchEvent(new Event('change', { bubbles: true }));
+      function modeSelect() {
+        return document.getElementById('objective-mode');
+      }
 
-      // Never leave result cards from one objective visible after switching to another.
-      mode.addEventListener('change', () => {
-        const output = document.getElementById('results');
-        if (!output?.querySelector('.result-card')) return;
-        output.innerHTML = '<div class="empty">Mode changé : relance l’optimisation pour recalculer le stuff et le tour avec ce mode.</div>';
+      function forceAutomaticMode() {
+        if (manualExplicitlySelected) return;
+        const mode = modeSelect();
+        if (!mode || mode.value === 'combat') return;
+        mode.value = 'combat';
+        mode.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const mode = modeSelect();
+        if (!mode) return;
+
+        // `input` is a real user interaction; browser form restoration does not
+        // count as an explicit request to switch to the benchmark/manual solver.
+        mode.addEventListener('input', () => {
+          manualExplicitlySelected = mode.value === 'manual';
+        });
+
+        forceAutomaticMode();
+
+        // The solve button is the final authority: before the app reads the
+        // select value, guarantee that a non-explicit restored value cannot
+        // silently launch the manual benchmark and return builds without a plan.
+        document.getElementById('optimize')?.addEventListener('click', forceAutomaticMode, true);
+
+        // Browsers may restore form state again on pageshow/back-forward cache.
+        window.addEventListener('pageshow', forceAutomaticMode);
+
+        // Never leave result cards from one objective visible after switching.
+        mode.addEventListener('change', () => {
+          const output = document.getElementById('results');
+          if (!output?.querySelector('.result-card')) return;
+          output.innerHTML = '<div class="empty">Mode changé : relance l’optimisation pour recalculer le stuff et le tour avec ce mode.</div>';
+        });
       });
-    });
+    })();
   </script>
-  <script type="module" src="js/app-experimental.js?v=20260824-7"></script>
-  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-7"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-7').catch(() => {});</script>
+  <script type="module" src="js/app-experimental.js?v=20260824-8"></script>
+  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-8"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-8').catch(() => {});</script>
 </body>
 </html>
