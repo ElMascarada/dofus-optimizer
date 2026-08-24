@@ -76,7 +76,10 @@ function durationTurns(effect = {}) {
 function looksNegative(description = '', effect = {}) {
   const raw = String(description).trim();
   const text = normalizeText(description);
-  if (/^-/.test(raw)) return true;
+  // Ankama templates can encode the minus sign in the middle of the template
+  // (for example "#1 : -#3 PA"). Treat these as maluses before trying to infer
+  // a stat from the PA/PM/Power wording.
+  if (/^-/.test(raw) || /:\s*-\s*#?\d*/.test(raw) || /-\s*#\d+/.test(raw)) return true;
   if (/(?:retire|reduit|diminue|malus|perd|moins)/.test(text)) return true;
   const numeric = [effect.diceNum, effect.diceSide, effect.value]
     .map(Number)
@@ -94,7 +97,14 @@ function selfTargetLikely(effect = {}, level = {}) {
 
 function statFromDescription(description = '') {
   const text = normalizeText(description);
-  if (/dommages critiques?/.test(text)) return 'critDamage';
+
+  // Defensive/reduction effects contain many of the same words as offensive
+  // stats (Critique, PA, PM, dommages). Reject them before generic matching.
+  if (/resistance|esquive|retrait|reduction/.test(text)) return null;
+
+  if (/dommages? critiques?/.test(text)) return 'critDamage';
+  if (/dommages?.*melee|melee.*dommages?/.test(text)) return 'meleeDamagePct';
+  if (/dommages?.*distance|distance.*dommages?/.test(text)) return 'rangedDamagePct';
   if (/(?:%|pourcent).*dommages.*sort|dommages.*sort.*(?:%|pourcent)/.test(text)) return 'spellDamagePct';
   if (/dommages finaux|dommages occasionnes.*%|%.*dommages occasionnes/.test(text)) return 'finalDamagePct';
   if (/puissance/.test(text)) return 'power';
@@ -111,6 +121,15 @@ function statFromDescription(description = '') {
   if (/dommages? eau/.test(text)) return 'damageWater';
   if (/dommages? terre/.test(text)) return 'damageEarth';
   if (/dommages? neutre/.test(text)) return 'damageNeutral';
+
+  // Generic fixed damage buffs such as Furia's "+40 Dommages". At this point
+  // every more specific damage family has already been handled/rejected. Only
+  // persistent effects reach this parser, so an instant hit cannot become a
+  // fake +damage buff.
+  if (/\bdommages?\b/.test(text)
+      && !/(subis|poussee|piege|arme|sort|melee|distance|final|occasionne)/.test(text)) {
+    return 'damage';
+  }
   return null;
 }
 

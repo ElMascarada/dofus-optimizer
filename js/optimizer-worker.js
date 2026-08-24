@@ -1,6 +1,7 @@
 import { searchArchitecturesV2 } from './architecture-search-v2.js';
 import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
+import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
   'deep-purple',
@@ -98,6 +99,18 @@ function mergeOutputs(primary, fallback, topN) {
   };
 }
 
+function mergeBuildCandidates(groups = [], limit = 60) {
+  const seen = new Map();
+  for (const group of groups) {
+    for (const build of group || []) {
+      const key = resultKey(build);
+      const previous = seen.get(key);
+      if (!previous || Number(build.score || 0) > Number(previous.score || 0)) seen.set(key, build);
+    }
+  }
+  return [...seen.values()].slice(0, Math.max(1, Number(limit || 60)));
+}
+
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'optimize') return;
   const { requestId, payload } = event.data;
@@ -122,6 +135,7 @@ self.addEventListener('message', (event) => {
 
     const normalizedPayload = {
       ...payload,
+      items: preferCompanionVitalityOnTies(payload?.items || []),
       selections,
       turnMode,
       scenario,
@@ -176,8 +190,55 @@ self.addEventListener('message', (event) => {
     }
 
     if (combatMode && output.results?.length) {
-      const combat = refineCombatTurns({
+      // Pass 1: solve real rotations on the broad equipment bench.
+      const feedbackPlanCount = Math.min(searchTopN, Math.max(24, requestedTopN * 3));
+      const firstCombat = refineCombatTurns({
         results: output.results,
+        spells: combatSpells,
+        combatObjective: { ...combatObjective, turnMode },
+        topN: feedbackPlanCount,
+        onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
+      });
+
+      // Pass 2: rebuild the companion/Dofus/trophy objective from spells that
+      // the real rotations actually cast. This prevents a 6% final-damage
+      // trophy, Pourpre or Nébuleux from being discarded because unrelated
+      // spells in the class kit had equal synthetic weight during preselection.
+      const feedbackSelections = buildCombatFeedbackSelections({
+        results: firstCombat.results,
+        spells: combatSpells,
+        turnMode,
+        maxPlans: 8
+      });
+
+      let finalCandidates = firstCombat.results;
+      let feedbackDiagnostics = { selections: feedbackSelections.length, refined: 0 };
+
+      if (feedbackSelections.length) {
+        const feedbackRefined = refineOffensiveSlots({
+          ...normalizedPayload,
+          selections: feedbackSelections,
+          results: firstCombat.results,
+          topN: Math.min(searchTopN, Math.max(40, requestedTopN * 4)),
+          onProgress: (progress) => self.postMessage({
+            type: 'progress',
+            requestId,
+            progress: { ...progress, label: `raffinage sur combo réel · ${progress.label || ''}` }
+          })
+        });
+        feedbackDiagnostics = {
+          selections: feedbackSelections.length,
+          ...feedbackRefined.diagnostics
+        };
+        finalCandidates = mergeBuildCandidates([
+          feedbackRefined.results,
+          firstCombat.results
+        ], Math.min(searchTopN, Math.max(50, requestedTopN * 5)));
+      }
+
+      // Final pass: only this score determines the displayed ranking.
+      const combat = refineCombatTurns({
+        results: finalCandidates,
         spells: combatSpells,
         combatObjective: { ...combatObjective, turnMode },
         topN: requestedTopN,
@@ -188,6 +249,7 @@ self.addEventListener('message', (event) => {
         results: combat.results,
         diagnostics: {
           ...(output.diagnostics || {}),
+          combatFeedback: feedbackDiagnostics,
           combatRefine: { ...combat.diagnostics, spellPool: combatSpells.length, element: combatObjective.element || 'multi', turnMode }
         }
       };

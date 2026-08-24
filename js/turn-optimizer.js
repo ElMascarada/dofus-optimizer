@@ -57,6 +57,20 @@ function targetDamageMultiplier(modifiers = [], turn = 1) {
   return Math.max(0, 1 + takenPct / 100);
 }
 
+// Equipment melee/ranged stats intentionally remain outside the generic build
+// objective, as requested. Temporary combat buffs are different: if a class
+// spell grants +10% melee damage, the turn optimizer must be able to exploit it
+// on a spell that can actually be cast in melee. For a flexible-range spell we
+// assume the optimizer can choose the better legal positioning for that cast.
+function temporaryPositionDamageMultiplier(spell, modifiers = [], turn = 1) {
+  const temporary = statsWithCombatModifiers({}, modifiers, turn, 'self');
+  const options = Array.isArray(spell?.distanceOptions) ? spell.distanceOptions : [];
+  let bestPct = 0;
+  if (options.includes('melee')) bestPct = Math.max(bestPct, num(temporary.meleeDamagePct, 0));
+  if (options.includes('ranged')) bestPct = Math.max(bestPct, num(temporary.rangedDamagePct, 0));
+  return Math.max(0, 1 + bestPct / 100);
+}
+
 function areaMultiplier(spell, objective = {}) {
   if (objective.targetMode !== 'zone') return 1;
   if (!spell.isArea) return 1;
@@ -68,7 +82,10 @@ function castSpell(spell, state, turn, objective) {
   const hasDamage = Array.isArray(spell.hits) && spell.hits.length > 0;
   const breakdown = hasDamage ? spellDamageBreakdown(spell, selfStats, turn) : null;
   const dealt = breakdown
-    ? breakdown.expected * targetDamageMultiplier(state.modifiers, turn) * areaMultiplier(spell, objective)
+    ? breakdown.expected
+      * temporaryPositionDamageMultiplier(spell, state.modifiers, turn)
+      * targetDamageMultiplier(state.modifiers, turn)
+      * areaMultiplier(spell, objective)
     : 0;
 
   const cost = Math.max(0, num(spell.apCost, 0));
@@ -117,10 +134,12 @@ function supportPotential(state, turn) {
   const selfStats = statsWithCombatModifiers({}, state.modifiers, turn, 'self');
   const targetStats = statsWithCombatModifiers({}, state.modifiers, turn, 'target');
   return num(selfStats.power) * 0.8
+    + num(selfStats.damage) * 3
     + num(selfStats.crit) * 4
     + num(selfStats.critDamage) * 2
     + num(selfStats.spellDamagePct) * 10
     + num(selfStats.finalDamagePct) * 14
+    + Math.max(num(selfStats.meleeDamagePct), num(selfStats.rangedDamagePct)) * 12
     + num(targetStats.finalDamageTakenPct) * 14
     + Math.max(0, state.apRemaining) * 3;
 }

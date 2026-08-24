@@ -38,10 +38,6 @@ export function collectUnknownSlotTypes(items = []) {
   return counts;
 }
 
-// Legendary and other dynamic items can still contribute trustworthy fixed stats
-// even when one active/meta effect is not modelled yet. Keep those items in the
-// solver snapshot as "static only" instead of deleting them entirely. Unknown
-// numeric effects or unknown conditions still exclude an item.
 export function isStaticSnapshotSafeItem(item) {
   if (item?.certification?.certified) return true;
   if (!item?.certification?.slotKnown || !item?.certification?.conditionsCertified) return false;

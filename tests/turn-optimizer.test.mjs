@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { optimizeCombatSequence } from '../js/turn-optimizer.js';
 
-function damageSpell({ id, name = id, apCost = 4, base = 30, maxCastPerTurn = 3, isArea = false } = {}) {
+function damageSpell({ id, name = id, apCost = 4, base = 30, maxCastPerTurn = 3, isArea = false, distanceOptions = ['melee', 'ranged'], modifiers = [] } = {}) {
   return {
     id,
     name,
@@ -11,8 +11,9 @@ function damageSpell({ id, name = id, apCost = 4, base = 30, maxCastPerTurn = 3,
     maxCastPerTurn,
     maxCastPerTarget: maxCastPerTurn,
     isArea,
+    distanceOptions,
     hits: [{ element: 'air', normal: [base, base], crit: [base, base] }],
-    combatModifiers: [],
+    combatModifiers: modifiers,
     combatRelevant: true
   };
 }
@@ -129,4 +130,69 @@ test('support spells are ignored when allowSupport is disabled', () => {
   });
 
   assert.deepEqual(result.sequence.map((entry) => entry.spellId), ['hit', 'hit']);
+});
+
+test('stacks Psychopath Mask, Inferno and Furia style buffs when that is the best 12 AP turn', () => {
+  const psychopath = supportSpell({
+    id: 'psychopath-mask',
+    apCost: 1,
+    modifiers: [{ id: 'melee-buff', scope: 'self', stats: { meleeDamagePct: 10 }, durationTurns: 2 }]
+  });
+  const inferno = damageSpell({
+    id: 'inferno',
+    apCost: 4,
+    base: 25,
+    maxCastPerTurn: 1,
+    distanceOptions: ['melee'],
+    modifiers: [{ id: 'power-buff', scope: 'self', stats: { power: 200 }, durationTurns: 2 }]
+  });
+  const furia = damageSpell({
+    id: 'furia',
+    apCost: 3,
+    base: 25,
+    maxCastPerTurn: 1,
+    distanceOptions: ['melee'],
+    modifiers: [{ id: 'flat-buff', scope: 'self', stats: { damage: 40 }, durationTurns: 2 }]
+  });
+  const finisher = damageSpell({
+    id: 'finisher',
+    apCost: 4,
+    base: 100,
+    maxCastPerTurn: 1,
+    distanceOptions: ['melee']
+  });
+
+  const result = optimizeCombatSequence({
+    baseStats: { ap: 12, air: 0 },
+    spells: [finisher, furia, inferno, psychopath],
+    objective: { turns: 1, allowSupport: true },
+    beamWidth: 2000
+  });
+
+  assert.deepEqual(result.sequence.map((entry) => entry.spellId), [
+    'psychopath-mask',
+    'inferno',
+    'furia',
+    'finisher'
+  ]);
+  assert.ok(result.totalDamage > 450, `expected stacked class buffs to be profitable, got ${result.totalDamage}`);
+});
+
+test('temporary melee damage only boosts spells that can be cast in melee', () => {
+  const mask = supportSpell({
+    id: 'mask',
+    apCost: 1,
+    modifiers: [{ id: 'melee', scope: 'self', stats: { meleeDamagePct: 50 }, durationTurns: 1 }]
+  });
+  const melee = damageSpell({ id: 'melee', apCost: 5, base: 100, maxCastPerTurn: 1, distanceOptions: ['melee'] });
+  const ranged = damageSpell({ id: 'ranged', apCost: 5, base: 100, maxCastPerTurn: 1, distanceOptions: ['ranged'] });
+
+  const result = optimizeCombatSequence({
+    baseStats: { ap: 6, air: 0 },
+    spells: [ranged, melee, mask],
+    objective: { turns: 1, allowSupport: true }
+  });
+
+  assert.deepEqual(result.sequence.map((entry) => entry.spellId), ['mask', 'melee']);
+  assert.equal(Math.round(result.totalDamage), 150);
 });

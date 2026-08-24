@@ -44,22 +44,65 @@ function elementKeyForRow(row) {
   return matches.length === 1 ? matches[0] : 'multi';
 }
 
-function spellIconUrl(iconId, scale = '2x') {
+function localSpellIconUrl(iconId) {
+  const id = Number(iconId || 0);
+  return id ? `./assets/spells/${id}.png` : '';
+}
+
+function remoteSpellIconUrl(iconId, scale = '2x') {
   const id = Number(iconId || 0);
   return id ? `https://api.dofusdu.de/dofus3/v1/img/spell/${scale}/${id}.png` : '';
 }
 
+function spellIconIdFromImage(img) {
+  const fromDataset = Number(img?.dataset?.spellIconId || 0);
+  if (fromDataset > 0) return fromDataset;
+  const src = String(img?.getAttribute?.('src') || img?.src || '');
+  const patterns = [
+    /\/assets\/spells\/(\d+)\.png(?:$|\?)/,
+    /\/spell\/(?:1x|2x)\/(\d+)\.png(?:$|\?)/,
+    /\/spell\/(\d+)(?:-96)?\.png(?:$|\?)/
+  ];
+  for (const pattern of patterns) {
+    const match = src.match(pattern);
+    if (match) return Number(match[1]);
+  }
+  return 0;
+}
+
 function attachIconFallback(img, iconId) {
-  if (!img || img.dataset.spellIconFallback === 'ready') return;
+  if (!img) return;
+  const id = Number(iconId || spellIconIdFromImage(img) || 0);
+  if (!(id > 0)) return;
+  img.dataset.spellIconId = String(id);
+  if (img.dataset.spellIconFallback === 'ready') return;
   img.dataset.spellIconFallback = 'ready';
+  img.dataset.fallbackStage = 'local';
   img.addEventListener('error', () => {
-    if (img.dataset.fallbackTried !== '1') {
-      img.dataset.fallbackTried = '1';
-      img.src = spellIconUrl(iconId, '1x');
+    const stage = img.dataset.fallbackStage || 'local';
+    if (stage === 'local') {
+      img.dataset.fallbackStage = 'remote-2x';
+      img.src = remoteSpellIconUrl(id, '2x');
       return;
     }
+    if (stage === 'remote-2x') {
+      img.dataset.fallbackStage = 'remote-1x';
+      img.src = remoteSpellIconUrl(id, '1x');
+      return;
+    }
+    img.dataset.fallbackStage = 'failed';
     img.style.display = 'none';
   });
+}
+
+function setLocalSpellIcon(img, iconId) {
+  const id = Number(iconId || 0);
+  if (!img || !(id > 0)) return;
+  img.dataset.spellIconId = String(id);
+  img.dataset.fallbackStage = 'local';
+  attachIconFallback(img, id);
+  const local = localSpellIconUrl(id);
+  if (img.getAttribute('src') !== local) img.src = local;
 }
 
 function decorateSpellRows() {
@@ -69,14 +112,16 @@ function decorateSpellRows() {
 
     const spell = spellMetaById.get(row.dataset.spellId);
     const check = row.querySelector('.check');
-    if (!spell?.iconId || !check || check.querySelector('.spell-selection-icon')) continue;
-    const img = document.createElement('img');
-    img.className = 'spell-selection-icon';
-    img.alt = '';
-    img.loading = 'lazy';
-    img.src = spellIconUrl(spell.iconId);
-    attachIconFallback(img, spell.iconId);
-    check.querySelector('input')?.insertAdjacentElement('afterend', img);
+    if (!spell?.iconId || !check) continue;
+    let img = check.querySelector('.spell-selection-icon');
+    if (!img) {
+      img = document.createElement('img');
+      img.className = 'spell-selection-icon';
+      img.alt = '';
+      img.loading = 'lazy';
+      check.querySelector('input')?.insertAdjacentElement('afterend', img);
+    }
+    setLocalSpellIcon(img, spell.iconId);
   }
 }
 
@@ -124,12 +169,9 @@ function updateAutomaticSpellRecap() {
 function repairRenderedSpellIcons(root = document) {
   const images = root.querySelectorAll('.spell-damage-icon img, .combat-sequence-icon img');
   for (const img of images) {
-    const match = String(img.src || '').match(/\/spell\/(\d+)(?:-96)?\.png(?:$|\?)/);
-    if (!match) continue;
-    const iconId = Number(match[1]);
-    const correct = spellIconUrl(iconId);
-    if (img.src !== correct) img.src = correct;
-    attachIconFallback(img, iconId);
+    const iconId = spellIconIdFromImage(img);
+    if (!(iconId > 0)) continue;
+    setLocalSpellIcon(img, iconId);
   }
 }
 
