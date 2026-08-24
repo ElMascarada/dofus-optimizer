@@ -1,4 +1,5 @@
 import { searchArchitecturesV2 } from './architecture-search-v2.js';
+import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 
 // Context-heavy Dofus passives stay outside the automatic ranking until their
 // combat context is explicitly modelled. Their fixed item stats remain usable.
@@ -122,6 +123,29 @@ self.addEventListener('message', (event) => {
         }
       });
       output = mergeOutputs(primary, fallback, topN);
+    }
+
+    // Once the set/equipment skeleton is known, companion + six Dofus/trophies
+    // are re-optimized together with the REAL expected spell damage. This phase
+    // correctly values crit chance and power, and lets set AP/MP free offensive
+    // Dofus slots (e.g. Kokulte + Ocre vs a stat mount + AP trophy).
+    if (output.results?.length) {
+      const refined = refineOffensiveSlots({
+        ...normalizedPayload,
+        results: output.results,
+        topN,
+        onProgress: (progress) => {
+          self.postMessage({ type: 'progress', requestId, progress });
+        }
+      });
+      output = {
+        ...output,
+        results: refined.results,
+        diagnostics: {
+          ...(output.diagnostics || {}),
+          offensiveRefine: refined.diagnostics
+        }
+      };
     }
 
     self.postMessage({ type: 'result', requestId, output });
