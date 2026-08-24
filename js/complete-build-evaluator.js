@@ -25,7 +25,9 @@ export function evaluateCompleteBuild({
   character = BASE_CHARACTER,
   scenario = {}
 } = {}) {
-  if (!specialSlotRulesAreValid(items)) return { result: null, reason: 'special-slot-rule' };
+  // Structural slot legality is an invariant of the architecture generator.
+  // Keep the guard as a safety net, but generated candidates should never hit it.
+  if (!specialSlotRulesAreValid(items)) return { result: null, reason: 'structural-invalid' };
 
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const rawStats = emptyStats();
@@ -43,8 +45,9 @@ export function evaluateCompleteBuild({
     baseVitality: 0
   });
 
-  // Permanent equipment is capped at the requested Dofus base (12/6 in the UI).
-  // Temporary combat effects are applied afterwards and may exceed that cap.
+  // The architecture search already guarantees the permanent 12/6 target.
+  // If an equipment combination naturally exceeds it, cap the permanent display
+  // at 12/6; temporary combat effects are still applied afterwards and may exceed it.
   const permanentBase = capPermanentApMp(charResult.stats, constraints);
   const fm = optimizeFm({
     baseStats: permanentBase,
@@ -54,14 +57,11 @@ export function evaluateCompleteBuild({
     policy: fmPolicy,
     scenario
   });
-  if (!fm || fm.objective.unresolvedPassiveContexts?.length) {
-    return { result: null, reason: 'unresolved-passive' };
-  }
+  if (!fm) return { result: null, reason: 'evaluation-failed' };
 
-  if (!itemConditionsAreValid(items, fm.stats, character.level)) {
-    return { result: null, reason: 'item-condition' };
-  }
-
+  // IMPORTANT: these checks are diagnostic only. They must never remove an
+  // architecture from damage comparison. We compare every generated 12/6 build.
+  const itemConditionsSatisfied = itemConditionsAreValid(items, fm.stats, character.level);
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
@@ -70,19 +70,14 @@ export function evaluateCompleteBuild({
     turnMode,
     scenario
   });
-  if (turnConstraints.unresolvedPassiveContexts.length) {
-    return { result: null, reason: 'unresolved-passive' };
+
+  const warnings = [];
+  if (!itemConditionsSatisfied) warnings.push('item-condition');
+  if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
+    warnings.push('unresolved-passive');
   }
-  if (!turnConstraints.meets) {
-    const baseMismatch = Object.keys(turnConstraints.baseApMpMismatches || {}).length > 0;
-    const turnDeficit = Object.keys(turnConstraints.deficitsByTurn || {}).length > 0;
-    return {
-      result: null,
-      reason: baseMismatch ? 'base-ap-mp' : turnDeficit ? 'turn-constraints' : 'constraints',
-      deficitsByTurn: turnConstraints.deficitsByTurn,
-      baseApMpMismatches: turnConstraints.baseApMpMismatches
-    };
-  }
+  if (Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
+  if (Object.keys(turnConstraints.deficitsByTurn || {}).length) warnings.push('turn-constraints');
 
   return {
     result: {
@@ -98,8 +93,18 @@ export function evaluateCompleteBuild({
         structuralExos: 0,
         assignments: fm.assignments
       },
-      activeSets
+      activeSets,
+      warnings,
+      itemConditionsSatisfied,
+      turnFeasible: turnConstraints.meets,
+      unresolvedPassiveContexts: [
+        ...new Set([
+          ...(fm.objective.unresolvedPassiveContexts || []),
+          ...(turnConstraints.unresolvedPassiveContexts || [])
+        ])
+      ]
     },
-    reason: null
+    reason: null,
+    warnings
   };
 }
