@@ -1,3 +1,5 @@
+import { isOptimizerAvailableItem } from './item-availability.js';
+
 export function validateDofusSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') throw new Error('Snapshot Dofus invalide.');
   if (Number(snapshot.schemaVersion) !== 1) throw new Error(`Version de snapshot non prise en charge: ${snapshot.schemaVersion ?? 'absente'}.`);
@@ -7,8 +9,19 @@ export function validateDofusSnapshot(snapshot) {
     (item?.certified === true || item?.staticOnly === true)
     && item?.id
     && item?.slot
+    && isOptimizerAvailableItem(item)
   );
-  const sets = snapshot.sets.filter((set) => set?.id && set?.bonuses && typeof set.bonuses === 'object');
+  const itemIds = new Set(items.map((item) => String(item.id)));
+  const sets = snapshot.sets
+    .filter((set) => set?.id && set?.bonuses && typeof set.bonuses === 'object')
+    .map((set) => ({
+      ...set,
+      // Keep set membership coherent if an unavailable historical item was still
+      // present in an older static snapshot.
+      equipmentIds: Array.isArray(set.equipmentIds)
+        ? set.equipmentIds.filter((id) => itemIds.has(String(id)))
+        : set.equipmentIds
+    }));
   if (!items.length) throw new Error('Le snapshot ne contient aucun équipement utilisable.');
 
   return {
