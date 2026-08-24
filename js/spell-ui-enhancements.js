@@ -13,11 +13,23 @@ const ELEMENT_TEXT = {
   air: 'air'
 };
 
+let spellMetaById = new Map();
+
 function normalized(value = '') {
   return String(value)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase();
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>'"]/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    "'": '&#39;',
+    '"': '&quot;'
+  }[char]));
 }
 
 function rowElementText(row) {
@@ -32,10 +44,39 @@ function elementKeyForRow(row) {
   return matches.length === 1 ? matches[0] : 'multi';
 }
 
+function spellIconUrl(iconId, scale = '2x') {
+  const id = Number(iconId || 0);
+  return id ? `https://api.dofusdu.de/dofus3/v1/img/spell/${scale}/${id}.png` : '';
+}
+
+function attachIconFallback(img, iconId) {
+  if (!img || img.dataset.spellIconFallback === 'ready') return;
+  img.dataset.spellIconFallback = 'ready';
+  img.addEventListener('error', () => {
+    if (img.dataset.fallbackTried !== '1') {
+      img.dataset.fallbackTried = '1';
+      img.src = spellIconUrl(iconId, '1x');
+      return;
+    }
+    img.style.display = 'none';
+  });
+}
+
 function decorateSpellRows() {
   for (const row of document.querySelectorAll('#spell-list .spell-row')) {
     row.classList.remove(...ELEMENT_CLASS_NAMES);
     row.classList.add(`spell-element-${elementKeyForRow(row)}`);
+
+    const spell = spellMetaById.get(row.dataset.spellId);
+    const check = row.querySelector('.check');
+    if (!spell?.iconId || !check || check.querySelector('.spell-selection-icon')) continue;
+    const img = document.createElement('img');
+    img.className = 'spell-selection-icon';
+    img.alt = '';
+    img.loading = 'lazy';
+    img.src = spellIconUrl(spell.iconId);
+    attachIconFallback(img, spell.iconId);
+    check.querySelector('input')?.insertAdjacentElement('afterend', img);
   }
 }
 
@@ -67,7 +108,7 @@ function updateAutomaticSpellRecap() {
   const selectedLabel = ELEMENT_TEXT[selectedElement] || '';
   const names = [...document.querySelectorAll('#spell-list .spell-row')]
     .filter((row) => selectedElement === 'multi' || rowElementText(row).includes(selectedLabel))
-    .map((row) => row.querySelector('.check > span')?.textContent?.trim())
+    .map((row) => row.querySelector('.check > span:not(.spell-variant-badge):not(.spell-support-badge)')?.textContent?.trim())
     .filter(Boolean);
 
   if (!names.length) {
@@ -80,19 +121,89 @@ function updateAutomaticSpellRecap() {
     .join('')}<small>Les supports purs certifiés restent ajoutés automatiquement au pool.</small>`;
 }
 
-function escapeHtml(value = '') {
-  return String(value).replace(/[&<>'"]/g, (char) => ({
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    "'": '&#39;',
-    '"': '&quot;'
-  }[char]));
+function repairRenderedSpellIcons(root = document) {
+  const images = root.querySelectorAll('.spell-damage-icon img, .combat-sequence-icon img');
+  for (const img of images) {
+    const match = String(img.src || '').match(/\/spell\/(\d+)(?:-96)?\.png(?:$|\?)/);
+    if (!match) continue;
+    const iconId = Number(match[1]);
+    const correct = spellIconUrl(iconId);
+    if (img.src !== correct) img.src = correct;
+    attachIconFallback(img, iconId);
+  }
+}
+
+function parseFrenchNumber(value = '') {
+  return Number(String(value).replace(/\s/g, '').replace(',', '.').replace(/[^0-9.-]/g, '')) || 0;
+}
+
+function enhanceCombatPlan(modalContent) {
+  const plan = modalContent.querySelector('.combat-plan-section');
+  const layout = modalContent.querySelector('.build-detail-layout');
+  const damage = modalContent.querySelector('.spell-damage-section');
+
+  if (plan && layout) {
+    const title = plan.querySelector('h3');
+    if (title) title.textContent = 'Tour idéal — rotation réelle';
+    const explanation = plan.querySelector('.spell-damage-heading p');
+    if (explanation) explanation.textContent += ' · seuls les sorts listés ici sont réellement lancés';
+
+    for (const block of plan.querySelectorAll('.combat-turn-block')) {
+      const header = block.querySelector('header');
+      if (!header || header.querySelector('.combat-pa-total')) continue;
+      const costs = [...block.querySelectorAll('.combat-sequence-row')]
+        .map((row) => parseFrenchNumber(row.querySelector('strong + span')?.textContent || ''));
+      const spent = costs.reduce((sum, value) => sum + value, 0);
+      const chip = document.createElement('small');
+      chip.className = 'combat-pa-total';
+      chip.textContent = `${spent} PA de coûts de sorts`;
+      header.appendChild(chip);
+    }
+
+    // The ideal rotation is the primary answer in automatic mode: place it before
+    // the long equipment/stat sheet instead of burying it at the bottom.
+    layout.insertAdjacentElement('beforebegin', plan);
+  }
+
+  if (damage) {
+    const title = damage.querySelector('h3');
+    if (title) title.textContent = 'Comparatif individuel des sorts';
+    const paragraph = damage.querySelector('.spell-damage-heading p');
+    if (paragraph) paragraph.textContent = 'Chaque carte correspond à un lancer isolé. Les PA de toutes les cartes ne doivent surtout pas être additionnés.';
+    damage.classList.add('spell-comparison-section');
+
+    if (!plan && !damage.querySelector('.no-combat-plan-warning')) {
+      const warning = document.createElement('div');
+      warning.className = 'no-combat-plan-warning';
+      warning.textContent = 'Aucune rotation automatique n’est attachée à ce résultat : ce bloc compare seulement les sorts un par un. Lance le mode « Optimisation automatique » pour obtenir le tour idéal sous contrainte de PA.';
+      damage.insertAdjacentElement('afterbegin', warning);
+    }
+  }
+
+  repairRenderedSpellIcons(modalContent);
+}
+
+function refreshModalEnhancements() {
+  const modalContent = document.querySelector('#build-modal-content');
+  if (modalContent?.children.length) enhanceCombatPlan(modalContent);
 }
 
 function refreshSpellUi() {
   decorateSpellRows();
   updateAutomaticSpellRecap();
+  refreshModalEnhancements();
+}
+
+async function loadSpellMetadata() {
+  try {
+    const response = await fetch('./data/normalized/spell-data.json', { cache: 'no-cache' });
+    if (!response.ok) return;
+    const data = await response.json();
+    spellMetaById = new Map((data.spells || []).map((spell) => [String(spell.id), spell]));
+  } catch {
+    spellMetaById = new Map();
+  }
+  refreshSpellUi();
 }
 
 const spellList = document.querySelector('#spell-list');
@@ -101,8 +212,12 @@ if (spellList) {
     .observe(spellList, { childList: true, subtree: true });
 }
 
+new MutationObserver(() => requestAnimationFrame(refreshModalEnhancements))
+  .observe(document.body, { childList: true, subtree: true });
+
 for (const id of ['breed-select', 'combat-element', 'objective-mode']) {
   document.querySelector(`#${id}`)?.addEventListener('change', () => requestAnimationFrame(refreshSpellUi));
 }
 
 requestAnimationFrame(refreshSpellUi);
+loadSpellMetadata();
