@@ -1,4 +1,4 @@
-const CACHE = 'dofus-optimizer-v0.13.4';
+const CACHE = 'dofus-optimizer-v0.13.5';
 const APP_SHELL = [
   './',
   './index.html',
@@ -14,6 +14,7 @@ const APP_SHELL = [
   './js/item-availability.js',
   './js/spell-selection.js',
   './js/optimizer-worker.js',
+  './js/result-diversity.js',
   './js/architecture-search.js',
   './js/architecture-search-v2.js',
   './js/offensive-slot-refiner.js',
