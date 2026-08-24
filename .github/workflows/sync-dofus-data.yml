@@ -5,7 +5,7 @@ on:
   schedule:
     - cron: '17 5 * * *'
   push:
-    branches: [main, feature/combat-turn-optimizer]
+    branches: [main, feature/combat-turn-optimizer, fix/class-offensive-buffs]
     paths:
       - '.github/workflows/sync-dofus-data.yml'
       - 'js/data-certification.js'
