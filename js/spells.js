@@ -22,6 +22,11 @@ function midpoint(range) {
   return Number(range || 0);
 }
 
+function rangeEndpoint(range, index) {
+  if (Array.isArray(range)) return Number(range[index] ?? range[0] ?? 0);
+  return Number(range || 0);
+}
+
 function scenarioContextForTurn(scenario = {}, turn = 1) {
   const shared = { ...scenario };
   delete shared.turns;
@@ -60,6 +65,26 @@ function spellRawTotals(spell, stats) {
   return { nonCrit, crit };
 }
 
+function spellRawRanges(spell, stats) {
+  let normalMin = 0;
+  let normalMax = 0;
+  let critMin = 0;
+  let critMax = 0;
+  for (const hit of spell.hits || []) {
+    const element = hit.element || 'earth';
+    const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
+    const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
+    const multiplier = 1 + characteristic / 100;
+    const normal = hit.normal || [0, 0];
+    const critical = hit.crit ?? normal;
+    normalMin += rangeEndpoint(normal, 0) * multiplier + flat;
+    normalMax += rangeEndpoint(normal, 1) * multiplier + flat;
+    critMin += rangeEndpoint(critical, 0) * multiplier + flat + stat(stats, 'critDamage');
+    critMax += rangeEndpoint(critical, 1) * multiplier + flat + stat(stats, 'critDamage');
+  }
+  return { normal: [normalMin, normalMax], critical: [critMin, critMax] };
+}
+
 function damageSource(spell) {
   return spell?.damageSource === 'weapon' ? 'weapon' : 'spell';
 }
@@ -74,11 +99,22 @@ function damageMultiplier(spell, stats, turn) {
   return (1 + sourcePct / 100) * (1 + finalPct / 100);
 }
 
-export function spellExpectedDamage(spell, stats, turn = 1) {
+export function spellDamageBreakdown(spell, stats, turn = 1) {
   const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
   const totals = spellRawTotals(spell, stats);
-  const expected = totals.nonCrit * (1 - critChance) + totals.crit * critChance;
-  return expected * damageMultiplier(spell, stats, turn);
+  const ranges = spellRawRanges(spell, stats);
+  const multiplier = damageMultiplier(spell, stats, turn);
+  const expected = (totals.nonCrit * (1 - critChance) + totals.crit * critChance) * multiplier;
+  return {
+    expected,
+    critChancePct: critChance * 100,
+    normal: ranges.normal.map((value) => value * multiplier),
+    critical: ranges.critical.map((value) => value * multiplier)
+  };
+}
+
+export function spellExpectedDamage(spell, stats, turn = 1) {
+  return spellDamageBreakdown(spell, stats, turn).expected;
 }
 
 // Safe upper bound used only by branch-and-bound. It deliberately allows each
