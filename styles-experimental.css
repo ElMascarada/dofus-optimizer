@@ -26,11 +26,107 @@
   display: none !important;
 }
 
+.spell-row {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 13px;
+  transition: background .16s ease, border-color .16s ease, box-shadow .16s ease;
+}
+
+.spell-row:first-child {
+  margin-top: 12px;
+}
+
+.spell-row.spell-element-earth {
+  background: linear-gradient(90deg, rgba(164,119,63,.16), rgba(164,119,63,.035) 72%);
+  border-color: rgba(164,119,63,.28);
+}
+
+.spell-row.spell-element-fire {
+  background: linear-gradient(90deg, rgba(219,86,65,.16), rgba(219,86,65,.035) 72%);
+  border-color: rgba(219,86,65,.28);
+}
+
+.spell-row.spell-element-water {
+  background: linear-gradient(90deg, rgba(67,143,219,.16), rgba(67,143,219,.035) 72%);
+  border-color: rgba(67,143,219,.28);
+}
+
+.spell-row.spell-element-air {
+  background: linear-gradient(90deg, rgba(72,180,122,.16), rgba(72,180,122,.035) 72%);
+  border-color: rgba(72,180,122,.28);
+}
+
+.spell-row.spell-element-multi {
+  background: linear-gradient(90deg, rgba(157,111,214,.14), rgba(65,145,196,.06) 55%, rgba(229,184,75,.035));
+  border-color: rgba(157,111,214,.25);
+}
+
+.spell-row:has(.spell-enabled:checked) {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .spell-row:has(.spell-enabled:disabled) {
-  opacity: .72;
+  opacity: .76;
 }
 
 .spell-row:has(.spell-enabled:disabled) .spell-enabled,
 .spell-row:has(.spell-enabled:disabled) input[type="number"] {
   cursor: not-allowed;
+}
+
+.combat-spell-name-recap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 8px;
+  padding: 9px 10px;
+  border: 1px solid #2a333c;
+  border-radius: 11px;
+  background: rgba(255,255,255,.018);
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.45;
+}
+
+.combat-spell-name-recap[hidden] {
+  display: none !important;
+}
+
+.combat-spell-name-recap > strong {
+  color: var(--text);
+  margin-right: 2px;
+}
+
+.combat-spell-name {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 6px;
+  border: 1px solid #34404b;
+  border-radius: 999px;
+  background: #151b21;
+  color: #dce2e8;
+  font-weight: 700;
+}
+
+.combat-spell-name-recap > small {
+  flex-basis: 100%;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+/* Keep the spell name readable in the result recap even when T1/T2/T3 chips are wide. */
+.spell-damage-meta strong {
+  display: block;
+  min-width: 90px;
+  color: var(--text);
+  font-weight: 800;
+}
+
+@media (max-width: 760px) {
+  .spell-row {
+    padding: 10px;
+  }
 }
