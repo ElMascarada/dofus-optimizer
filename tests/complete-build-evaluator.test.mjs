@@ -19,12 +19,12 @@ const prysma = {
   stats: {},
   passives: [{
     id: 'ap-burst',
-    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3 } }]
+    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3, finalDamagePct: 20 } }]
   }],
   conditions: null
 };
 
-test('permanent AP is capped at 12 while a combat passive may reach 15', () => {
+test('permanent AP is capped at 12 while combat passives and spell display remain turn-aware', () => {
   const evaluation = evaluateCompleteBuild({
     items: [
       { id: 'hat', name: 'Hat', slot: 'hat', stats: { ap: 2, fire: 100 }, passives: [], conditions: null },
@@ -47,4 +47,12 @@ test('permanent AP is capped at 12 while a combat passive may reach 15', () => {
   assert.ok(evaluation.result);
   assert.equal(evaluation.result.stats.ap, 12);
   assert.equal(evaluation.result.effectiveStatsByTurn[1].ap, 15);
+  assert.equal(evaluation.result.effectiveStatsByTurn[2].ap, 12);
+
+  const breakdown = evaluation.result.spellBreakdowns[0];
+  assert.deepEqual(Object.keys(breakdown.perTurn), ['1', '2', '3']);
+  assert.ok(breakdown.perTurn[1].expected > breakdown.perTurn[2].expected);
+  assert.equal(breakdown.perTurn[2].expected, breakdown.perTurn[3].expected);
+  assert.ok(breakdown.averageDamage > breakdown.perTurn[2].expected);
+  assert.ok(breakdown.averageDamage < breakdown.perTurn[1].expected);
 });
