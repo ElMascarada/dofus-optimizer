@@ -1,11 +1,492 @@
 {
   "breedCount": 19,
-  "classSpellRefs": 418,
-  "offensiveCandidates": 239,
-  "certified": 222,
+  "classSpellRefs": 836,
+  "variantSpellRefs": 418,
+  "variantsCertified": 242,
+  "offensiveCandidates": 490,
+  "supportOnly": 64,
+  "combatModifierSpells": 216,
+  "certified": 506,
+  "modifierSamples": [
+    {
+      "breed": "Iop",
+      "spell": "Ferveur",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageWater": 19
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Eau"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Épée Divine",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageAir": 28
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Air"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Concentration",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageEarth": 24
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Terre"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Puissance",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 300
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Tempête de Puissance",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageFire": 30
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Feu"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Endurance",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageWater": 34
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Eau"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Vertu",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 50
+          },
+          "durationTurns": 2,
+          "description": "-#1{{~1~2 à -}}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Épée de Iop",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageEarth": 41
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Terre"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Épée Céleste",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageAir": 40
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Air"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Précipitation",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "ap": 5
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PA"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Accumulation",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageEarth": 26
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Terre"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Agitation",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 3
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Rassemblement",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageFire": 25
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Feu"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Duel",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 100
+          },
+          "durationTurns": 1,
+          "description": "-#1{{~1~2 à -}}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Fendoir",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageWater": 53
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Eau"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Tumulte",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageFire": 21
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Feu"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Anneau Destructeur",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageAir": 28
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Air"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Tirs Puissants",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 250
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "crit": 15
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2% Critique"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Acuité Absolue",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "crit": 15
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2% Critique"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Flèche Assaillante",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 150
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Balise Tactique",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 40
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Flèches Amoureuses",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 100
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Pluie de Flèches",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 20
+          },
+          "durationTurns": 1,
+          "description": "-#1{{~1~2 à -}}#2 Esquive PM"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "damageAir": 23
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Air"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Flèche Boomerang",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 2
+          },
+          "durationTurns": 1,
+          "description": "-#1{{~1~2 à -}}#2 PM"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "damageAir": 29
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Air"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Mutilation",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 150
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Condensation",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageWater": 25
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 dommages Eau"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Transfusion",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damageNeutral": 10
+          },
+          "durationTurns": 1,
+          "description": "Dommages Neutre : #1{{~1~2 à }}#2% <sprite name=\"PV\"> PV du lanceur"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Berserk",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "spellDamagePct": 10
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2% Dommages aux sorts"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Pacte de Sang",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 100
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Fluctuation",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 2
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    }
+  ],
   "skipped": {
-    "best-element-damage": 11,
-    "no-fixed-direct-damage": 179,
-    "conditional-or-delayed-damage": 6
-  }
+    "best-element-damage": 23,
+    "no-fixed-direct-damage-or-supported-buff": 282,
+    "conditional-or-delayed-damage": 25
+  },
+  "variantSourceRecords": 431
 }
