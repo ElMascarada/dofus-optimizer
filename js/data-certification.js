@@ -21,9 +21,7 @@ export function isInternalOrNonPlayerItem(item) {
 export function isPlayerEquipmentScope(item) {
   if (isInternalOrNonPlayerItem(item)) return false;
   if (item?.slot === 'dofus' || item?.slot === 'companion') return true;
-  // The optimizer's classical equipment scope is level 200 only. Dofus,
-  // trophies, pets and mounts are intentionally exempt from this restriction.
-  return Number(item?.level) === 200;
+  return Number(item?.level) >= 190;
 }
 
 export function equipmentForCoverage(items = []) {
@@ -40,10 +38,6 @@ export function collectUnknownSlotTypes(items = []) {
   return counts;
 }
 
-// Legendary and other dynamic items can still contribute trustworthy fixed stats
-// even when one active/meta effect is not modelled yet. Keep those items in the
-// solver snapshot as "static only" instead of deleting them entirely. Unknown
-// numeric effects or unknown conditions still exclude an item.
 export function isStaticSnapshotSafeItem(item) {
   if (item?.certification?.certified) return true;
   if (!item?.certification?.slotKnown || !item?.certification?.conditionsCertified) return false;
