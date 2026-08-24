@@ -6,25 +6,25 @@
 - Class spell references: 836
 - SpellVariantData source records: 431
 - Variant spell references added: 418
-- Certified variants: 236
+- Certified variants: 239
 - Offensive candidates detected: 490
-- Certified combat spells: 484
-- Spells with deterministic buff/debuff: 72
-- Support-only spells: 42
+- Certified combat spells: 488
+- Spells with deterministic buff/debuff: 78
+- Support-only spells: 46
 - Model: direct-damage-and-deterministic-combat-effects
 
 ## Coverage by class
 
 - Iop: 29/44
-- Crâ: 32/44
+- Crâ: 33/44
 - Sacrieur: 26/44
 - Eniripsa: 32/44
 - Ouginak: 26/44
 - Féca: 25/44
 - Enutrof: 28/44
-- Sram: 20/44
+- Sram: 21/44
 - Forgelance: 30/44
-- Zobal: 26/44
+- Zobal: 28/44
 - Pandawa: 25/44
 - Sadida: 19/44
 - Osamodas: 21/44
@@ -37,6 +37,7 @@
 
 ## Deterministic combat modifier samples
 
+- Iop · Épée Divine: [{"scope":"self","stats":{"damage":30},"durationTurns":4,"description":"#1{{~1~2 à }}#2 Dommage{{~ps}}{{~zs}}"}]
 - Iop · Puissance: [{"scope":"self","stats":{"power":300},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Iop · Précipitation: [{"scope":"self","stats":{"ap":5},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PA"}]
 - Iop · Agitation [variant]: [{"scope":"self","stats":{"mp":3},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
@@ -45,6 +46,7 @@
 - Crâ · Flèche Assaillante [variant]: [{"scope":"self","stats":{"power":150},"durationTurns":1,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Crâ · Balise Tactique [variant]: [{"scope":"self","stats":{"power":40},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Crâ · Flèches Amoureuses [variant]: [{"scope":"self","stats":{"power":100},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Crâ · Sentinelle [variant]: [{"scope":"self","stats":{"rangedDamagePct":20},"durationTurns":2,"description":"#1{{~1~2 à }}#2% Dommages distance"}]
 - Sacrieur · Pacte de Sang [variant]: [{"scope":"self","stats":{"power":100},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Sacrieur · Fluctuation [variant]: [{"scope":"self","stats":{"mp":2},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
 - Sacrieur · Furie [variant]: [{"scope":"self","stats":{"finalDamagePct":3},"durationTurns":3,"description":"#1% Dommages finaux"}]
@@ -65,12 +67,10 @@
 - Enutrof · Opportunité: [{"scope":"self","stats":{"power":80},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Enutrof · Ruée vers l'Or: [{"scope":"self","stats":{"mp":4},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
 - Enutrof · Boîte de Pandore: [{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
-- Enutrof · Avarice: [{"scope":"self","stats":{"ap":3},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PA"},{"scope":"self","stats":{"power":50},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
-- Enutrof · Décadence [variant]: [{"scope":"self","stats":{"finalDamagePct":10},"durationTurns":1,"description":"#1% Dommages finaux"}]
 
 ## Skipped reasons
 
-- no-fixed-direct-damage-or-supported-buff: 304
+- no-fixed-direct-damage-or-supported-buff: 300
 - conditional-or-delayed-damage: 25
 - best-element-damage: 23
 

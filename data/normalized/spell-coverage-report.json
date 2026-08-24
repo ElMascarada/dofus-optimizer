@@ -2,12 +2,27 @@
   "breedCount": 19,
   "classSpellRefs": 836,
   "variantSpellRefs": 418,
-  "variantsCertified": 236,
+  "variantsCertified": 239,
   "offensiveCandidates": 490,
-  "supportOnly": 42,
-  "combatModifierSpells": 72,
-  "certified": 484,
+  "supportOnly": 46,
+  "combatModifierSpells": 78,
+  "certified": 488,
   "modifierSamples": [
+    {
+      "breed": "Iop",
+      "spell": "Épée Divine",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "damage": 30
+          },
+          "durationTurns": 4,
+          "description": "#1{{~1~2 à }}#2 Dommage{{~ps}}{{~zs}}"
+        }
+      ]
+    },
     {
       "breed": "Iop",
       "spell": "Puissance",
@@ -133,6 +148,21 @@
           },
           "durationTurns": 2,
           "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Sentinelle",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "rangedDamagePct": 20
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2% Dommages distance"
         }
       ]
     },
@@ -467,49 +497,11 @@
           "description": "#1{{~1~2 à }}#2 PM"
         }
       ]
-    },
-    {
-      "breed": "Enutrof",
-      "spell": "Avarice",
-      "variant": false,
-      "modifiers": [
-        {
-          "scope": "self",
-          "stats": {
-            "ap": 3
-          },
-          "durationTurns": 1,
-          "description": "#1{{~1~2 à }}#2 PA"
-        },
-        {
-          "scope": "self",
-          "stats": {
-            "power": 50
-          },
-          "durationTurns": 2,
-          "description": "#1{{~1~2 à }}#2 Puissance"
-        }
-      ]
-    },
-    {
-      "breed": "Enutrof",
-      "spell": "Décadence",
-      "variant": true,
-      "modifiers": [
-        {
-          "scope": "self",
-          "stats": {
-            "finalDamagePct": 10
-          },
-          "durationTurns": 1,
-          "description": "#1% Dommages finaux"
-        }
-      ]
     }
   ],
   "skipped": {
     "best-element-damage": 23,
-    "no-fixed-direct-damage-or-supported-buff": 304,
+    "no-fixed-direct-damage-or-supported-buff": 300,
     "conditional-or-delayed-damage": 25
   },
   "variantSourceRecords": 431
