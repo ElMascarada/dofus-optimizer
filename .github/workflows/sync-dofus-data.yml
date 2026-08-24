@@ -41,12 +41,13 @@ jobs:
           node-version: 22
       - name: Sync and normalize Dofusdude
         run: npm run sync:normalize
-      - name: Inspect raw variable spell source records
+      - name: Persist temporary raw spell diagnostics
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const raw = JSON.parse(fs.readFileSync('data/raw/spell_levels.json', 'utf8'));
           const wanted = new Set([41327, 41355, 41764, 85268]);
+          const found = [];
           function walk(value, path = '$') {
             if (Array.isArray(value)) {
               value.forEach((entry, index) => walk(entry, `${path}[${index}]`));
@@ -54,13 +55,13 @@ jobs:
             }
             if (!value || typeof value !== 'object') return;
             const ids = [value.id, value.ankama_id, value.ankamaId].map(Number);
-            if (ids.some((id) => wanted.has(id))) {
-              console.log(`RAW SPELL LEVEL ${path}`);
-              console.log(JSON.stringify(value, null, 2));
-            }
+            if (ids.some((id) => wanted.has(id))) found.push({ path, value });
             for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
           }
           walk(raw);
+          fs.mkdirSync('data/diagnostics', { recursive: true });
+          fs.writeFileSync('data/diagnostics/raw-variable-spells.json', JSON.stringify(found, null, 2));
+          console.log(`Persisted ${found.length} raw spell-level records.`);
           NODE
       - name: Run tests on normalized code
         run: |
@@ -83,9 +84,10 @@ jobs:
             data/normalized/spell-data.json \
             data/normalized/spell-coverage-report.json \
             data/normalized/spell-coverage-report.md \
+            data/diagnostics/raw-variable-spells.json \
             assets/spells
           if git diff --cached --quiet; then
-            echo "Dofus data and spell icons are already current."
+            echo "Dofus data, diagnostics and spell icons are already current."
             exit 0
           fi
           VERSION=$(node -e "const fs=require('node:fs'); const d=JSON.parse(fs.readFileSync('./data/normalized/dofus-data.json','utf8')); console.log(d.gameVersion?.version || 'unknown')")
