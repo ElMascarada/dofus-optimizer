@@ -1,3 +1,5 @@
+import { isOptimizerAvailableItem } from './item-availability.js';
+
 export function isSolverSafeSet(set) {
   if (!set?.certification?.certified) return false;
   return (set.certification.coverage || []).every((entry) => Number(entry.active ?? 0) === 0 && Number(entry.meta ?? 0) === 0);
@@ -8,6 +10,7 @@ function normalizeSearchText(value = '') {
 }
 
 export function isInternalOrNonPlayerItem(item) {
+  if (!isOptimizerAvailableItem(item)) return true;
   const typeName = normalizeSearchText(item?.typeName);
   const name = String(item?.name || '');
   if (typeName.includes('percepteur')) return true;
