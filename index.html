@@ -26,7 +26,7 @@
           <h2>1. Sorts à optimiser</h2>
           <label class="field">Classe<select id="breed-select" disabled></select></label>
           <div id="spell-list"><div class="empty">Chargement du catalogue de sorts…</div></div>
-          <p class="hint">Catalogue Dofus réel : dégâts directs immédiats à élément fixe uniquement. Les poisons, dégâts conditionnels et « meilleur élément » restent exclus tant qu’ils ne sont pas simulés exactement.</p>
+          <p class="hint">Catalogue Dofus réel : dégâts directs immédiats à élément fixe. Les variantes offensives de classe sont incluses lorsqu’elles sont présentes dans la source. Les poisons, dégâts conditionnels et « meilleur élément » restent exclus tant qu’ils ne sont pas simulés exactement.</p>
         </section>
 
         <section class="panel">
@@ -57,16 +57,16 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
-          <p class="hint">Le stuff de base est en 12 PA / 6 PM en incluant un exo +1 PA et un exo +1 PM sur deux pièces différentes. Les PA/PM temporaires gagnés en combat peuvent ensuite dépasser 12/6 et sont calculés dans les tours concernés.</p>
+          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base du personnage pour accélérer le solveur. Ils ne consomment pas de FM offensive. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans les tours concernés.</p>
         </section>
 
         <section class="panel">
           <h2>5. FM offensive</h2>
           <label class="field">% Do sorts par item
-            <select id="fm-spell"><option>2</option><option selected>3</option><option>4</option><option>5</option></select>
+            <select id="fm-spell"><option value="0">0 · aucun</option><option value="2">2</option><option value="3" selected>3</option><option value="4">4</option><option value="5">5</option></select>
           </label>
           <label class="toggle"><input id="fm-crit" type="checkbox"><span>Autoriser +8 Do Crit si l'item n'en possède pas</span></label>
-          <p class="hint">Deux pièces utilisent leur FM pour les exos PA/PM. Les autres comparent automatiquement % Do sorts et +8 Do Crit selon les sorts sélectionnés.</p>
+          <p class="hint">Chaque pièce éligible compare automatiquement la FM sélectionnée et +8 Do Crit lorsque cette option est active. Choisir 0 désactive totalement les % Do sorts ajoutés.</p>
         </section>
 
         <button id="optimize" class="primary" disabled>Optimiser le stuff</button>
