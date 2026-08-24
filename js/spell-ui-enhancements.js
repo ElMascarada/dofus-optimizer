@@ -142,11 +142,12 @@ function enhanceCombatPlan(modalContent) {
   const layout = modalContent.querySelector('.build-detail-layout');
   const damage = modalContent.querySelector('.spell-damage-section');
 
-  if (plan && layout) {
+  if (plan && layout && plan.dataset.uiEnhanced !== '1') {
+    plan.dataset.uiEnhanced = '1';
     const title = plan.querySelector('h3');
     if (title) title.textContent = 'Tour idéal — rotation réelle';
     const explanation = plan.querySelector('.spell-damage-heading p');
-    if (explanation) explanation.textContent += ' · seuls les sorts listés ici sont réellement lancés';
+    if (explanation) explanation.textContent = `${explanation.textContent} · seuls les sorts listés ici sont réellement lancés`;
 
     for (const block of plan.querySelectorAll('.combat-turn-block')) {
       const header = block.querySelector('header');
@@ -159,20 +160,21 @@ function enhanceCombatPlan(modalContent) {
       chip.textContent = `${spent} PA de coûts de sorts`;
       header.appendChild(chip);
     }
+  }
 
-    // The ideal rotation is the primary answer in automatic mode: place it before
-    // the long equipment/stat sheet instead of burying it at the bottom.
+  if (plan && layout && layout.previousElementSibling !== plan) {
     layout.insertAdjacentElement('beforebegin', plan);
   }
 
-  if (damage) {
+  if (damage && damage.dataset.uiEnhanced !== '1') {
+    damage.dataset.uiEnhanced = '1';
     const title = damage.querySelector('h3');
     if (title) title.textContent = 'Comparatif individuel des sorts';
     const paragraph = damage.querySelector('.spell-damage-heading p');
     if (paragraph) paragraph.textContent = 'Chaque carte correspond à un lancer isolé. Les PA de toutes les cartes ne doivent surtout pas être additionnés.';
     damage.classList.add('spell-comparison-section');
 
-    if (!plan && !damage.querySelector('.no-combat-plan-warning')) {
+    if (!plan) {
       const warning = document.createElement('div');
       warning.className = 'no-combat-plan-warning';
       warning.textContent = 'Aucune rotation automatique n’est attachée à ce résultat : ce bloc compare seulement les sorts un par un. Lance le mode « Optimisation automatique » pour obtenir le tour idéal sous contrainte de PA.';
