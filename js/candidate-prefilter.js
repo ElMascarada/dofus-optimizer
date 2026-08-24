@@ -12,14 +12,15 @@ const DAMAGE_STAT_BY_ELEMENT = {
 
 const GENERIC_OFFENSE_KEYS = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
+  'meleeDamagePct', 'rangedDamagePct',
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
 
 const SLOT_LIMITS = Object.freeze({
-  dofus: 22,
+  dofus: 28,
   ring: 20,
   weapon: 20,
-  companion: 18,
+  companion: 22,
   hat: 18,
   cape: 18,
   amulet: 18,
@@ -30,6 +31,7 @@ const SLOT_LIMITS = Object.freeze({
 
 const MAX_RELEVANT_SETS = 6;
 const CONSTRAINT_RESERVE_PER_STAT = 4;
+const OFFENSIVE_RESERVE_PER_STAT = 2;
 
 function number(stats, key) {
   const value = Number(stats?.[key] || 0);
@@ -117,14 +119,15 @@ function statsProfile(stats, { targetElement, constraints, selections, turnMode,
   const target = targetElementValue(stats, targetElement);
   const generic = genericOffenseValue(stats);
   const other = otherElementValue(stats, targetElement);
-  let score = constraint + objectiveGain;
-  if (targetElement) {
-    score += target * 35;
-    score += generic * 6;
-    score -= other * 2;
-  } else {
-    score += generic * 4;
-  }
+
+  // The real objective is the primary ranking signal. Raw elemental stats used
+  // to receive a huge artificial multiplier here, which could discard Pourpre,
+  // % spell damage and crit specialists before the real solver ever saw them.
+  // Keep raw stats only as small deterministic tie-breakers.
+  let score = constraint + objectiveGain * 100;
+  if (targetElement) score += target * 1.25 + generic - other * 0.05;
+  else score += generic;
+
   return {
     relevant: target > 0 || generic > 0 || constraint > 0 || objectiveGain > 0,
     score,
@@ -197,9 +200,6 @@ function buildRelevantSetPlans(sets, items, context, slotRules) {
       const bonusProfile = statsProfile(bonus, context);
       if (!combinedProfile.relevant && !bonusProfile.relevant) continue;
 
-      // Seed ranking intentionally rewards coherent set structures. In Dofus a
-      // strong 3/4-piece set, especially one whose bonus grants AP, is a much
-      // better starting point than four unrelated individually-good pieces.
       const structuralBonus = count >= 3 ? 12000 + count * 3000 : count === 2 ? 5000 : 0;
       const apBonus = Math.max(0, number(bonus, 'ap')) * 50000;
       const score = combinedProfile.score + bonusProfile.score * 1.25 + structuralBonus + apBonus;
@@ -242,24 +242,52 @@ function itemProfile(item, context) {
   };
 }
 
-function reserveConstraintSpecialists(profiles, constraints, selectedIds, reservePerStat) {
+function reserveProfiles(selectedIds, profiles, cap) {
+  for (const profile of profiles) {
+    if (selectedIds.size >= cap) break;
+    selectedIds.add(profile.item.id);
+  }
+}
+
+function reserveConstraintSpecialists(profiles, constraints, selectedIds, reservePerStat, cap) {
   for (const [key, minimumRaw] of Object.entries(constraints || {})) {
     if (!(Number(minimumRaw || 0) > 0)) continue;
     const specialists = profiles
       .filter((profile) => number(profile.optimistic, key) > 0)
       .sort((a, b) => number(b.optimistic, key) - number(a.optimistic, key) || b.score - a.score)
       .slice(0, reservePerStat);
-    for (const profile of specialists) selectedIds.add(profile.item.id);
+    reserveProfiles(selectedIds, specialists, cap);
   }
 }
 
-function reserveRelevantSetPieces(profiles, relevantSetPlans, selectedIds, maxRelevantSets) {
+function offensiveReserveKeys(context) {
+  const keys = [...GENERIC_OFFENSE_KEYS];
+  if (context.targetElement) {
+    keys.unshift(context.targetElement, DAMAGE_STAT_BY_ELEMENT[context.targetElement]);
+  } else {
+    keys.unshift(...ELEMENTS, ...Object.values(DAMAGE_STAT_BY_ELEMENT));
+  }
+  return [...new Set(keys)];
+}
+
+function reserveOffensiveSpecialists(profiles, context, selectedIds, cap) {
+  for (const key of offensiveReserveKeys(context)) {
+    const specialists = profiles
+      .filter((profile) => number(profile.optimistic, key) > 0)
+      .sort((a, b) => number(b.optimistic, key) - number(a.optimistic, key) || b.score - a.score)
+      .slice(0, OFFENSIVE_RESERVE_PER_STAT);
+    reserveProfiles(selectedIds, specialists, cap);
+  }
+}
+
+function reserveRelevantSetPieces(profiles, relevantSetPlans, selectedIds, maxRelevantSets, cap) {
   const bestPlans = [...relevantSetPlans.values()]
     .sort((a, b) => b.score - a.score)
     .slice(0, maxRelevantSets);
 
   for (const plan of bestPlans) {
     for (const profile of profiles) {
+      if (selectedIds.size >= cap) return;
       if (profile.item?.setId !== plan.setId) continue;
       if (plan.memberIds.has(profile.item.id)) selectedIds.add(profile.item.id);
     }
@@ -296,8 +324,9 @@ function shortlistSlot(items, rule, context) {
   }
 
   const selectedIds = new Set();
-  reserveConstraintSpecialists(eligible, context.constraints, selectedIds, context.constraintReservePerStat);
-  reserveRelevantSetPieces(eligible, context.relevantSetPlans, selectedIds, context.maxRelevantSets);
+  reserveConstraintSpecialists(eligible, context.constraints, selectedIds, context.constraintReservePerStat, cap);
+  reserveOffensiveSpecialists(eligible, context, selectedIds, cap);
+  reserveRelevantSetPieces(eligible, context.relevantSetPlans, selectedIds, context.maxRelevantSets, cap);
 
   for (const profile of eligible) {
     if (selectedIds.size >= cap) break;
