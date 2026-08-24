@@ -21,7 +21,7 @@ const normalWeapon = {
   id: 'item-999999',
   ankamaId: 999999,
   name: 'Arme normale',
-  level: 197,
+  level: 200,
   slot: 'weapon',
   typeName: 'Bâton',
   certified: true,
