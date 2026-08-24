@@ -15,6 +15,13 @@ function positiveInt(value, fallback = 1) {
   return Math.max(1, Math.floor(num(value, fallback)));
 }
 
+function activeTurns(turnMode = 't1') {
+  if (turnMode === 't2') return [2];
+  if (turnMode === 't3') return [3];
+  if (turnMode === 'sum' || turnMode === 'average' || turnMode === 'min') return [1, 2, 3];
+  return [1];
+}
+
 function baseStatsForTurn(state, turn) {
   return state.baseStatsByTurn?.[turn] || state.baseStats || {};
 }
@@ -58,7 +65,6 @@ function castSpell(spell, state, turn, objective) {
   const modifiers = applyTimedModifiers(state.modifiers, spell.combatModifiers || [], spell.id, turn);
   let apRemaining = state.apRemaining - cost;
 
-  // A deterministic AP gain applied by the spell can be spent immediately.
   for (const modifier of (spell.combatModifiers || [])) {
     if ((modifier.scope || 'self') !== 'self') continue;
     apRemaining += Math.max(0, num(modifier.stats?.ap, 0));
@@ -163,6 +169,12 @@ function finalScore(state, objective) {
     const spent = state.sequence.reduce((sum, entry) => sum + num(entry.apCost), 0);
     return state.damage / Math.max(1, spent);
   }
+  if (objective.turnMode === 'average') return state.damage / Math.max(1, objective.activeTurns.length);
+  if (objective.turnMode === 'min') {
+    const perTurn = {};
+    for (const entry of state.sequence) perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
+    return Math.min(...objective.activeTurns.map((turn) => perTurn[turn] || 0));
+  }
   return state.damage;
 }
 
@@ -174,23 +186,28 @@ export function optimizeCombatSequence({
   beamWidth = 1600,
   maxActionsPerTurn = 12
 } = {}) {
+  const turnMode = ['t1', 't2', 't3', 'sum', 'average', 'min'].includes(objective.turnMode) ? objective.turnMode : 't1';
+  const selectedTurns = activeTurns(turnMode);
   const normalizedObjective = {
     targetMode: objective.targetMode === 'zone' ? 'zone' : 'single',
     areaTargets: positiveInt(objective.areaTargets, 3),
-    turns: Math.max(1, Math.min(3, positiveInt(objective.turns, 1))),
+    turnMode,
+    activeTurns: selectedTurns,
+    turns: selectedTurns.length,
     allowSupport: objective.allowSupport !== false,
     metric: objective.metric === 'damage-per-ap' ? 'damage-per-ap' : 'total-damage'
   };
-  const firstTurnBase = baseStatsByTurn?.[1] || baseStats || {};
+  const firstTurn = selectedTurns[0];
+  const firstTurnBase = baseStatsByTurn?.[firstTurn] || baseStats || {};
   const candidates = (spells || []).filter((spell) =>
     spell?.combatRelevant !== false
     && Math.max(0, num(spell.apCost, 0)) <= Math.max(0, num(firstTurnBase.ap, 0) + 12)
     && ((spell.hits || []).length || (spell.combatModifiers || []).length)
   );
-  if (!candidates.length) return { score: 0, totalDamage: 0, sequence: [], perTurn: {}, explored: 0 };
+  if (!candidates.length) return { score: 0, totalDamage: 0, sequence: [], perTurn: {}, objective: normalizedObjective, explored: 0 };
 
   let frontier = [{
-    turn: 1,
+    turn: firstTurn,
     baseStats: { ...baseStats },
     baseStatsByTurn: baseStatsByTurn ? Object.fromEntries(Object.entries(baseStatsByTurn).map(([turn, stats]) => [turn, { ...stats }])) : null,
     apRemaining: Math.max(0, num(firstTurnBase.ap, 0)),
@@ -202,10 +219,11 @@ export function optimizeCombatSequence({
   }];
   let explored = 0;
 
-  for (let turn = 1; turn <= normalizedObjective.turns; turn++) {
+  for (let index = 0; index < selectedTurns.length; index++) {
+    const turn = selectedTurns[index];
     const turnResults = [];
     for (const previous of frontier) {
-      const start = turn === 1 ? previous : startTurnState(previous, turn);
+      const start = index === 0 ? previous : startTurnState(previous, turn);
       const optimized = optimizeSingleTurn({
         spells: candidates,
         state: start,
@@ -223,6 +241,7 @@ export function optimizeCombatSequence({
   const ranked = frontier.sort((a, b) => finalScore(b, normalizedObjective) - finalScore(a, normalizedObjective));
   const best = ranked[0] || frontier[0];
   const perTurn = {};
+  for (const turn of selectedTurns) perTurn[turn] = 0;
   for (const entry of best?.sequence || []) perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
   return {
     score: best ? finalScore(best, normalizedObjective) : 0,
