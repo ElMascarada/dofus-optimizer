@@ -3,9 +3,13 @@ export function validateDofusSnapshot(snapshot) {
   if (Number(snapshot.schemaVersion) !== 1) throw new Error(`Version de snapshot non prise en charge: ${snapshot.schemaVersion ?? 'absente'}.`);
   if (!Array.isArray(snapshot.items) || !Array.isArray(snapshot.sets)) throw new Error('Le snapshot doit contenir items et sets.');
 
-  const items = snapshot.items.filter((item) => item?.certified === true && item?.id && item?.slot);
+  const items = snapshot.items.filter((item) =>
+    (item?.certified === true || item?.staticOnly === true)
+    && item?.id
+    && item?.slot
+  );
   const sets = snapshot.sets.filter((set) => set?.id && set?.bonuses && typeof set.bonuses === 'object');
-  if (!items.length) throw new Error('Le snapshot certifié ne contient aucun équipement.');
+  if (!items.length) throw new Error('Le snapshot ne contient aucun équipement utilisable.');
 
   return {
     schemaVersion: 1,
