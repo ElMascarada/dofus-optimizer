@@ -29,18 +29,32 @@ function selectionsForTurnMode(selections = [], turnMode = 'sum') {
   }));
 }
 
+function spellMatchesElement(spell, element = 'multi') {
+  if (element === 'multi' || !element) return Array.isArray(spell?.hits) && spell.hits.length > 0;
+  return (spell?.hits || []).some((hit) => hit?.element === element);
+}
+
+function combatSpellPool(classSpells = [], combatObjective = {}) {
+  const element = combatObjective.element || 'multi';
+  return (classSpells || []).filter((spell) => {
+    const support = Array.isArray(spell?.combatModifiers) && spell.combatModifiers.length > 0;
+    return support || spellMatchesElement(spell, element);
+  });
+}
+
 function combatGearSelections(classSpells = [], combatObjective = {}) {
-  const turns = Math.max(1, Math.min(3, Number(combatObjective.turns || 1)));
+  const turns = new Set(activeTurns(combatObjective.turnMode || 't1'));
+  const element = combatObjective.element || 'multi';
   return (classSpells || [])
-    .filter((spell) => Array.isArray(spell?.hits) && spell.hits.length > 0)
+    .filter((spell) => spellMatchesElement(spell, element))
     .map((spell) => ({
       spell: { ...spell },
       enabled: true,
       weight: 1,
       casts: {
-        1: 1,
-        2: turns >= 2 ? 1 : 0,
-        3: turns >= 3 ? 1 : 0
+        1: turns.has(1) ? 1 : 0,
+        2: turns.has(2) ? 1 : 0,
+        3: turns.has(3) ? 1 : 0
       }
     }));
 }
@@ -91,16 +105,20 @@ self.addEventListener('message', (event) => {
   try {
     const combatMode = payload?.objectiveMode === 'combat';
     const combatObjective = payload?.combatObjective || {};
-    const turnMode = combatMode ? 'sum' : (payload?.turnMode || 'sum');
+    const turnMode = combatMode ? (combatObjective.turnMode || payload?.turnMode || 't1') : (payload?.turnMode || 'sum');
+    const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
     const rawSelections = combatMode
-      ? combatGearSelections(payload?.classSpells || [], combatObjective)
+      ? combatGearSelections(combatSpells, combatObjective)
       : payload?.selections;
     const selections = selectionsForTurnMode(rawSelections, turnMode);
     const scenario = scenarioForUi(payload?.scenario, turnMode);
     const enabledSpellCount = selections.filter((selection) => selection.enabled).length;
 
-    // Benchmark or automatic combat mode must not be rejected as a prescribed combo.
     if (combatMode || enabledSpellCount <= 1) scenario.requiredApByTurn = {};
+
+    if (combatMode && !selections.length) {
+      throw new Error(`Aucun sort offensif ${combatObjective.element || 'multi'} certifié pour cette classe.`);
+    }
 
     const normalizedPayload = {
       ...payload,
@@ -111,8 +129,10 @@ self.addEventListener('message', (event) => {
     };
 
     const requestedTopN = Math.max(1, Number(payload?.topN || 10));
-    // Combat mode needs a wider candidate bench before the expensive sequence pass.
-    const searchTopN = combatMode ? Math.max(30, requestedTopN * 3) : requestedTopN;
+    // The automatic mode deliberately keeps a wider equipment bench before the
+    // sequence solver. A build that is only second-best on isolated hits may be
+    // first once AP economy and class buffs are sequenced correctly.
+    const searchTopN = combatMode ? Math.max(60, requestedTopN * 6) : requestedTopN;
     const primary = searchArchitecturesV2({
       ...normalizedPayload,
       topN: searchTopN,
@@ -158,8 +178,8 @@ self.addEventListener('message', (event) => {
     if (combatMode && output.results?.length) {
       const combat = refineCombatTurns({
         results: output.results,
-        spells: payload?.classSpells || [],
-        combatObjective,
+        spells: combatSpells,
+        combatObjective: { ...combatObjective, turnMode },
         topN: requestedTopN,
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
@@ -168,7 +188,7 @@ self.addEventListener('message', (event) => {
         results: combat.results,
         diagnostics: {
           ...(output.diagnostics || {}),
-          combatRefine: combat.diagnostics
+          combatRefine: { ...combat.diagnostics, spellPool: combatSpells.length, element: combatObjective.element || 'multi', turnMode }
         }
       };
     } else if (output.results?.length > requestedTopN) {
