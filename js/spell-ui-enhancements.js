@@ -83,7 +83,12 @@ function attachIconFallback(img, iconId) {
   if (img.dataset.spellIconFallback === 'ready') return;
   img.dataset.spellIconFallback = 'ready';
   img.addEventListener('error', () => {
-    const stage = img.dataset.fallbackStage || 'remote-2x';
+    const stage = img.dataset.fallbackStage || 'local';
+    if (stage === 'local') {
+      img.dataset.fallbackStage = 'remote-2x';
+      img.src = remoteSpellIconUrl(id, '2x');
+      return;
+    }
     if (stage === 'remote-2x') {
       img.dataset.fallbackStage = 'remote-legacy-96';
       img.src = legacyRemoteSpellIconUrl(id);
@@ -92,11 +97,6 @@ function attachIconFallback(img, iconId) {
     if (stage === 'remote-legacy-96') {
       img.dataset.fallbackStage = 'remote-1x';
       img.src = remoteSpellIconUrl(id, '1x');
-      return;
-    }
-    if (stage === 'remote-1x') {
-      img.dataset.fallbackStage = 'local';
-      img.src = localSpellIconUrl(id);
       return;
     }
     img.dataset.fallbackStage = 'failed';
@@ -108,10 +108,10 @@ function setPreferredSpellIcon(img, iconId) {
   const id = Number(iconId || 0);
   if (!img || !(id > 0)) return;
   img.dataset.spellIconId = String(id);
-  img.dataset.fallbackStage = 'remote-2x';
+  img.dataset.fallbackStage = 'local';
   img.style.display = '';
   attachIconFallback(img, id);
-  const preferred = remoteSpellIconUrl(id, '2x');
+  const preferred = localSpellIconUrl(id);
   if (img.getAttribute('src') !== preferred) img.src = preferred;
 }
 
