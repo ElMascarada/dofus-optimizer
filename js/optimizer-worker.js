@@ -1,4 +1,4 @@
-import { searchArchitectures } from './architecture-search.js';
+import { searchArchitecturesV2 } from './architecture-search-v2.js';
 
 // Context-heavy Dofus passives stay outside the automatic ranking until their
 // combat context is explicitly modelled. Their fixed item stats remain usable.
@@ -62,7 +62,7 @@ self.addEventListener('message', (event) => {
       fmPolicy: { ...payload?.fmPolicy, structuralExos: false }
     };
 
-    const output = searchArchitectures({
+    const output = searchArchitecturesV2({
       ...normalizedPayload,
       onProgress: (progress) => {
         self.postMessage({ type: 'progress', requestId, progress });
