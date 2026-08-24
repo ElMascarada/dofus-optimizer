@@ -69,7 +69,7 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
 }
 
 function hasExplicitTurnPlan(scenario = {}) {
-  return Object.keys(scenario?.requiredApByTurn || {}).length > 0;
+  return Object.values(scenario?.requiredApByTurn || {}).some((value) => Number(value || 0) > 0);
 }
 
 function buildRequestedTurnPlan(spellBreakdowns = [], turnMode = 'sum') {
