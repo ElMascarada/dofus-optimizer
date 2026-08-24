@@ -7,18 +7,18 @@
   },
   "elements": 273,
   "items": {
-    "total": 1110,
-    "certified": 1054,
+    "total": 1109,
+    "certified": 1053,
     "unknownSlot": 0,
     "unmappedEffects": 1,
-    "activeEffects": 348,
+    "activeEffects": 346,
     "metaEffects": 56,
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
       "cape": 72,
       "companion": 145,
-      "weapon": 131,
+      "weapon": 130,
       "boots": 83,
       "ring": 82,
       "belt": 65,
@@ -32,20 +32,21 @@
     "unknownConditionNames": {},
     "certifiedPct": 94.95,
     "unknownSlotTypes": {},
-    "snapshotCertified": 1048,
+    "snapshotCertified": 1093,
+    "snapshotStaticOnly": 46,
     "excludedByUncertifiedSet": 6,
     "ignoredEffects": 83,
     "activeEffectNames": {
       "Water steal (Active)": 38,
       "Steals MP (Active)": 4,
-      "Fire damage (Active)": 36,
-      "Fire steal (Active)": 25,
       "Air Damage (Active)": 30,
       "Water damage (Active)": 36,
+      "Fire damage (Active)": 35,
       "Neutral damage (Active)": 46,
       "Earth damage (Active)": 27,
       "Earth steal (Active)": 13,
       "AP (Active)": 16,
+      "Fire steal (Active)": 24,
       "Neutral steal (Active)": 21,
       "Air steal (Active)": 20,
       "Fire heals (Active)": 5,
@@ -734,6 +735,11 @@
         "name": "Le Diviseur (MJ)",
         "ankamaId": 7913,
         "typeName": "Anneau"
+      },
+      {
+        "name": "Le Ramboton",
+        "ankamaId": 8575,
+        "typeName": "Bâton"
       },
       {
         "name": "Fers Fu",
@@ -1934,16 +1940,16 @@
       }
     ],
     "snapshotBySlot": {
-      "dofus": 289,
-      "cape": 68,
+      "dofus": 319,
+      "cape": 71,
       "companion": 145,
-      "weapon": 121,
-      "boots": 79,
-      "ring": 80,
-      "belt": 62,
-      "hat": 89,
-      "amulet": 71,
-      "shield": 44
+      "weapon": 120,
+      "boots": 82,
+      "ring": 81,
+      "belt": 65,
+      "hat": 92,
+      "amulet": 72,
+      "shield": 46
     }
   },
   "sets": {

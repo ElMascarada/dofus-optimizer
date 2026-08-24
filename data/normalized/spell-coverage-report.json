@@ -1,11 +1,516 @@
 {
   "breedCount": 19,
-  "classSpellRefs": 418,
-  "offensiveCandidates": 239,
-  "certified": 222,
+  "classSpellRefs": 836,
+  "variantSpellRefs": 418,
+  "variantsCertified": 236,
+  "offensiveCandidates": 490,
+  "supportOnly": 42,
+  "combatModifierSpells": 72,
+  "certified": 484,
+  "modifierSamples": [
+    {
+      "breed": "Iop",
+      "spell": "Puissance",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 300
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Précipitation",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "ap": 5
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PA"
+        }
+      ]
+    },
+    {
+      "breed": "Iop",
+      "spell": "Agitation",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 3
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Tirs Puissants",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 250
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "crit": 15
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2% Critique"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Acuité Absolue",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "crit": 15
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2% Critique"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Flèche Assaillante",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 150
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Balise Tactique",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 40
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Crâ",
+      "spell": "Flèches Amoureuses",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 100
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Pacte de Sang",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 100
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Fluctuation",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 2
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Furie",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "finalDamagePct": 3
+          },
+          "durationTurns": 3,
+          "description": "#1% Dommages finaux"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Nervosité",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "crit": 7
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2% Critique"
+        }
+      ]
+    },
+    {
+      "breed": "Sacrieur",
+      "spell": "Douleur Cuisante",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 60
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Eniripsa",
+      "spell": "Mot Stimulant",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "ap": 2
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 PA"
+        }
+      ]
+    },
+    {
+      "breed": "Eniripsa",
+      "spell": "Mot Vivifiant",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 2
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Eniripsa",
+      "spell": "Vacarme",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "finalDamagePct": 25
+          },
+          "durationTurns": 1,
+          "description": "#1% Dommages finaux"
+        }
+      ]
+    },
+    {
+      "breed": "Eniripsa",
+      "spell": "Mot Galvanisant",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 150
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Eniripsa",
+      "spell": "Murmure",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 1
+          },
+          "durationTurns": 1,
+          "description": "Vole #1{{~1~2 à }}#2 PM"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 1
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Ouginak",
+      "spell": "Cubitus",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 1
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Ouginak",
+      "spell": "Arcanin",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 100
+          },
+          "durationTurns": 3,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Ouginak",
+      "spell": "Aboiement",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 2
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Ouginak",
+      "spell": "Battue",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 150
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Ouginak",
+      "spell": "Rogne",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 80
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Féca",
+      "spell": "Mise en Garde",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "earth": 200
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Force"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "fire": 200
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Intelligence"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "water": 200
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Chance"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "air": 200
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Agilité"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Force de l'Âge",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 1
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Opportunité",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "power": 80
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Ruée vers l'Or",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 4
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Boîte de Pandore",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "mp": 1
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PM"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Avarice",
+      "variant": false,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "ap": 3
+          },
+          "durationTurns": 1,
+          "description": "#1{{~1~2 à }}#2 PA"
+        },
+        {
+          "scope": "self",
+          "stats": {
+            "power": 50
+          },
+          "durationTurns": 2,
+          "description": "#1{{~1~2 à }}#2 Puissance"
+        }
+      ]
+    },
+    {
+      "breed": "Enutrof",
+      "spell": "Décadence",
+      "variant": true,
+      "modifiers": [
+        {
+          "scope": "self",
+          "stats": {
+            "finalDamagePct": 10
+          },
+          "durationTurns": 1,
+          "description": "#1% Dommages finaux"
+        }
+      ]
+    }
+  ],
   "skipped": {
-    "best-element-damage": 11,
-    "no-fixed-direct-damage": 179,
-    "conditional-or-delayed-damage": 6
-  }
+    "best-element-damage": 23,
+    "no-fixed-direct-damage-or-supported-buff": 304,
+    "conditional-or-delayed-damage": 25
+  },
+  "variantSourceRecords": 431
 }

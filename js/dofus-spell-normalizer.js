@@ -1,3 +1,9 @@
+import {
+  buildSpellEffectRegistry,
+  extractDeterministicCombatModifiers,
+  spellAreaHint
+} from './spell-combat-effects.js';
+
 const ELEMENT_BY_EFFECT_ID = new Map([
   [91, 'water'],
   [92, 'earth'],
@@ -152,27 +158,36 @@ function distanceOptions(level = {}) {
   return ['melee', 'ranged'];
 }
 
-function normalizeOneSpell({ spell, level, breed, translations }) {
-  const normal = analyzeDamageEffects(arrayField(level.effects));
-  const critical = analyzeDamageEffects(arrayField(level.criticalEffect));
+function normalizeOneSpell({ spell, level, breed, translations, combatEffectRegistry }) {
+  const rawEffects = arrayField(level.effects);
+  const rawCritical = arrayField(level.criticalEffect);
+  const normal = analyzeDamageEffects(rawEffects);
+  const critical = analyzeDamageEffects(rawCritical);
   const hasKnownDamage = normal.hasKnownDamage || critical.hasKnownDamage;
+  const combat = extractDeterministicCombatModifiers(rawEffects, combatEffectRegistry, level);
+  const hasCombatModifiers = combat.modifiers.length > 0;
 
   if (normal.unsupportedReason || critical.unsupportedReason) {
-    return { status: 'unsupported', reason: normal.unsupportedReason || critical.unsupportedReason, hasKnownDamage };
+    return { status: 'unsupported', reason: normal.unsupportedReason || critical.unsupportedReason, hasKnownDamage, hasCombatModifiers };
   }
-  if (!normal.hits.length) return { status: 'non-offensive', reason: 'no-fixed-direct-damage', hasKnownDamage };
+  if (!normal.hits.length && !hasCombatModifiers) {
+    return { status: 'irrelevant', reason: 'no-fixed-direct-damage-or-supported-buff', hasKnownDamage, hasCombatModifiers: false };
+  }
 
   const baseCritPct = Math.max(0, number(level.criticalHitProbability, 0));
-  const critHits = critical.hits.length ? critical.hits : (baseCritPct === 0 ? normal.hits : []);
-  if (baseCritPct > 0 && !critHits.length) {
-    return { status: 'unsupported', reason: 'missing-critical-damage', hasKnownDamage: true };
-  }
-  if (critHits.length !== normal.hits.length) {
-    return { status: 'unsupported', reason: 'critical-hit-count-mismatch', hasKnownDamage: true };
-  }
-  for (let index = 0; index < normal.hits.length; index++) {
-    if (normal.hits[index].element !== critHits[index].element) {
-      return { status: 'unsupported', reason: 'critical-element-mismatch', hasKnownDamage: true };
+  let critHits = [];
+  if (normal.hits.length) {
+    critHits = critical.hits.length ? critical.hits : (baseCritPct === 0 ? normal.hits : []);
+    if (baseCritPct > 0 && !critHits.length) {
+      return { status: 'unsupported', reason: 'missing-critical-damage', hasKnownDamage: true, hasCombatModifiers };
+    }
+    if (critHits.length !== normal.hits.length) {
+      return { status: 'unsupported', reason: 'critical-hit-count-mismatch', hasKnownDamage: true, hasCombatModifiers };
+    }
+    for (let index = 0; index < normal.hits.length; index++) {
+      if (normal.hits[index].element !== critHits[index].element) {
+        return { status: 'unsupported', reason: 'critical-element-mismatch', hasKnownDamage: true, hasCombatModifiers };
+      }
     }
   }
 
@@ -185,7 +200,8 @@ function normalizeOneSpell({ spell, level, breed, translations }) {
 
   return {
     status: 'certified',
-    hasKnownDamage: true,
+    hasKnownDamage,
+    hasCombatModifiers,
     spell: {
       id: `spell-${ankamaId}`,
       ankamaId,
@@ -205,13 +221,23 @@ function normalizeOneSpell({ spell, level, breed, translations }) {
       distanceOptions: distanceOptions(level),
       maxCastPerTurn: Math.max(0, number(level.maxCastPerTurn, 0)),
       maxCastPerTarget: Math.max(0, number(level.maxCastPerTarget, 0)),
+      minCastInterval: Math.max(0, number(level.minCastInterval ?? level.minCastIntervalTurns, 0)),
+      initialCooldown: Math.max(0, number(level.initialCooldown ?? level.initialCooldownTurns, 0)),
+      isArea: spellAreaHint(rawEffects),
       hits: normal.hits.map((hit, index) => ({
         element: hit.element,
         normal: [...hit.range],
         crit: [...critHits[index].range]
       })),
+      combatModifiers: combat.modifiers,
+      combatModifierCoverage: {
+        supported: combat.modifiers.length,
+        ignored: combat.ignored.length
+      },
+      combatRelevant: normal.hits.length > 0 || hasCombatModifiers,
+      supportOnly: normal.hits.length === 0 && hasCombatModifiers,
       damageSource: 'spell',
-      model: 'direct-fixed-element',
+      model: hasCombatModifiers ? 'direct-damage-plus-deterministic-effects' : 'direct-fixed-element',
       certified: true
     }
   };
@@ -220,9 +246,22 @@ function normalizeOneSpell({ spell, level, breed, translations }) {
 function variantIndex(variantsPayload = {}) {
   const byBreed = new Map();
   for (const variant of releaseRecords(variantsPayload)) {
-    const breedId = number(variant?.breedId ?? variant?.breed_id ?? variant?.breed?.id, -1);
+    const breedId = number(
+      variant?.breedId
+      ?? variant?.breed_id
+      ?? variant?.breed?.id
+      ?? variant?.breed
+      ?? variant?.id,
+      -1
+    );
     if (breedId < 0) continue;
-    const spellIds = uniqueNumericIds(arrayField(variant?.spellIds ?? variant?.spell_ids ?? variant?.spells));
+    const spellIds = uniqueNumericIds(arrayField(
+      variant?.spellIds
+      ?? variant?.spell_ids
+      ?? variant?.spells
+      ?? variant?.variants
+      ?? variant?.spellVariants
+    ));
     if (!spellIds.length) continue;
     if (!byBreed.has(breedId)) byBreed.set(breedId, new Set());
     const target = byBreed.get(breedId);
@@ -246,6 +285,7 @@ export function normalizeDofusSpellCatalog({
   if (!registryAudit.valid) throw new Error(`Dofus spell damage registry mismatch: ${registryAudit.errors.join('; ')}`);
 
   const translations = translationEntries(translationsPayload);
+  const combatEffectRegistry = buildSpellEffectRegistry(effectsPayload, translationsPayload);
   const spells = releaseRecords(spellsPayload, 'SpellData');
   const levels = releaseRecords(levelsPayload, 'SpellLevelData');
   const variantsByBreed = variantIndex(variantsPayload);
@@ -258,9 +298,13 @@ export function normalizeDofusSpellCatalog({
   const normalizedSpells = [];
   const normalizedBreeds = [];
   const skipped = {};
+  const modifierSamples = [];
   let classSpellRefs = 0;
   let variantSpellRefs = 0;
+  let variantsCertified = 0;
   let offensiveCandidates = 0;
+  let supportOnly = 0;
+  let combatModifierSpells = 0;
 
   for (const breed of breeds) {
     const breedAnkamaId = number(breed.id, -1);
@@ -285,13 +329,31 @@ export function normalizeDofusSpellCatalog({
         skipped['missing-level-200'] = (skipped['missing-level-200'] || 0) + 1;
         continue;
       }
-      const result = normalizeOneSpell({ spell, level, breed, translations });
+      const result = normalizeOneSpell({ spell, level, breed, translations, combatEffectRegistry });
       if (result.hasKnownDamage) offensiveCandidates++;
       if (result.status !== 'certified') {
         skipped[result.reason] = (skipped[result.reason] || 0) + 1;
         continue;
       }
       result.spell.isVariant = variantSpellIds.has(spellId) && !baseSpellIds.has(spellId);
+      if (result.spell.isVariant) variantsCertified++;
+      if (result.spell.supportOnly) supportOnly++;
+      if (result.spell.combatModifiers.length) {
+        combatModifierSpells++;
+        if (modifierSamples.length < 30) {
+          modifierSamples.push({
+            breed: breedName,
+            spell: result.spell.name,
+            variant: result.spell.isVariant,
+            modifiers: result.spell.combatModifiers.map((modifier) => ({
+              scope: modifier.scope,
+              stats: modifier.stats,
+              durationTurns: modifier.durationTurns,
+              description: modifier.description
+            }))
+          });
+        }
+      }
       normalizedSpells.push(result.spell);
       breedSpellIds.push(result.spell.id);
       breedCertified++;
@@ -317,15 +379,19 @@ export function normalizeDofusSpellCatalog({
     gameVersion,
     generatedAt,
     characterLevel,
-    model: 'direct-fixed-element',
+    model: 'direct-damage-and-deterministic-combat-effects',
     breeds: normalizedBreeds,
     spells: normalizedSpells,
     coverage: {
       breedCount: normalizedBreeds.length,
       classSpellRefs,
       variantSpellRefs,
+      variantsCertified,
       offensiveCandidates,
+      supportOnly,
+      combatModifierSpells,
       certified: normalizedSpells.length,
+      modifierSamples,
       skipped
     }
   };

@@ -11,6 +11,26 @@ export function spellsForBreed(spellData, breedId) {
   return (spellData?.spells || []).filter((spell) => allowed.has(spell.id));
 }
 
+export function spellElements(spell = {}) {
+  return [...new Set((spell.hits || []).map((hit) => hit.element).filter(Boolean))];
+}
+
+export function spellMatchesElement(spell = {}, element = 'multi') {
+  if (element === 'multi' || !element) return (spell.hits || []).length > 0;
+  return spellElements(spell).includes(element);
+}
+
+export function combatSpellsForElement(spellData, breedId, element = 'multi') {
+  return spellsForBreed(spellData, breedId).filter((spell) => {
+    const hasSupport = Array.isArray(spell.combatModifiers) && spell.combatModifiers.length > 0;
+    const hasMatchingDamage = spellMatchesElement(spell, element);
+    // A support spell remains available even if its own incidental damage is in
+    // another element: the turn optimizer may still decide that its buff/debuff
+    // is worth the AP cost before the requested-element attacks.
+    return hasSupport || hasMatchingDamage;
+  });
+}
+
 export function castCap(spell = {}) {
   const positive = [spell.maxCastPerTurn, spell.maxCastPerTarget]
     .map(Number)
@@ -29,8 +49,8 @@ export function defaultDistance(spell = {}) {
 }
 
 export function spellElementLabel(spell = {}) {
-  const elements = [...new Set((spell.hits || []).map((hit) => hit.element).filter(Boolean))];
-  return elements.map((element) => ELEMENT_LABELS[element] || element).join(' / ') || 'Dégâts';
+  const elements = spellElements(spell);
+  return elements.map((element) => ELEMENT_LABELS[element] || element).join(' / ') || 'Support';
 }
 
 export function requiredApByTurn(selections = []) {

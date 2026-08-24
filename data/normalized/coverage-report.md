@@ -2,17 +2,18 @@
 
 - Generated: 2026-08-06T14:44:19.969310786+02:00
 - Game version: 3.6.10.10 (main)
-- Included items: 1110
-- Self-certified items in coverage scope: 1054 (94.95%)
-- Snapshot-certified items: 1048
+- Included items: 1109
+- Self-certified items in coverage scope: 1053 (94.95%)
+- Snapshot items: 1093
+- Snapshot static-only dynamic items: 46
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
 - Unmapped passive effects: 1
-- Active effects intentionally excluded from stats: 348
+- Active effects intentionally excluded from stats: 346
 - Meta effects: 56
 - Explicitly ignored non-combat metadata: 83
 - Items with unmapped conditions: 0
-- Explicitly excluded internal/non-player items: 214
+- Explicitly excluded internal/non-player items: 215
 - Sets: 160/161 certified
 
 ## Slots
@@ -26,7 +27,7 @@
 - hat: 93
 - ring: 82
 - shield: 46
-- weapon: 131
+- weapon: 130
 
 ## Unknown slot types
 
@@ -48,11 +49,11 @@
 
 - Neutral damage (Active): 46
 - Water steal (Active): 38
-- Fire damage (Active): 36
 - Water damage (Active): 36
+- Fire damage (Active): 35
 - Air Damage (Active): 30
 - Earth damage (Active): 27
-- Fire steal (Active): 25
+- Fire steal (Active): 24
 - Neutral steal (Active): 21
 - Air steal (Active): 20
 - AP (Active): 16
@@ -144,6 +145,7 @@
 - Surpuissant Chacha de Combat (MJ) (#6894; Familier)
 - Petit Chacha de Combat (MJ) (#6895; Familier)
 - Le Diviseur (MJ) (#7913; Anneau)
+- Le Ramboton (#8575; Bâton)
 - Fers Fu (#27995; Fers de Percepteur)
 - Fers Ta (#27996; Fers de Percepteur)
 - Fers Espem (#27997; Fers de Percepteur)

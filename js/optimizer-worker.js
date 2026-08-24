@@ -1,8 +1,7 @@
 import { searchArchitecturesV2 } from './architecture-search-v2.js';
 import { refineOffensiveSlots } from './offensive-slot-refiner.js';
+import { refineCombatTurns } from './combat-turn-refiner.js';
 
-// Context-heavy Dofus passives stay outside the automatic ranking until their
-// combat context is explicitly modelled. Their fixed item stats remain usable.
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
   'deep-purple',
   'turquoise-blue',
@@ -30,6 +29,36 @@ function selectionsForTurnMode(selections = [], turnMode = 'sum') {
   }));
 }
 
+function spellMatchesElement(spell, element = 'multi') {
+  if (element === 'multi' || !element) return Array.isArray(spell?.hits) && spell.hits.length > 0;
+  return (spell?.hits || []).some((hit) => hit?.element === element);
+}
+
+function combatSpellPool(classSpells = [], combatObjective = {}) {
+  const element = combatObjective.element || 'multi';
+  return (classSpells || []).filter((spell) => {
+    const support = Array.isArray(spell?.combatModifiers) && spell.combatModifiers.length > 0;
+    return support || spellMatchesElement(spell, element);
+  });
+}
+
+function combatGearSelections(classSpells = [], combatObjective = {}) {
+  const turns = new Set(activeTurns(combatObjective.turnMode || 't1'));
+  const element = combatObjective.element || 'multi';
+  return (classSpells || [])
+    .filter((spell) => spellMatchesElement(spell, element))
+    .map((spell) => ({
+      spell: { ...spell },
+      enabled: true,
+      weight: 1,
+      casts: {
+        1: turns.has(1) ? 1 : 0,
+        2: turns.has(2) ? 1 : 0,
+        3: turns.has(3) ? 1 : 0
+      }
+    }));
+}
+
 function scenarioForUi(scenario = {}, turnMode = 'sum') {
   const allowed = new Set(activeTurns(turnMode));
   const requiredApByTurn = {};
@@ -50,17 +79,13 @@ function resultKey(result) {
 }
 
 function mergeOutputs(primary, fallback, topN) {
-  const merged = [];
   const seen = new Map();
   for (const result of [...(primary?.results || []), ...(fallback?.results || [])]) {
     const key = resultKey(result);
     const previous = seen.get(key);
     if (!previous || result.score > previous.score) seen.set(key, result);
   }
-  merged.push(...seen.values());
-  merged.sort((a, b) => b.score - a.score);
-  if (merged.length > topN) merged.length = topN;
-
+  const merged = [...seen.values()].sort((a, b) => b.score - a.score).slice(0, topN);
   return {
     ...(primary || {}),
     results: merged,
@@ -78,42 +103,50 @@ self.addEventListener('message', (event) => {
   const { requestId, payload } = event.data;
 
   try {
-    const turnMode = payload?.turnMode || 'sum';
-    const selections = selectionsForTurnMode(payload?.selections, turnMode);
+    const combatMode = payload?.objectiveMode === 'combat';
+    const combatObjective = payload?.combatObjective || {};
+    const turnMode = combatMode ? (combatObjective.turnMode || payload?.turnMode || 't1') : (payload?.turnMode || 'sum');
+    const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
+    const rawSelections = combatMode
+      ? combatGearSelections(combatSpells, combatObjective)
+      : payload?.selections;
+    const selections = selectionsForTurnMode(rawSelections, turnMode);
     const scenario = scenarioForUi(payload?.scenario, turnMode);
     const enabledSpellCount = selections.filter((selection) => selection.enabled).length;
 
-    // One selected spell is a benchmark target, not a combo to validate.
-    if (enabledSpellCount <= 1) scenario.requiredApByTurn = {};
+    if (combatMode || enabledSpellCount <= 1) scenario.requiredApByTurn = {};
+
+    if (combatMode && !selections.length) {
+      throw new Error(`Aucun sort offensif ${combatObjective.element || 'multi'} certifié pour cette classe.`);
+    }
 
     const normalizedPayload = {
       ...payload,
       selections,
       turnMode,
       scenario,
-      // +1 PA/+1 PM are already included in BASE_CHARACTER. Every equipment
-      // slot therefore remains available for offensive FM.
       fmPolicy: { ...payload?.fmPolicy, structuralExos: false }
     };
 
-    const topN = Math.max(1, Number(payload?.topN || 10));
+    const requestedTopN = Math.max(1, Number(payload?.topN || 10));
+    // The automatic mode deliberately keeps a wider equipment bench before the
+    // sequence solver. A build that is only second-best on isolated hits may be
+    // first once AP economy and class buffs are sequenced correctly.
+    const searchTopN = combatMode ? Math.max(60, requestedTopN * 6) : requestedTopN;
     const primary = searchArchitecturesV2({
       ...normalizedPayload,
-      onProgress: (progress) => {
-        self.postMessage({ type: 'progress', requestId, progress });
-      }
+      topN: searchTopN,
+      onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
     });
 
     let output = primary;
 
-    // Trophy conditions can dominate the heuristic (PA/PM items in particular).
-    // If that leaves us with fewer than the requested legal results, rerun the
-    // same architecture search without conditional items and merge both rankings.
-    if ((primary.results || []).length < topN) {
+    if ((primary.results || []).length < searchTopN) {
       const conditionlessItems = (normalizedPayload.items || []).filter((item) => !item.conditions);
       const fallback = searchArchitecturesV2({
         ...normalizedPayload,
         items: conditionlessItems,
+        topN: searchTopN,
         onProgress: (progress) => {
           self.postMessage({
             type: 'progress',
@@ -122,21 +155,15 @@ self.addEventListener('message', (event) => {
           });
         }
       });
-      output = mergeOutputs(primary, fallback, topN);
+      output = mergeOutputs(primary, fallback, searchTopN);
     }
 
-    // Once the set/equipment skeleton is known, companion + six Dofus/trophies
-    // are re-optimized together with the REAL expected spell damage. This phase
-    // correctly values crit chance and power, and lets set AP/MP free offensive
-    // Dofus slots (e.g. Kokulte + Ocre vs a stat mount + AP trophy).
     if (output.results?.length) {
       const refined = refineOffensiveSlots({
         ...normalizedPayload,
         results: output.results,
-        topN,
-        onProgress: (progress) => {
-          self.postMessage({ type: 'progress', requestId, progress });
-        }
+        topN: searchTopN,
+        onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       output = {
         ...output,
@@ -146,6 +173,26 @@ self.addEventListener('message', (event) => {
           offensiveRefine: refined.diagnostics
         }
       };
+    }
+
+    if (combatMode && output.results?.length) {
+      const combat = refineCombatTurns({
+        results: output.results,
+        spells: combatSpells,
+        combatObjective: { ...combatObjective, turnMode },
+        topN: requestedTopN,
+        onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
+      });
+      output = {
+        ...output,
+        results: combat.results,
+        diagnostics: {
+          ...(output.diagnostics || {}),
+          combatRefine: { ...combat.diagnostics, spellPool: combatSpells.length, element: combatObjective.element || 'multi', turnMode }
+        }
+      };
+    } else if (output.results?.length > requestedTopN) {
+      output.results = output.results.slice(0, requestedTopN);
     }
 
     self.postMessage({ type: 'result', requestId, output });

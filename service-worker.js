@@ -1,12 +1,13 @@
-const CACHE = 'dofus-optimizer-v0.12.1';
+const CACHE = 'dofus-optimizer-v0.13.0-exp.1';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
+  './styles-experimental.css',
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
-  './js/app.js',
+  './js/app-experimental.js',
   './js/config.js',
   './js/data-loader.js',
   './js/item-availability.js',
@@ -15,6 +16,10 @@ const APP_SHELL = [
   './js/architecture-search.js',
   './js/architecture-search-v2.js',
   './js/offensive-slot-refiner.js',
+  './js/combat-state.js',
+  './js/turn-optimizer.js',
+  './js/combat-turn-refiner.js',
+  './js/spell-combat-effects.js',
   './js/set-synergy-index.js',
   './js/complete-build-evaluator.js',
   './js/candidate-prefilter.js',

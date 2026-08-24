@@ -246,7 +246,7 @@ test('AP and MP targets reject permanent overcap builds', () => {
   assert.equal(output.results.length, 0);
 });
 
-test('Pryximite is scored offensively only when its T1 proximity context is provided', () => {
+test('Pryximite melee bonus is ignored by spell scoring, even when its context is resolved', () => {
   const pryximite = passiveItem({
     id: 'pryximite',
     passiveId: 'pryximite',
@@ -277,8 +277,7 @@ test('Pryximite is scored offensively only when its T1 proximity context is prov
     ...common,
     scenario: { pryximiteNearbyEnemiesStartT1: 2, pryximiteNearbyEnemiesEndT1: 2 }
   });
-  assert.equal(resolved.results[0].items[0].id, 'pryximite');
-  assert.equal(resolved.results[0].effectiveStatsByTurn[1].meleeDamagePct, 8);
+  assert.equal(resolved.results[0].items[0].id, 'power-dofus');
 
   const unresolved = optimizeBuild(common);
   assert.equal(unresolved.results.some((result) => result.items[0].id === 'pryximite'), false);

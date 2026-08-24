@@ -60,7 +60,7 @@ test('spell loader keeps certified damaging spells and drops empty classes', () 
 });
 
 test('spell loader rejects empty or malformed spell snapshots', () => {
-  assert.throws(() => validateSpellSnapshot({ schemaVersion: 1, breeds: [], spells: [] }), /aucun sort offensif/);
+  assert.throws(() => validateSpellSnapshot({ schemaVersion: 1, breeds: [], spells: [] }), /aucun sort de combat/);
   assert.throws(() => validateSpellSnapshot({ schemaVersion: 2, breeds: [], spells: [] }), /non prise en charge/);
 });
 

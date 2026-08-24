@@ -29,9 +29,9 @@ test('Nébuleux-style temporal passive changes T1/T2/T3 damage at the final-dama
   assert.equal(result.score, 330);
 });
 
-test('final damage is applied after spell/melee percentage modifiers', () => {
+test('final damage is applied after spell damage while melee percentage is ignored for spell scoring', () => {
   const damage = spellExpectedDamage(spell, { spellDamagePct: 10, meleeDamagePct: 10, finalDamagePct: 20 }, 1);
-  assert.equal(damage, 144);
+  assert.equal(damage, 132);
 });
 
 test('spell damage applies to spells but weapon damage does not', () => {
@@ -65,7 +65,7 @@ test('objective reports unresolved conditional passive context', () => {
   assert.deepEqual(result.unresolvedPassiveContexts, ['enemyAdjacent']);
 });
 
-test('hard constraints are checked against effective stats on every selected turn', () => {
+test('temporary AP is visible per turn but cannot satisfy the permanent 12 AP base target', () => {
   const item = {
     passives: [{
       id: 'pryssion-matte',
@@ -78,13 +78,14 @@ test('hard constraints are checked against effective stats on every selected tur
     constraints: { ap: 12, mp: 6 },
     turnMode: 'sum'
   });
-  assert.equal(result.meets, true);
+  assert.equal(result.meets, false);
+  assert.deepEqual(result.baseApMpMismatches, { ap: { actual: 11, target: 12 } });
   assert.equal(result.perTurn[1].ap, 12);
   assert.equal(result.perTurn[2].ap, 12);
   assert.equal(result.perTurn[3].ap, 12);
 });
 
-test('a T1-only passive satisfies a T1 constraint but not a T1-T3 constraint', () => {
+test('a T1-only passive never replaces the permanent AP target', () => {
   const item = {
     passives: [{
       id: 'prycipithon-matte',
@@ -93,8 +94,11 @@ test('a T1-only passive satisfies a T1 constraint but not a T1-T3 constraint', (
   };
   const t1 = evaluateTurnConstraints({ stats: { ap: 10 }, items: [item], constraints: { ap: 12 }, turnMode: 't1' });
   const sum = evaluateTurnConstraints({ stats: { ap: 10 }, items: [item], constraints: { ap: 12 }, turnMode: 'sum' });
-  assert.equal(t1.meets, true);
+  assert.equal(t1.meets, false);
   assert.equal(sum.meets, false);
+  assert.deepEqual(t1.baseApMpMismatches, { ap: { actual: 10, target: 12 } });
+  assert.deepEqual(sum.baseApMpMismatches, { ap: { actual: 10, target: 12 } });
+  assert.equal(t1.perTurn[1].ap, 12);
   assert.deepEqual(sum.deficitsByTurn, { 2: { ap: 2 }, 3: { ap: 2 } });
 });
 

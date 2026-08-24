@@ -4,8 +4,8 @@ import { applySetBonuses } from './sets.js';
 import {
   estimateElementValues,
   evaluateTurnConstraints,
-  selectedTurnsForMode,
-  spellDamageBreakdown
+  spellDamageBreakdown,
+  statsForTurnDetailed
 } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { optimizeFm } from './fm.js';
@@ -26,17 +26,15 @@ function average(values = []) {
   return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
 }
 
-function buildSpellBreakdowns(selections, effectiveStatsByTurn, turnMode) {
-  const turns = selectedTurnsForMode(turnMode);
+function buildSpellBreakdowns(selections, baseStats, items, scenario) {
   return (selections || [])
-    .filter((selection) => selection?.enabled && selection?.spell)
+    .filter((selection) => selection?.enabled && selection?.spell && (selection.spell.hits || []).length)
     .map((selection) => {
       const spell = selection.spell;
       const perTurn = {};
-      for (const turn of turns) {
-        const stats = effectiveStatsByTurn?.[turn];
-        if (!stats) continue;
-        perTurn[turn] = spellDamageBreakdown(spell, stats, turn);
+      for (const turn of [1, 2, 3]) {
+        const turnStats = statsForTurnDetailed(baseStats, items, turn, scenario).stats;
+        perTurn[turn] = spellDamageBreakdown(spell, turnStats, turn);
       }
       const entries = Object.values(perTurn);
       return {
@@ -88,8 +86,6 @@ export function evaluateCompleteBuild({
     baseVitality: 0
   });
 
-  // The optimizer models the permanent target as 12/6. Temporary combat effects
-  // are applied afterwards by the objective and may exceed these values.
   const permanentBase = capPermanentApMp(charResult.stats, constraints);
   const fm = optimizeFm({
     baseStats: permanentBase,
@@ -101,9 +97,6 @@ export function evaluateCompleteBuild({
   });
   if (!fm) return { result: null, reason: 'evaluation-failed' };
 
-  // Equipment conditions are real Dofus legality rules. Unlike turn/benchmark
-  // feasibility they are not optional: an impossible trophy/item must never be
-  // shown in the ranking (e.g. a Remueur with too many set bonuses).
   if (!itemConditionsAreValid(items, fm.stats, character.level)) {
     return { result: null, reason: 'item-condition' };
   }
@@ -117,8 +110,6 @@ export function evaluateCompleteBuild({
     scenario
   });
 
-  // Turn feasibility remains diagnostic. A single-spell benchmark intentionally
-  // compares damage values even when its requested cast count is not a real combo.
   const warnings = [];
   if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
     warnings.push('unresolved-passive');
@@ -126,7 +117,9 @@ export function evaluateCompleteBuild({
   if (Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
   if (Object.keys(turnConstraints.deficitsByTurn || {}).length) warnings.push('turn-constraints');
 
-  const spellBreakdowns = buildSpellBreakdowns(selections, turnConstraints.perTurn, turnMode);
+  const effectiveStatsByTurn = {};
+  for (const turn of [1, 2, 3]) effectiveStatsByTurn[turn] = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
+  const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
 
   return {
     result: {
@@ -134,7 +127,7 @@ export function evaluateCompleteBuild({
       perTurn: fm.objective.perTurn,
       items: [...items],
       stats: fm.stats,
-      effectiveStatsByTurn: turnConstraints.perTurn,
+      effectiveStatsByTurn,
       spellBreakdowns,
       characteristics: charResult.allocation,
       fm: {

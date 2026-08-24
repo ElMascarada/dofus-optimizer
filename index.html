@@ -7,6 +7,7 @@
   <title>Dofus Optimizer</title>
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles-experimental.css">
 </head>
 <body>
   <header class="topbar">
@@ -23,15 +24,56 @@
     <div class="layout">
       <aside class="controls">
         <section class="panel">
-          <h2>1. Sorts à optimiser</h2>
+          <h2>1. Classe & sorts</h2>
           <label class="field">Classe<select id="breed-select" disabled></select></label>
           <div id="spell-list"><div class="empty">Chargement du catalogue de sorts…</div></div>
-          <p class="hint">Catalogue Dofus réel : dégâts directs immédiats à élément fixe. Les variantes offensives de classe sont incluses lorsqu’elles sont présentes dans la source. Les poisons, dégâts conditionnels et « meilleur élément » restent exclus tant qu’ils ne sont pas simulés exactement.</p>
+          <p class="hint">Les variantes sont signalées dans la liste. En optimisation automatique, les sorts de support certifiés sont utilisés eux aussi sans avoir besoin de les cocher.</p>
         </section>
 
         <section class="panel">
-          <h2>2. Temporalité</h2>
-          <label class="field">Objectif de tours<select id="turn-mode"></select></label>
+          <h2>2. Objectif de calcul</h2>
+          <label class="field">Mode
+            <select id="objective-mode">
+              <option value="manual">Benchmark / combo manuel</option>
+              <option value="combat">Optimisation automatique</option>
+            </select>
+          </label>
+
+          <label class="field">Tour(s) à optimiser<select id="turn-mode"></select></label>
+
+          <div id="manual-objective-controls">
+            <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés.</p>
+          </div>
+
+          <div id="combat-objective-controls" class="combat-objective-controls" hidden>
+            <div class="form-grid">
+              <label class="field">Élément
+                <select id="combat-element">
+                  <option value="earth">Terre</option>
+                  <option value="fire">Feu</option>
+                  <option value="water">Eau</option>
+                  <option value="air">Air</option>
+                  <option value="multi">Multi</option>
+                </select>
+              </label>
+              <label class="field">Cibles
+                <select id="combat-target-mode">
+                  <option value="single">1 cible</option>
+                  <option value="zone">Zone</option>
+                </select>
+              </label>
+              <label class="field">Cibles touchées en zone<input id="combat-area-targets" type="number" min="2" max="8" value="3"></label>
+              <label class="field">Classement
+                <select id="combat-metric">
+                  <option value="total-damage">Dégâts totaux</option>
+                  <option value="damage-per-ap">Dégâts / PA</option>
+                </select>
+              </label>
+            </div>
+            <label class="toggle"><input id="combat-allow-support" type="checkbox" checked><span>Autoriser les sorts de buff / support</span></label>
+            <p id="combat-spell-summary" class="hint"></p>
+            <p class="hint">Le moteur choisit lui-même l’ordre des sorts et les PA dépensés. En mono-élément, il teste tous les sorts offensifs de cet élément ainsi que les buffs/debuffs utiles de la classe. En Multi, tout le panel de combat est disponible.</p>
+          </div>
         </section>
 
         <section class="panel">
@@ -42,7 +84,7 @@
             <label class="field">Pryximite · proches fin T1<input id="ctx-pryximite-end" type="number" min="0" placeholder="non renseigné"></label>
           </div>
           <p class="hint">Laisser vide signifie « ne pas supposer ». Un item dont le calcul dépend de ce contexte ne sera pas retenu tant que l’information manque.</p>
-          <p class="hint">Les passifs contextuels complexes des Dofus sont pour l’instant neutralisés : leurs stats fixes restent utilisables, mais aucun bonus conditionnel n’est inventé. Nébuleux et les passifs déterministes restent calculés normalement.</p>
+          <p class="hint">Les passifs contextuels complexes des Dofus restent neutralisés tant qu’ils ne sont pas simulés exactement. Nébuleux et les passifs déterministes sont calculés tour par tour.</p>
         </section>
 
         <section class="panel">
@@ -57,7 +99,7 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
-          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base du personnage pour accélérer le solveur. Ils ne consomment pas de FM offensive. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans les tours concernés.</p>
+          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans le tour concerné.</p>
         </section>
 
         <section class="panel">
@@ -80,7 +122,7 @@
     </div>
   </main>
 
-  <script type="module" src="js/app.js"></script>
+  <script type="module" src="js/app-experimental.js"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});</script>
 </body>
 </html>
