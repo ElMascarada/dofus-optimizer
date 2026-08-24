@@ -58,7 +58,7 @@ function compactItem(item) {
     setId: item.setId,
     imageUrl: item.imageUrl,
     stats: item.stats,
-    passives: item.passives || [],
+    passives: staticOnly ? [] : (item.passives || []),
     conditions: item.conditions,
     conditionStatus: item.conditionStatus,
     certified: item.certification.certified,
