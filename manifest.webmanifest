@@ -1,8 +1,23 @@
 {
   "name": "Dofus Optimizer",
   "short_name": "Optimizer",
+  "id": "./",
   "start_url": "./",
   "display": "standalone",
   "background_color": "#090b0e",
-  "theme_color": "#0b0d10"
+  "theme_color": "#0b0d10",
+  "icons": [
+    {
+      "src": "assets/app/icon-180.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/app/icon-192.webp",
+      "sizes": "192x192",
+      "type": "image/webp",
+      "purpose": "any"
+    }
+  ]
 }
