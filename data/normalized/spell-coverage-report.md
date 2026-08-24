@@ -6,71 +6,71 @@
 - Class spell references: 836
 - SpellVariantData source records: 431
 - Variant spell references added: 418
-- Certified variants: 242
+- Certified variants: 236
 - Offensive candidates detected: 490
-- Certified combat spells: 506
-- Spells with deterministic buff/debuff: 216
-- Support-only spells: 64
+- Certified combat spells: 484
+- Spells with deterministic buff/debuff: 72
+- Support-only spells: 42
 - Model: direct-damage-and-deterministic-combat-effects
 
 ## Coverage by class
 
-- Iop: 31/44
+- Iop: 29/44
 - Crâ: 32/44
-- Sacrieur: 30/44
+- Sacrieur: 26/44
 - Eniripsa: 32/44
-- Ouginak: 27/44
+- Ouginak: 26/44
 - Féca: 25/44
-- Enutrof: 29/44
+- Enutrof: 28/44
 - Sram: 20/44
 - Forgelance: 30/44
-- Zobal: 27/44
-- Pandawa: 27/44
-- Sadida: 20/44
+- Zobal: 26/44
+- Pandawa: 25/44
+- Sadida: 19/44
 - Osamodas: 21/44
-- Steamer: 21/44
-- Huppermage: 33/44
-- Ecaflip: 31/44
-- Roublard: 18/44
-- Eliotrope: 28/44
-- Xélor: 24/44
+- Steamer: 20/44
+- Huppermage: 31/44
+- Ecaflip: 28/44
+- Roublard: 16/44
+- Eliotrope: 27/44
+- Xélor: 23/44
 
 ## Deterministic combat modifier samples
 
-- Iop · Ferveur: [{"scope":"self","stats":{"damageWater":19},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Eau"}]
-- Iop · Épée Divine: [{"scope":"self","stats":{"damageAir":28},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Air"}]
-- Iop · Concentration: [{"scope":"self","stats":{"damageEarth":24},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Terre"}]
 - Iop · Puissance: [{"scope":"self","stats":{"power":300},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
-- Iop · Tempête de Puissance: [{"scope":"self","stats":{"damageFire":30},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Feu"}]
-- Iop · Endurance: [{"scope":"self","stats":{"damageWater":34},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Eau"}]
-- Iop · Vertu: [{"scope":"self","stats":{"power":50},"durationTurns":2,"description":"-#1{{~1~2 à -}}#2 Puissance"}]
-- Iop · Épée de Iop: [{"scope":"self","stats":{"damageEarth":41},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Terre"}]
-- Iop · Épée Céleste: [{"scope":"self","stats":{"damageAir":40},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Air"}]
 - Iop · Précipitation: [{"scope":"self","stats":{"ap":5},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PA"}]
-- Iop · Accumulation [variant]: [{"scope":"self","stats":{"damageEarth":26},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Terre"}]
 - Iop · Agitation [variant]: [{"scope":"self","stats":{"mp":3},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
-- Iop · Rassemblement [variant]: [{"scope":"self","stats":{"damageFire":25},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Feu"}]
-- Iop · Duel [variant]: [{"scope":"self","stats":{"mp":100},"durationTurns":1,"description":"-#1{{~1~2 à -}}#2 PM"}]
-- Iop · Fendoir [variant]: [{"scope":"self","stats":{"damageWater":53},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Eau"}]
-- Iop · Tumulte [variant]: [{"scope":"self","stats":{"damageFire":21},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Feu"}]
-- Iop · Anneau Destructeur [variant]: [{"scope":"self","stats":{"damageAir":28},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Air"}]
 - Crâ · Tirs Puissants: [{"scope":"self","stats":{"power":250},"durationTurns":1,"description":"#1{{~1~2 à }}#2 Puissance"},{"scope":"self","stats":{"crit":15},"durationTurns":1,"description":"#1{{~1~2 à }}#2% Critique"}]
 - Crâ · Acuité Absolue: [{"scope":"self","stats":{"crit":15},"durationTurns":1,"description":"#1{{~1~2 à }}#2% Critique"}]
 - Crâ · Flèche Assaillante [variant]: [{"scope":"self","stats":{"power":150},"durationTurns":1,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Crâ · Balise Tactique [variant]: [{"scope":"self","stats":{"power":40},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Crâ · Flèches Amoureuses [variant]: [{"scope":"self","stats":{"power":100},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
-- Crâ · Pluie de Flèches [variant]: [{"scope":"self","stats":{"mp":20},"durationTurns":1,"description":"-#1{{~1~2 à -}}#2 Esquive PM"},{"scope":"self","stats":{"damageAir":23},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Air"}]
-- Crâ · Flèche Boomerang [variant]: [{"scope":"self","stats":{"mp":2},"durationTurns":1,"description":"-#1{{~1~2 à -}}#2 PM"},{"scope":"self","stats":{"damageAir":29},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Air"}]
-- Sacrieur · Mutilation: [{"scope":"self","stats":{"power":150},"durationTurns":1,"description":"#1{{~1~2 à }}#2 Puissance"}]
-- Sacrieur · Condensation: [{"scope":"self","stats":{"damageWater":25},"durationTurns":1,"description":"#1{{~1~2 à }}#2 dommages Eau"}]
-- Sacrieur · Transfusion: [{"scope":"self","stats":{"damageNeutral":10},"durationTurns":1,"description":"Dommages Neutre : #1{{~1~2 à }}#2% <sprite name=\"PV\"> PV du lanceur"}]
-- Sacrieur · Berserk: [{"scope":"self","stats":{"spellDamagePct":10},"durationTurns":1,"description":"#1{{~1~2 à }}#2% Dommages aux sorts"}]
 - Sacrieur · Pacte de Sang [variant]: [{"scope":"self","stats":{"power":100},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
 - Sacrieur · Fluctuation [variant]: [{"scope":"self","stats":{"mp":2},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Sacrieur · Furie [variant]: [{"scope":"self","stats":{"finalDamagePct":3},"durationTurns":3,"description":"#1% Dommages finaux"}]
+- Sacrieur · Nervosité [variant]: [{"scope":"self","stats":{"crit":7},"durationTurns":3,"description":"#1{{~1~2 à }}#2% Critique"}]
+- Sacrieur · Douleur Cuisante [variant]: [{"scope":"self","stats":{"power":60},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Eniripsa · Mot Stimulant: [{"scope":"self","stats":{"ap":2},"durationTurns":2,"description":"#1{{~1~2 à }}#2 PA"}]
+- Eniripsa · Mot Vivifiant: [{"scope":"self","stats":{"mp":2},"durationTurns":2,"description":"#1{{~1~2 à }}#2 PM"}]
+- Eniripsa · Vacarme [variant]: [{"scope":"self","stats":{"finalDamagePct":25},"durationTurns":1,"description":"#1% Dommages finaux"}]
+- Eniripsa · Mot Galvanisant [variant]: [{"scope":"self","stats":{"power":150},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Eniripsa · Murmure [variant]: [{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"Vole #1{{~1~2 à }}#2 PM"},{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Ouginak · Cubitus: [{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Ouginak · Arcanin: [{"scope":"self","stats":{"power":100},"durationTurns":3,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Ouginak · Aboiement: [{"scope":"self","stats":{"mp":2},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Ouginak · Battue [variant]: [{"scope":"self","stats":{"power":150},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Ouginak · Rogne [variant]: [{"scope":"self","stats":{"power":80},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Féca · Mise en Garde [variant]: [{"scope":"self","stats":{"earth":200},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Force"},{"scope":"self","stats":{"fire":200},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Intelligence"},{"scope":"self","stats":{"water":200},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Chance"},{"scope":"self","stats":{"air":200},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Agilité"}]
+- Enutrof · Force de l'Âge: [{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Enutrof · Opportunité: [{"scope":"self","stats":{"power":80},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Enutrof · Ruée vers l'Or: [{"scope":"self","stats":{"mp":4},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Enutrof · Boîte de Pandore: [{"scope":"self","stats":{"mp":1},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PM"}]
+- Enutrof · Avarice: [{"scope":"self","stats":{"ap":3},"durationTurns":1,"description":"#1{{~1~2 à }}#2 PA"},{"scope":"self","stats":{"power":50},"durationTurns":2,"description":"#1{{~1~2 à }}#2 Puissance"}]
+- Enutrof · Décadence [variant]: [{"scope":"self","stats":{"finalDamagePct":10},"durationTurns":1,"description":"#1% Dommages finaux"}]
 
 ## Skipped reasons
 
-- no-fixed-direct-damage-or-supported-buff: 282
+- no-fixed-direct-damage-or-supported-buff: 304
 - conditional-or-delayed-damage: 25
 - best-element-damage: 23
 
