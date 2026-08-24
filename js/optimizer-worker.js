@@ -52,6 +52,14 @@ self.addEventListener('message', (event) => {
     const turnMode = payload?.turnMode || 'sum';
     const selections = selectionsForTurnMode(payload?.selections, turnMode);
     const scenario = scenarioForUi(payload?.scenario, turnMode);
+    const enabledSpellCount = selections.filter((selection) => selection.enabled).length;
+
+    // One selected spell is a benchmark target, not a combo to validate.
+    // Its casts/weights still scale the damage objective, but AP feasibility
+    // must not discard or penalize builds. Combo AP checks only make sense when
+    // several different spells are being evaluated together.
+    if (enabledSpellCount <= 1) scenario.requiredApByTurn = {};
+
     const normalizedPayload = {
       ...payload,
       selections,
