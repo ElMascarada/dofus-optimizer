@@ -14,7 +14,7 @@ async function getJson(url) {
 }
 
 const releaseBase = `https://github.com/dofusdude/dofus3-main/releases/download/${encodeURIComponent(version)}`;
-for (const name of ['spells', 'spell_levels', 'breeds', 'effects', 'fr']) {
+for (const name of ['spells', 'spell_levels', 'spell_variants', 'breeds', 'effects', 'fr']) {
   console.log(`Fetching spell source ${name} for Dofus ${version}…`);
   const payload = await getJson(`${releaseBase}/${name}.json`);
   await writeFile(new URL(`${name}.json`, rawDir), JSON.stringify(payload));
