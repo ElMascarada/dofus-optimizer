@@ -47,6 +47,12 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
         name: spell.name,
         iconId: spell.iconId,
         apCost: spell.apCost,
+        weight: Number(selection.weight ?? 1),
+        casts: {
+          1: Math.max(0, Number(selection.casts?.[1] || 0)),
+          2: Math.max(0, Number(selection.casts?.[2] || 0)),
+          3: Math.max(0, Number(selection.casts?.[3] || 0))
+        },
         averageDamage: average(entries.map((entry) => entry.expected)),
         critChancePct: average(entries.map((entry) => entry.critChancePct)),
         normal: [
@@ -60,6 +66,51 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
         perTurn
       };
     });
+}
+
+function hasExplicitTurnPlan(scenario = {}) {
+  return Object.keys(scenario?.requiredApByTurn || {}).length > 0;
+}
+
+function buildRequestedTurnPlan(spellBreakdowns = [], turnMode = 'sum') {
+  const activeTurns = turnMode === 't1' ? [1]
+    : turnMode === 't2' ? [2]
+      : turnMode === 't3' ? [3]
+        : [1, 2, 3];
+  const perTurn = {};
+
+  for (const turn of activeTurns) {
+    const actions = spellBreakdowns
+      .map((spell) => {
+        const casts = Math.max(0, Number(spell.casts?.[turn] || 0));
+        if (!casts) return null;
+        const expectedPerCast = Number(spell.perTurn?.[turn]?.expected || 0);
+        const weight = Math.max(0, Number(spell.weight ?? 1));
+        return {
+          id: spell.id,
+          ankamaId: spell.ankamaId,
+          iconId: spell.iconId,
+          name: spell.name,
+          casts,
+          apCost: Number(spell.apCost || 0),
+          apSpent: casts * Number(spell.apCost || 0),
+          expectedPerCast,
+          expectedDamage: expectedPerCast * casts,
+          weight,
+          objectiveContribution: expectedPerCast * casts * weight
+        };
+      })
+      .filter(Boolean);
+
+    perTurn[turn] = {
+      actions,
+      apSpent: actions.reduce((sum, action) => sum + action.apSpent, 0),
+      expectedDamage: actions.reduce((sum, action) => sum + action.expectedDamage, 0),
+      objectiveScore: actions.reduce((sum, action) => sum + action.objectiveContribution, 0)
+    };
+  }
+
+  return { activeTurns, perTurn };
 }
 
 export function evaluateCompleteBuild({
@@ -116,14 +167,25 @@ export function evaluateCompleteBuild({
     return { result: null, reason: 'item-condition' };
   }
 
+  // In automatic combat mode the preselection deliberately marks many spells as
+  // enabled at once. Those synthetic casts are a scoring probe, not a sequence the
+  // player is expected to cast. Only an explicit UI turn plan should consume PA
+  // here; the real combat sequence solver enforces PA again action by action later.
+  const explicitTurnPlan = hasExplicitTurnPlan(scenario);
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
     constraints,
-    selections,
+    selections: explicitTurnPlan ? selections : [],
     turnMode,
     scenario
   });
+
+  const hardTurnFailure = Object.keys(turnConstraints.baseApMpMismatches || {}).length > 0
+    || Object.keys(turnConstraints.deficitsByTurn || {}).length > 0;
+  if (explicitTurnPlan && hardTurnFailure) {
+    return { result: null, reason: 'turn-constraints', turnConstraints };
+  }
 
   const warnings = [];
   if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
@@ -144,6 +206,8 @@ export function evaluateCompleteBuild({
       stats: fm.stats,
       effectiveStatsByTurn,
       spellBreakdowns,
+      requestedTurnPlan: explicitTurnPlan ? buildRequestedTurnPlan(spellBreakdowns, turnMode) : null,
+      objectiveMode: explicitTurnPlan ? 'manual' : 'combat',
       characteristics: charResult.allocation,
       characteristicRequirements: minimumStats,
       fm: {
@@ -156,6 +220,7 @@ export function evaluateCompleteBuild({
       warnings,
       itemConditionsSatisfied: true,
       turnFeasible: turnConstraints.meets,
+      turnConstraints,
       unresolvedPassiveContexts: [
         ...new Set([
           ...(fm.objective.unresolvedPassiveContexts || []),
