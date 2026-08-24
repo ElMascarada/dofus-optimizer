@@ -19,6 +19,10 @@ const [spellsPayload, levelsPayload, variantsPayload, breedsPayload, effectsPayl
   readJson('version')
 ]);
 
+const rawVariantRecords = Array.isArray(variantsPayload?.references?.RefIds)
+  ? variantsPayload.references.RefIds.filter((entry) => entry?.data).length
+  : 0;
+
 const catalog = normalizeDofusSpellCatalog({
   spellsPayload,
   levelsPayload,
@@ -31,6 +35,11 @@ const catalog = normalizeDofusSpellCatalog({
   characterLevel: 200
 });
 
+catalog.coverage.variantSourceRecords = rawVariantRecords;
+if (rawVariantRecords > 0 && Number(catalog.coverage.variantSpellRefs || 0) === 0) {
+  throw new Error(`Spell variants source contains ${rawVariantRecords} records but the normalizer extracted 0 variant spell references.`);
+}
+
 await writeFile(new URL('spell-data.json', outDir), JSON.stringify(catalog));
 await writeFile(new URL('spell-coverage-report.json', outDir), JSON.stringify(catalog.coverage, null, 2));
 
@@ -40,14 +49,6 @@ const byBreed = catalog.breeds.map((breed) => ({
   source: breed.sourceSpellCount
 }));
 const skipped = Object.entries(catalog.coverage.skipped || {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-const samples = (catalog.coverage.modifierSamples || []).map((sample) => {
-  const modifiers = (sample.modifiers || []).map((modifier) => {
-    const stats = Object.entries(modifier.stats || {}).map(([key, value]) => `${key} ${value}`).join(', ');
-    return `${modifier.scope}: ${stats} · ${modifier.durationTurns}T`;
-  }).join(' | ');
-  return `- ${sample.breed} · ${sample.spell}${sample.variant ? ' (variante)' : ''}: ${modifiers}`;
-});
-
 const markdown = [
   '# Dofus spell normalization coverage',
   '',
@@ -55,21 +56,24 @@ const markdown = [
   `- Game version: ${version?.version || 'unknown'} (${version?.release || 'unknown'})`,
   `- Classes: ${catalog.coverage.breedCount}`,
   `- Class spell references: ${catalog.coverage.classSpellRefs}`,
+  `- SpellVariantData source records: ${rawVariantRecords}`,
   `- Variant spell references added: ${catalog.coverage.variantSpellRefs || 0}`,
   `- Certified variants: ${catalog.coverage.variantsCertified || 0}`,
   `- Offensive candidates detected: ${catalog.coverage.offensiveCandidates}`,
   `- Certified combat spells: ${catalog.coverage.certified}`,
-  `- Support-only spells: ${catalog.coverage.supportOnly || 0}`,
   `- Spells with deterministic buff/debuff: ${catalog.coverage.combatModifierSpells || 0}`,
+  `- Support-only spells: ${catalog.coverage.supportOnly || 0}`,
   `- Model: ${catalog.model}`,
   '',
   '## Coverage by class',
   '',
   ...byBreed.map((row) => `- ${row.name}: ${row.certified}/${row.source}`),
   '',
-  '## Deterministic combat-effect samples',
+  '## Deterministic combat modifier samples',
   '',
-  ...(samples.length ? samples : ['- none']),
+  ...((catalog.coverage.modifierSamples || []).length
+    ? catalog.coverage.modifierSamples.map((row) => `- ${row.breed} · ${row.spell}${row.variant ? ' [variant]' : ''}: ${JSON.stringify(row.modifiers)}`)
+    : ['- none']),
   '',
   '## Skipped reasons',
   '',
@@ -78,16 +82,15 @@ const markdown = [
   '## Certification scope',
   '',
   '- Includes immediate fixed-element damage and life-steal hits at the highest spell level available to a level-200 character.',
-  '- Includes class spell variants exposed by the Dofus SpellVariants dataset.',
-  '- Includes deterministic offensive self-buffs and target damage-taken modifiers when their source effect is unambiguous.',
-  '- Buff duration is preserved so the combat sequence optimizer can value setup spells across T1/T2/T3.',
+  '- Includes class spell variants exposed by the Dofus SpellVariants dataset; normalization fails if the source contains variant records but none can be mapped.',
+  '- Includes deterministic offensive self buffs and target damage-taken modifiers when their effect metadata is explicit.',
   '- Critical hits must match the normal hit count and elements.',
   '- Best-element, delayed, triggered or otherwise contextual damage is excluded rather than approximated.',
-  '- Unrecognized secondary effects are never guessed; they remain outside the automatic combat model.',
+  '- Unsupported contextual secondary effects are ignored rather than invented.',
   ''
 ].join('\n');
 await writeFile(new URL('spell-coverage-report.md', outDir), markdown);
 
 console.log(`Normalized ${catalog.spells.length} certified combat spells across ${catalog.breeds.length} classes.`);
-console.log(`Variants: ${catalog.coverage.variantsCertified || 0}; support-only: ${catalog.coverage.supportOnly || 0}; buff/debuff spells: ${catalog.coverage.combatModifierSpells || 0}.`);
+console.log(`Variants: ${catalog.coverage.variantsCertified || 0} certified from ${rawVariantRecords} SpellVariantData records.`);
 console.log(`Spell coverage report: ${new URL('spell-coverage-report.md', outDir).pathname}`);
