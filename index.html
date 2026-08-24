@@ -23,15 +23,52 @@
     <div class="layout">
       <aside class="controls">
         <section class="panel">
-          <h2>1. Sorts à optimiser</h2>
+          <h2>1. Classe & sorts</h2>
           <label class="field">Classe<select id="breed-select" disabled></select></label>
           <div id="spell-list"><div class="empty">Chargement du catalogue de sorts…</div></div>
-          <p class="hint">Catalogue Dofus réel : dégâts directs immédiats à élément fixe. Les variantes offensives de classe sont incluses lorsqu’elles sont présentes dans la source. Les poisons, dégâts conditionnels et « meilleur élément » restent exclus tant qu’ils ne sont pas simulés exactement.</p>
+          <p class="hint">Les variantes offensives sont signalées dans la liste. En mode meilleur tour, les sorts de support certifiés sont aussi utilisés automatiquement, même s’ils ne sont pas cochables ici.</p>
         </section>
 
         <section class="panel">
-          <h2>2. Temporalité</h2>
-          <label class="field">Objectif de tours<select id="turn-mode"></select></label>
+          <h2>2. Objectif de calcul</h2>
+          <label class="field">Mode
+            <select id="objective-mode">
+              <option value="manual">Benchmark / combo manuel</option>
+              <option value="combat">Meilleur tour automatique</option>
+            </select>
+          </label>
+
+          <div id="manual-objective-controls">
+            <label class="field">Objectif de tours<select id="turn-mode"></select></label>
+            <p class="hint">Le mode manuel compare exactement les sorts cochés et les lancers renseignés.</p>
+          </div>
+
+          <div id="combat-objective-controls" class="combat-objective-controls" hidden>
+            <div class="form-grid">
+              <label class="field">Cibles
+                <select id="combat-target-mode">
+                  <option value="single">1 cible</option>
+                  <option value="zone">Zone</option>
+                </select>
+              </label>
+              <label class="field">Cibles touchées en zone<input id="combat-area-targets" type="number" min="2" max="8" value="3"></label>
+              <label class="field">Horizon
+                <select id="combat-turns">
+                  <option value="1">1 tour</option>
+                  <option value="2">T1 + T2</option>
+                  <option value="3">T1 + T2 + T3</option>
+                </select>
+              </label>
+              <label class="field">Classement
+                <select id="combat-metric">
+                  <option value="total-damage">Dégâts totaux</option>
+                  <option value="damage-per-ap">Dégâts / PA</option>
+                </select>
+              </label>
+            </div>
+            <label class="toggle"><input id="combat-allow-support" type="checkbox" checked><span>Autoriser les sorts de buff / support</span></label>
+            <p class="hint">Le moteur dépense lui-même les PA et choisit l’ordre des sorts. Les buffs personnels (ex. Puissance) et vulnérabilités de cible (ex. Bond / Massacre lorsqu’ils sont certifiés) modifient les sorts lancés ensuite.</p>
+          </div>
         </section>
 
         <section class="panel">
@@ -42,7 +79,7 @@
             <label class="field">Pryximite · proches fin T1<input id="ctx-pryximite-end" type="number" min="0" placeholder="non renseigné"></label>
           </div>
           <p class="hint">Laisser vide signifie « ne pas supposer ». Un item dont le calcul dépend de ce contexte ne sera pas retenu tant que l’information manque.</p>
-          <p class="hint">Les passifs contextuels complexes des Dofus sont pour l’instant neutralisés : leurs stats fixes restent utilisables, mais aucun bonus conditionnel n’est inventé. Nébuleux et les passifs déterministes restent calculés normalement.</p>
+          <p class="hint">Les passifs contextuels complexes des Dofus restent neutralisés tant qu’ils ne sont pas simulés exactement. Nébuleux et les passifs déterministes sont calculés tour par tour.</p>
         </section>
 
         <section class="panel">
@@ -57,7 +94,7 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
-          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base du personnage pour accélérer le solveur. Ils ne consomment pas de FM offensive. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans les tours concernés.</p>
+          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans le tour concerné.</p>
         </section>
 
         <section class="panel">
