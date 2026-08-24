@@ -35,12 +35,23 @@ export function collectUnknownSlotTypes(items = []) {
   return counts;
 }
 
+// Legendary and other dynamic items can still contribute trustworthy fixed stats
+// even when one active/meta effect is not modelled yet. Keep those items in the
+// solver snapshot as "static only" instead of deleting them entirely. Unknown
+// numeric effects or unknown conditions still exclude an item.
+export function isStaticSnapshotSafeItem(item) {
+  if (item?.certification?.certified) return true;
+  if (!item?.certification?.slotKnown || !item?.certification?.conditionsCertified) return false;
+  if (!item?.certification?.temporalEffectsPending) return false;
+  return (item?.source?.effects || []).every((effect) => effect?.status !== 'unmapped');
+}
+
 export function selectSnapshotItems(items = [], sets = []) {
   const knownSetIds = new Set(sets.map((set) => set.id));
   const safeSetIds = new Set(sets.filter(isSolverSafeSet).map((set) => set.id));
   return items.filter((item) => {
     if (!isPlayerEquipmentScope(item)) return false;
-    if (!item?.certification?.certified) return false;
+    if (!isStaticSnapshotSafeItem(item)) return false;
     if (!item.setId) return true;
     return knownSetIds.has(item.setId) && safeSetIds.has(item.setId);
   });
