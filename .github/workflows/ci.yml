@@ -16,29 +16,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Inspect variable spell source
+      - name: Inspect PM-variable effect definitions
         run: |
           node --input-type=module <<'NODE'
-          const url = 'https://github.com/dofusdude/dofus3-main/releases/download/3.6.10.10/spell_levels.json';
-          const response = await fetch(url);
-          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-          const raw = await response.json();
-          const wanted = new Set([41327, 41355, 41764, 85268]);
-          const found = [];
-          function walk(value, path = '$') {
-            if (Array.isArray(value)) {
-              value.forEach((entry, index) => walk(entry, `${path}[${index}]`));
-              return;
-            }
-            if (!value || typeof value !== 'object') return;
-            const ids = [value.id, value.ankama_id, value.ankamaId].map(Number);
-            if (ids.some((id) => wanted.has(id))) found.push({ path, value });
-            for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
+          const base = 'https://github.com/dofusdude/dofus3-main/releases/download/3.6.10.10';
+          async function json(name) {
+            const r = await fetch(`${base}/${name}.json`);
+            if (!r.ok) throw new Error(`${name}: ${r.status} ${r.statusText}`);
+            return r.json();
           }
-          walk(raw);
-          console.log('RAW_VARIABLE_SPELLS_BEGIN');
-          console.log(JSON.stringify(found, null, 2));
-          console.log('RAW_VARIABLE_SPELLS_END');
+          const effects = await json('effects');
+          const scripts = await json('spell_scripts');
+          const wantedEffects = new Set([293, 1013, 1016, 186]);
+          const wantedSpells = new Set([13145, 13358, 32460]);
+          function collect(root, predicate) {
+            const out = [];
+            function walk(value, path = '$') {
+              if (Array.isArray(value)) return value.forEach((entry, i) => walk(entry, `${path}[${i}]`));
+              if (!value || typeof value !== 'object') return;
+              if (predicate(value)) out.push({ path, value });
+              for (const [key, entry] of Object.entries(value)) walk(entry, `${path}.${key}`);
+            }
+            walk(root);
+            return out;
+          }
+          const effectRows = collect(effects, v => wantedEffects.has(Number(v.id ?? v.ankama_id ?? v.ankamaId)));
+          const scriptRows = collect(scripts, v => {
+            const text = JSON.stringify(v);
+            return [...wantedSpells].some(id => text.includes(String(id)));
+          });
+          console.log('PM_EFFECT_DEFS_BEGIN');
+          console.log(JSON.stringify(effectRows, null, 2));
+          console.log('PM_EFFECT_DEFS_END');
+          console.log('PM_SCRIPT_ROWS_BEGIN');
+          console.log(JSON.stringify(scriptRows.slice(0, 80), null, 2));
+          console.log('PM_SCRIPT_ROWS_END');
           NODE
       - name: Syntax check
         run: npm run check
