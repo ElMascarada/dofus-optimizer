@@ -41,17 +41,22 @@ async function collectPngFiles(directory) {
   return files;
 }
 
-// Dofusdude packages spell PNGs by the real spell Ankama id, while our UI keeps
-// a separate iconId. Discover the archive recursively, resolve the source by the
-// best available spell identifier, then materialize the file under iconId.png so
-// the browser has one stable local asset key.
+// The release has changed naming/layout several times (for example ids may be
+// embedded in names instead of being the whole basename). Index every plausible
+// numeric token, not only files named exactly `12345.png`.
 const discovered = await collectPngFiles(fileURLToPath(extractedDir));
+console.log(`Archive sample basenames: ${discovered.slice(0, 24).map((source) => basename(source)).join(', ')}`);
+
 const sourceById = new Map();
 for (const source of discovered) {
-  const match = basename(source).match(/^(\d+)\.png$/i);
-  if (!match) continue;
-  const id = Number(match[1]);
-  if (!sourceById.has(id)) sourceById.set(id, source);
+  const tokens = (basename(source).match(/\d+/g) || [])
+    .map(Number)
+    // Spell/icon/level ids are in the thousands. This deliberately ignores
+    // dimensions such as 96 and 2x while remaining tolerant of suffixes.
+    .filter((id) => Number.isInteger(id) && id >= 1000);
+  for (const id of tokens) {
+    if (!sourceById.has(id)) sourceById.set(id, source);
+  }
 }
 
 function numericSpellId(spell) {
@@ -100,8 +105,8 @@ await rm(tempDir, { recursive: true, force: true });
 
 if (actual !== copied) throw new Error(`Spell icon sync mismatch: copied=${copied}, actual=${actual}`);
 if (copied === 0) {
-  const sample = [...sourceById.keys()].slice(0, 20).join(', ');
-  throw new Error(`Spell icon sync produced no files; archive contained ${discovered.length} PNG files; sample ids: ${sample}`);
+  const indexedSample = [...sourceById.keys()].slice(0, 20).join(', ');
+  throw new Error(`Spell icon sync produced no files; archive contained ${discovered.length} PNG files; indexed sample ids: ${indexedSample}`);
 }
 
 console.log(`Spell icons: ${copied}/${iconIds.length} copied for Dofus ${version} (${discovered.length} PNG files discovered).`);
