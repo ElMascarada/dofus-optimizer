@@ -9,9 +9,10 @@ async function readJson(name) {
   return JSON.parse(await readFile(new URL(`${name}.json`, rawDir), 'utf8'));
 }
 
-const [spellsPayload, levelsPayload, breedsPayload, effectsPayload, translationsPayload, version] = await Promise.all([
+const [spellsPayload, levelsPayload, variantsPayload, breedsPayload, effectsPayload, translationsPayload, version] = await Promise.all([
   readJson('spells'),
   readJson('spell_levels'),
+  readJson('spell_variants'),
   readJson('breeds'),
   readJson('effects'),
   readJson('fr'),
@@ -21,6 +22,7 @@ const [spellsPayload, levelsPayload, breedsPayload, effectsPayload, translations
 const catalog = normalizeDofusSpellCatalog({
   spellsPayload,
   levelsPayload,
+  variantsPayload,
   breedsPayload,
   effectsPayload,
   translationsPayload,
@@ -45,6 +47,7 @@ const markdown = [
   `- Game version: ${version?.version || 'unknown'} (${version?.release || 'unknown'})`,
   `- Classes: ${catalog.coverage.breedCount}`,
   `- Class spell references: ${catalog.coverage.classSpellRefs}`,
+  `- Variant spell references added: ${catalog.coverage.variantSpellRefs || 0}`,
   `- Offensive candidates detected: ${catalog.coverage.offensiveCandidates}`,
   `- Certified direct fixed-element spells: ${catalog.coverage.certified}`,
   `- Model: ${catalog.model}`,
@@ -60,6 +63,7 @@ const markdown = [
   '## Certification scope',
   '',
   '- Includes immediate fixed-element damage and life-steal hits at the highest spell level available to a level-200 character.',
+  '- Includes class spell variants exposed by the Dofus SpellVariants dataset.',
   '- Critical hits must match the normal hit count and elements.',
   '- Best-element, delayed, triggered or otherwise contextual damage is excluded rather than approximated.',
   '- Non-damage secondary effects are not included in the damage objective.',
