@@ -2,6 +2,13 @@ name: Sync spell icons
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/sync-spell-icons.yml'
+      - 'scripts/sync-spell-icons.mjs'
+      - 'data/normalized/spell-data.json'
+      - 'js/spell-ui-enhancements.js'
+      - 'index.html'
   push:
     branches: [main, fix/spell-assets-local]
     paths:
@@ -35,7 +42,15 @@ jobs:
           COUNT=$(find assets/spells -maxdepth 1 -type f -name '*.png' | wc -l)
           echo "Generated spell icons: ${COUNT}"
           test "${COUNT}" -gt 0
+      - name: Upload generated spell icons
+        uses: actions/upload-artifact@v4
+        with:
+          name: spell-icons
+          path: assets/spells
+          if-no-files-found: error
+          retention-days: 3
       - name: Commit spell icons
+        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
