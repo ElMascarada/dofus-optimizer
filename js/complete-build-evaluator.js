@@ -9,7 +9,11 @@ import {
 } from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { optimizeFm } from './fm.js';
-import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
+import {
+  characteristicMinimumsForItems,
+  itemConditionsAreValid,
+  specialSlotRulesAreValid
+} from './build-legality.js';
 
 function capPermanentApMp(stats, constraints = {}) {
   const capped = { ...stats };
@@ -78,13 +82,24 @@ export function evaluateCompleteBuild({
   const statsWithSets = { ...rawStats };
   const activeSets = applySetBonuses(statsWithSets, items, setsById);
   const elementValues = estimateElementValues(selections, {});
+
+  // Conditions are checked on final equipped stats. Scroll is free baseline;
+  // only the remaining deficit should consume the 995 characteristic points.
+  const conditionReference = { ...statsWithSets };
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    conditionReference[element] = Number(conditionReference[element] || 0) + Number(character.scrolled?.[element] || 0);
+  }
+  const minimumStats = characteristicMinimumsForItems(items, conditionReference, character.level);
+
   const charResult = optimizeCharacteristics(statsWithSets, {
     points: character.characteristicPoints,
     scrolled: character.scrolled,
     elementValues,
     minimumVitality: constraints.vit || 0,
-    baseVitality: 0
+    baseVitality: 0,
+    minimumStats
   });
+  if (!charResult.requirementsSatisfied) return { result: null, reason: 'item-condition' };
 
   const permanentBase = capPermanentApMp(charResult.stats, constraints);
   const fm = optimizeFm({
@@ -130,6 +145,7 @@ export function evaluateCompleteBuild({
       effectiveStatsByTurn,
       spellBreakdowns,
       characteristics: charResult.allocation,
+      characteristicRequirements: minimumStats,
       fm: {
         critItems: fm.critItems,
         spellPctItems: fm.spellPctItems,
