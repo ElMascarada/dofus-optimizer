@@ -16,8 +16,6 @@ export function validateDofusSnapshot(snapshot) {
     .filter((set) => set?.id && set?.bonuses && typeof set.bonuses === 'object')
     .map((set) => ({
       ...set,
-      // Keep set membership coherent if an unavailable historical item was still
-      // present in an older static snapshot.
       equipmentIds: Array.isArray(set.equipmentIds)
         ? set.equipmentIds.filter((id) => itemIds.has(String(id)))
         : set.equipmentIds
@@ -41,14 +39,12 @@ export function validateSpellSnapshot(snapshot) {
   if (Number(snapshot.schemaVersion) !== 1) throw new Error(`Version de snapshot de sorts non prise en charge: ${snapshot.schemaVersion ?? 'absente'}.`);
   if (!Array.isArray(snapshot.breeds) || !Array.isArray(snapshot.spells)) throw new Error('Le snapshot de sorts doit contenir breeds et spells.');
 
-  const spells = snapshot.spells.filter((spell) =>
-    spell?.certified === true
-    && spell?.id
-    && spell?.breedId
-    && Array.isArray(spell?.hits)
-    && spell.hits.length > 0
-    && Number.isFinite(Number(spell.apCost))
-  );
+  const spells = snapshot.spells.filter((spell) => {
+    if (spell?.certified !== true || !spell?.id || !spell?.breedId) return false;
+    if (!Array.isArray(spell?.hits) || !Array.isArray(spell?.combatModifiers || [])) return false;
+    if (!Number.isFinite(Number(spell.apCost))) return false;
+    return spell.hits.length > 0 || (spell.combatModifiers || []).length > 0;
+  });
   const spellIds = new Set(spells.map((spell) => spell.id));
   const breeds = snapshot.breeds
     .filter((breed) => breed?.id && breed?.name)
@@ -58,7 +54,7 @@ export function validateSpellSnapshot(snapshot) {
     }))
     .filter((breed) => breed.spellIds.length > 0);
 
-  if (!spells.length || !breeds.length) throw new Error('Le snapshot certifié ne contient aucun sort offensif utilisable.');
+  if (!spells.length || !breeds.length) throw new Error('Le snapshot certifié ne contient aucun sort de combat utilisable.');
 
   return {
     schemaVersion: 1,
