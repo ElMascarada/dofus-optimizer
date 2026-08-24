@@ -9,9 +9,9 @@ import { isPrysmaradite } from './build-legality.js';
 
 const OFFENSIVE_SLOTS = new Set(['companion', 'dofus']);
 const COMPANION_LIMIT = 24;
-const DOFUS_POOL_LIMIT = 56;
-const DOFUS_COMBO_LIMIT = 48;
-const MAX_SKELETONS = 8;
+const DOFUS_POOL_LIMIT = 84;
+const DOFUS_COMBO_LIMIT = 72;
+const MAX_SKELETONS = 10;
 
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
@@ -20,6 +20,11 @@ function num(stats, key) {
 
 function resultKey(result) {
   return (result?.items || []).map((item) => String(item.id)).sort().join('|');
+}
+
+function resultPrysmaKey(result) {
+  const prysma = (result?.items || []).find(isPrysmaradite);
+  return prysma ? String(prysma.id) : 'none';
 }
 
 function skeletonKey(items = []) {
@@ -41,6 +46,30 @@ function insertTop(results, result, limit) {
   results.push(result);
   results.sort((a, b) => b.score - a.score);
   if (results.length > limit) results.length = limit;
+}
+
+function rememberBestPrysma(map, result) {
+  if (!result?.items?.length) return;
+  const key = resultPrysmaKey(result);
+  const previous = map.get(key);
+  if (!previous || Number(result.score || 0) > Number(previous.score || 0)) map.set(key, result);
+}
+
+function mergeRetainingPrysmas(ranked, bestByPrysma, limit) {
+  const cap = Math.max(1, Number(limit || 10));
+  const reserved = [...bestByPrysma.values()]
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .slice(0, Math.min(cap, bestByPrysma.size));
+  const output = [];
+  const seen = new Set();
+  for (const result of [...reserved, ...ranked]) {
+    const key = resultKey(result);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(result);
+    if (output.length >= cap) break;
+  }
+  return output;
 }
 
 function staticStats(items, setsById) {
@@ -85,12 +114,14 @@ function itemProfile(item, referenceStats, baseItems, baseline, selections, turn
   const stats = cloneStats(referenceStats);
   addStats(stats, item.stats || {});
   const score = objectiveScore(stats, [...baseItems, item], selections, turnMode, scenario);
+  const prysma = isPrysmaradite(item);
   return {
     item,
     gain: Number.isFinite(score) ? score - baseline : -Infinity,
     ap: num(item.stats, 'ap'),
     mp: num(item.stats, 'mp'),
-    prysma: isPrysmaradite(item) ? 1 : 0
+    prysma: prysma ? 1 : 0,
+    prysmaId: prysma ? String(item.id) : 'none'
   };
 }
 
@@ -170,19 +201,23 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
     .filter((item) => item.slot === 'dofus')
     .map((item) => itemProfile(item, referenceStats, baseItems, baseline, selections, turnMode, scenario));
 
-  // Keep multiple offensive families even if a temporary 100%-crit effect makes
-  // one static seed look attractive. The final combat pass will decide their
-  // actual marginal value on the real rotation.
+  // A Prysmaradite can be weak on isolated-hit scoring but decisive once its
+  // temporary AP changes the real rotation. Keep every certified offensive
+  // Prysmaradite in the bench and let the final combat solver judge it.
   const usefulProfiles = profiles.filter(usefulOffensiveProfile);
   const candidates = usefulProfiles.length >= 6 ? usefulProfiles : profiles;
   const byGain = [...candidates].sort((a, b) => b.gain - a.gain);
   const current = candidates.filter((profile) => currentIds.has(String(profile.item.id)));
+  const allPrysmas = candidates
+    .filter((profile) => profile.prysma)
+    .sort((a, b) => b.gain - a.gain);
   const realDofus = byGain
     .filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus'))
     .slice(0, 20);
   return uniqueProfiles([
     current,
-    byGain.slice(0, 28),
+    allPrysmas,
+    byGain.slice(0, 30),
     topBy(candidates, (p) => num(p.item.stats, 'power'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'crit'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'critDamage'), 10),
@@ -192,8 +227,8 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
     topBy(candidates, (p) => num(p.item.stats, 'rangedDamagePct'), 8),
     topByAnyElement(candidates, 10),
     topByAnyElementDamage(candidates, 10),
-    topBy(candidates, (p) => p.ap, 8),
-    topBy(candidates, (p) => p.mp, 8),
+    topBy(candidates, (p) => p.ap, 10),
+    topBy(candidates, (p) => p.mp, 10),
     realDofus
   ], DOFUS_POOL_LIMIT);
 }
@@ -202,8 +237,8 @@ function comboKey(items) {
   return items.map((item) => String(item.id)).sort().join('|');
 }
 
-function apMpBucket(ap, mp, prysma) {
-  return `${Math.max(-3, Math.min(4, ap))}:${Math.max(-3, Math.min(4, mp))}:${prysma}`;
+function apMpBucket(ap, mp, prysmaId) {
+  return `${Math.max(-3, Math.min(4, ap))}:${Math.max(-3, Math.min(4, mp))}:${prysmaId || 'none'}`;
 }
 
 function keepComboDiversity(states, limit) {
@@ -214,9 +249,9 @@ function keepComboDiversity(states, limit) {
   for (const state of states) {
     const key = comboKey(state.items);
     if (seen.has(key)) continue;
-    const bucket = apMpBucket(state.ap, state.mp, state.prysma);
+    const bucket = apMpBucket(state.ap, state.mp, state.prysmaId);
     const used = perBucket.get(bucket) || 0;
-    if (used >= 24) continue;
+    if (used >= 20) continue;
     seen.add(key);
     perBucket.set(bucket, used + 1);
     output.push(state);
@@ -228,7 +263,7 @@ function keepComboDiversity(states, limit) {
 function dofusCombinations(profiles, count = 6) {
   if (profiles.length < count) return [];
   const ordered = [...profiles].sort((a, b) => String(a.item.id).localeCompare(String(b.item.id)));
-  let states = [{ items: [], score: 0, ap: 0, mp: 0, prysma: 0, next: 0 }];
+  let states = [{ items: [], score: 0, ap: 0, mp: 0, prysmaCount: 0, prysmaId: 'none', next: 0 }];
   for (let pick = 0; pick < count; pick++) {
     const nextStates = [];
     const left = count - pick - 1;
@@ -236,22 +271,41 @@ function dofusCombinations(profiles, count = 6) {
       const last = ordered.length - left;
       for (let index = state.next; index < last; index++) {
         const profile = ordered[index];
-        const prysma = state.prysma + profile.prysma;
-        if (prysma > 1) continue;
+        const prysmaCount = state.prysmaCount + profile.prysma;
+        if (prysmaCount > 1) continue;
         nextStates.push({
           items: [...state.items, profile.item],
           score: state.score + profile.gain,
           ap: state.ap + profile.ap,
           mp: state.mp + profile.mp,
-          prysma,
+          prysmaCount,
+          prysmaId: profile.prysma ? profile.prysmaId : state.prysmaId,
           next: index + 1
         });
       }
     }
-    states = keepComboDiversity(nextStates, pick === count - 1 ? 460 : 560);
+    states = keepComboDiversity(nextStates, pick === count - 1 ? 760 : 920);
     if (!states.length) break;
   }
-  return keepComboDiversity(states, 460);
+  return keepComboDiversity(states, 760);
+}
+
+function preservePrysmaCombos(combos, limit) {
+  const output = [];
+  const seen = new Set();
+  const bestByPrysma = new Map();
+  for (const combo of combos) {
+    const key = combo.prysmaId || 'none';
+    if (!bestByPrysma.has(key)) bestByPrysma.set(key, combo);
+  }
+  for (const combo of [...bestByPrysma.values(), ...combos]) {
+    const key = comboKey(combo.items);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    output.push(combo);
+    if (output.length >= limit) break;
+  }
+  return output;
 }
 
 function selectFinalCombos(combos, fixedItems, setsById, constraints) {
@@ -264,7 +318,7 @@ function selectFinalCombos(combos, fixedItems, setsById, constraints) {
   }
   ready.sort((a, b) => b.score - a.score);
   fallback.sort((a, b) => b.score - a.score);
-  return (ready.length ? ready : fallback).slice(0, DOFUS_COMBO_LIMIT);
+  return preservePrysmaCombos(ready.length ? ready : fallback, DOFUS_COMBO_LIMIT);
 }
 
 export function refineOffensiveSlots({
@@ -277,6 +331,7 @@ export function refineOffensiveSlots({
   turnMode = 'sum',
   scenario = {},
   topN = 10,
+  preservePrysmaradites = false,
   onProgress = null
 } = {}) {
   if (!results.length) return { results: [], diagnostics: { refined: 0, evaluated: 0, skeletons: 0 } };
@@ -284,7 +339,11 @@ export function refineOffensiveSlots({
   const limit = Math.max(1, Number(topN || 10));
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const refined = [];
-  for (const result of results) insertTop(refined, result, limit);
+  const bestByPrysma = new Map();
+  for (const result of results) {
+    insertTop(refined, result, limit);
+    if (preservePrysmaradites) rememberBestPrysma(bestByPrysma, result);
+  }
 
   const uniqueSkeletons = [];
   const seenSkeletons = new Set();
@@ -325,29 +384,39 @@ export function refineOffensiveSlots({
           scenario
         });
         evaluated++;
-        if (evaluation.result) insertTop(refined, evaluation.result, limit);
+        if (!evaluation.result) continue;
+        insertTop(refined, evaluation.result, limit);
+        if (preservePrysmaradites) rememberBestPrysma(bestByPrysma, evaluation.result);
       }
     }
 
     if (onProgress) {
+      const partialResults = preservePrysmaradites
+        ? mergeRetainingPrysmas(refined, bestByPrysma, limit)
+        : [...refined];
       onProgress({
         phase: 'offensive-refine',
         label: `raffinage dégâts ${skeletonIndex + 1}/${uniqueSkeletons.length}`,
         nodes: evaluated,
-        visited: refined.length,
+        visited: partialResults.length,
         pruned: 0,
         best: refined[0]?.score || 0,
-        partialResults: [...refined]
+        partialResults
       });
     }
   }
 
+  const finalResults = preservePrysmaradites
+    ? mergeRetainingPrysmas(refined, bestByPrysma, limit)
+    : refined;
+
   return {
-    results: refined,
+    results: finalResults,
     diagnostics: {
-      refined: refined.length,
+      refined: finalResults.length,
       evaluated,
-      skeletons: uniqueSkeletons.length
+      skeletons: uniqueSkeletons.length,
+      prysmaraditeVariants: preservePrysmaradites ? bestByPrysma.size : 0
     }
   };
 }
