@@ -8,7 +8,6 @@ import { addStats, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import { isPrysmaradite, specialSlotRulesAreValid } from './build-legality.js';
 
-const LEVEL_200_SLOTS = new Set(['hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield']);
 const ELEMENT_DAMAGE = { earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' };
 const GENERIC_OFFENSE = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
@@ -44,11 +43,6 @@ const GROUP_CHOICE_LIMIT = Object.freeze({
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
   return Number.isFinite(value) ? value : 0;
-}
-
-function eligibleItem(item) {
-  if (!LEVEL_200_SLOTS.has(item?.slot)) return true;
-  return Number(item?.level || 0) === 200;
 }
 
 function resultKey(result) {
@@ -124,7 +118,7 @@ function topByStat(raw, key, limit = 8) {
 
 function buildSlotPool(allItems, preferredItems, rule, context) {
   const raw = allItems
-    .filter((item) => eligibleItem(item) && item.slot === rule.id)
+    .filter((item) => item.slot === rule.id)
     .map((item) => itemScore(item, context));
   const preferredIds = new Set(preferredItems.filter((item) => item.slot === rule.id).map((item) => String(item.id)));
   const preferred = raw
@@ -393,7 +387,10 @@ export function searchArchitecturesV2({
     maxArchitectures: 90
   });
 
-  const rawEligible = items.filter(eligibleItem);
+  // Data normalization owns the endgame scope. Do not apply a second level
+  // filter here: a level-197 ring that survives certification must compete with
+  // level-200 rings on its actual offensive value.
+  const rawEligible = items || [];
   const preferredById = new Map(prefilter.items.map((item) => [String(item.id), item]));
   const originalById = new Map(items.map((item) => [String(item.id), item]));
   for (const plan of synergy.plans) {
