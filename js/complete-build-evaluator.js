@@ -1,7 +1,12 @@
 import { BASE_CHARACTER } from './config.js';
 import { addStats, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
-import { estimateElementValues, evaluateTurnConstraints } from './spells.js';
+import {
+  estimateElementValues,
+  evaluateTurnConstraints,
+  selectedTurnsForMode,
+  spellDamageBreakdown
+} from './spells.js';
 import { optimizeCharacteristics } from './characteristics.js';
 import { optimizeFm } from './fm.js';
 import { itemConditionsAreValid, specialSlotRulesAreValid } from './build-legality.js';
@@ -13,6 +18,46 @@ function capPermanentApMp(stats, constraints = {}) {
     if (Number.isFinite(cap) && cap > 0 && Number(capped[key] || 0) > cap) capped[key] = cap;
   }
   return capped;
+}
+
+function average(values = []) {
+  const numbers = values.map(Number).filter(Number.isFinite);
+  if (!numbers.length) return 0;
+  return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
+}
+
+function buildSpellBreakdowns(selections, effectiveStatsByTurn, turnMode) {
+  const turns = selectedTurnsForMode(turnMode);
+  return (selections || [])
+    .filter((selection) => selection?.enabled && selection?.spell)
+    .map((selection) => {
+      const spell = selection.spell;
+      const perTurn = {};
+      for (const turn of turns) {
+        const stats = effectiveStatsByTurn?.[turn];
+        if (!stats) continue;
+        perTurn[turn] = spellDamageBreakdown(spell, stats, turn);
+      }
+      const entries = Object.values(perTurn);
+      return {
+        id: spell.id,
+        ankamaId: spell.ankamaId,
+        name: spell.name,
+        iconId: spell.iconId,
+        apCost: spell.apCost,
+        averageDamage: average(entries.map((entry) => entry.expected)),
+        critChancePct: average(entries.map((entry) => entry.critChancePct)),
+        normal: [
+          average(entries.map((entry) => entry.normal?.[0])),
+          average(entries.map((entry) => entry.normal?.[1]))
+        ],
+        critical: [
+          average(entries.map((entry) => entry.critical?.[0])),
+          average(entries.map((entry) => entry.critical?.[1]))
+        ],
+        perTurn
+      };
+    });
 }
 
 export function evaluateCompleteBuild({
@@ -81,6 +126,8 @@ export function evaluateCompleteBuild({
   if (Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
   if (Object.keys(turnConstraints.deficitsByTurn || {}).length) warnings.push('turn-constraints');
 
+  const spellBreakdowns = buildSpellBreakdowns(selections, turnConstraints.perTurn, turnMode);
+
   return {
     result: {
       score: fm.objective.score,
@@ -88,6 +135,7 @@ export function evaluateCompleteBuild({
       items: [...items],
       stats: fm.stats,
       effectiveStatsByTurn: turnConstraints.perTurn,
+      spellBreakdowns,
       characteristics: charResult.allocation,
       fm: {
         critItems: fm.critItems,
