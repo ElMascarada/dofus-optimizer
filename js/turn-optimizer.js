@@ -22,6 +22,16 @@ function activeTurns(turnMode = 't1') {
   return [1];
 }
 
+function objectiveTurns(objective = {}) {
+  const validMode = ['t1', 't2', 't3', 'sum', 'average', 'min'].includes(objective.turnMode);
+  if (validMode) return { turnMode: objective.turnMode, turns: activeTurns(objective.turnMode) };
+  const legacyCount = Math.max(1, Math.min(3, positiveInt(objective.turns, 1)));
+  return {
+    turnMode: legacyCount === 1 ? 't1' : `legacy-${legacyCount}`,
+    turns: [1, 2, 3].slice(0, legacyCount)
+  };
+}
+
 function baseStatsForTurn(state, turn) {
   return state.baseStatsByTurn?.[turn] || state.baseStats || {};
 }
@@ -186,18 +196,17 @@ export function optimizeCombatSequence({
   beamWidth = 1600,
   maxActionsPerTurn = 12
 } = {}) {
-  const turnMode = ['t1', 't2', 't3', 'sum', 'average', 'min'].includes(objective.turnMode) ? objective.turnMode : 't1';
-  const selectedTurns = activeTurns(turnMode);
+  const selected = objectiveTurns(objective);
   const normalizedObjective = {
     targetMode: objective.targetMode === 'zone' ? 'zone' : 'single',
     areaTargets: positiveInt(objective.areaTargets, 3),
-    turnMode,
-    activeTurns: selectedTurns,
-    turns: selectedTurns.length,
+    turnMode: selected.turnMode,
+    activeTurns: selected.turns,
+    turns: selected.turns.length,
     allowSupport: objective.allowSupport !== false,
     metric: objective.metric === 'damage-per-ap' ? 'damage-per-ap' : 'total-damage'
   };
-  const firstTurn = selectedTurns[0];
+  const firstTurn = selected.turns[0];
   const firstTurnBase = baseStatsByTurn?.[firstTurn] || baseStats || {};
   const candidates = (spells || []).filter((spell) =>
     spell?.combatRelevant !== false
@@ -219,8 +228,8 @@ export function optimizeCombatSequence({
   }];
   let explored = 0;
 
-  for (let index = 0; index < selectedTurns.length; index++) {
-    const turn = selectedTurns[index];
+  for (let index = 0; index < selected.turns.length; index++) {
+    const turn = selected.turns[index];
     const turnResults = [];
     for (const previous of frontier) {
       const start = index === 0 ? previous : startTurnState(previous, turn);
@@ -241,7 +250,7 @@ export function optimizeCombatSequence({
   const ranked = frontier.sort((a, b) => finalScore(b, normalizedObjective) - finalScore(a, normalizedObjective));
   const best = ranked[0] || frontier[0];
   const perTurn = {};
-  for (const turn of selectedTurns) perTurn[turn] = 0;
+  for (const turn of selected.turns) perTurn[turn] = 0;
   for (const entry of best?.sequence || []) perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
   return {
     score: best ? finalScore(best, normalizedObjective) : 0,
