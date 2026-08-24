@@ -169,21 +169,25 @@ export function evaluateCompleteBuild({
     return { result: null, reason: 'item-condition' };
   }
 
+  // Manual/benchmark mode sends an explicit requiredApByTurn map. Automatic
+  // combat mode intentionally clears that map because its synthetic gear
+  // selections are only a pre-ranking hint; the real turn solver decides what
+  // is actually cast later.
+  const enforceRequestedCasts = Object.keys(scenario?.requiredApByTurn || {}).length > 0;
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
     constraints,
-    selections,
+    selections: enforceRequestedCasts ? selections : [],
     turnMode,
     scenario
   });
 
-  // A displayed score must correspond to a turn the character can actually
-  // execute. Previously we kept impossible builds and only attached a
-  // `turn-constraints` warning, which could rank a 15+ PA combo on a 12 PA
-  // build. Reject it instead; temporary PA from Prysmaradites is already
-  // included in `turnConstraints`, so legal burst turns still pass.
-  if (!turnConstraints.meets) {
+  // A displayed manual score must correspond to a turn the character can
+  // actually execute. Previously impossible requested combos survived with a
+  // `turn-constraints` warning. Temporary PA from Prysmaradites is already
+  // included here, so legal burst turns still pass.
+  if (enforceRequestedCasts && !turnConstraints.meets) {
     const unresolved = turnConstraints.unresolvedPassiveContexts?.length > 0;
     return {
       result: null,
@@ -192,10 +196,16 @@ export function evaluateCompleteBuild({
     };
   }
 
+  const warnings = [];
+  if (!enforceRequestedCasts && turnConstraints.unresolvedPassiveContexts?.length) warnings.push('unresolved-passive');
+  if (!enforceRequestedCasts && Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
+
   const effectiveStatsByTurn = {};
   for (const turn of [1, 2, 3]) effectiveStatsByTurn[turn] = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
   const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
-  const combatPlan = buildRequestedTurnPlan(selections, spellBreakdowns, fm.objective.perTurn, effectiveStatsByTurn);
+  const requestedPlan = enforceRequestedCasts
+    ? buildRequestedTurnPlan(selections, spellBreakdowns, fm.objective.perTurn, effectiveStatsByTurn)
+    : null;
 
   return {
     result: {
@@ -205,7 +215,7 @@ export function evaluateCompleteBuild({
       stats: fm.stats,
       effectiveStatsByTurn,
       spellBreakdowns,
-      combatPlan,
+      ...(requestedPlan ? { combatPlan: requestedPlan } : {}),
       characteristics: charResult.allocation,
       characteristicRequirements: minimumStats,
       fm: {
@@ -215,12 +225,12 @@ export function evaluateCompleteBuild({
         assignments: fm.assignments
       },
       activeSets,
-      warnings: [],
+      warnings,
       itemConditionsSatisfied: true,
-      turnFeasible: true,
-      unresolvedPassiveContexts: []
+      turnFeasible: enforceRequestedCasts ? true : turnConstraints.meets,
+      unresolvedPassiveContexts: [...(turnConstraints.unresolvedPassiveContexts || [])]
     },
     reason: null,
-    warnings: []
+    warnings
   };
 }
