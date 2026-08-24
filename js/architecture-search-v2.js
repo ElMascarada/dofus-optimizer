@@ -4,7 +4,7 @@ import { buildSetSynergyIndex } from './set-synergy-index.js';
 import { evaluateCompleteBuild } from './complete-build-evaluator.js';
 import { evaluateObjectiveUpperBound } from './spells.js';
 import { optimisticItemStats } from './search-space.js';
-import { addStats, emptyStats, stat } from './stats.js';
+import { addStats, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import { isPrysmaradite, specialSlotRulesAreValid } from './build-legality.js';
 
@@ -16,7 +16,7 @@ const GENERIC_OFFENSE = [
 ];
 
 const SLOT_POOL_LIMIT = Object.freeze({
-  dofus: 30,
+  dofus: 44,
   ring: 22,
   companion: 18,
   weapon: 16,
@@ -29,7 +29,7 @@ const SLOT_POOL_LIMIT = Object.freeze({
 });
 
 const GROUP_CHOICE_LIMIT = Object.freeze({
-  dofus: 70,
+  dofus: 120,
   ring: 36,
   companion: 14,
   weapon: 12,
@@ -80,10 +80,13 @@ function itemScore(item, context) {
     turnMode: context.turnMode
   }).score;
 
+  // PA/PM are intentionally NOT rewarded here. They are requirements used by
+  // legalityPriority(). Once a build reaches 12/6, an extra PA or PM must have
+  // zero offensive value and must not beat a Pourpre/Nébuleux/offensive trophy.
   let score = Number.isFinite(objective) ? objective : 0;
-  score += Math.max(0, num(stats, 'ap')) * 85000;
-  score += Math.max(0, num(stats, 'mp')) * 60000;
-  score += Math.max(0, num(stats, 'range')) * 1200;
+  if (Number(context.constraints?.range || 0) > 0) {
+    score += Math.max(0, num(stats, 'range')) * 1200;
+  }
 
   if (context.targetElement) {
     score += Math.max(0, num(stats, context.targetElement)) * 28;
@@ -93,8 +96,6 @@ function itemScore(item, context) {
 
   // Keep standalone/legendary candidates competitive once a set skeleton exists.
   if (!item.setId && item.slot !== 'dofus' && item.slot !== 'companion') score += 2200;
-  // Conditions/passives are not forbidden, but conditionless and deterministic
-  // items are useful fallbacks when a high-scoring trophy/passive is illegal.
   if (!item.conditions) score += 1000;
   if (!(item.passives || []).length) score += 700;
 
@@ -114,34 +115,102 @@ function uniqueProfiles(profiles, limit) {
   return output;
 }
 
+function topByStat(raw, key, limit = 8) {
+  return [...raw]
+    .filter((profile) => num(profile.stats, key) > 0)
+    .sort((a, b) => num(b.stats, key) - num(a.stats, key) || b.score - a.score)
+    .slice(0, limit);
+}
+
 function buildSlotPool(allItems, preferredItems, rule, context) {
-  const raw = allItems.filter((item) => eligibleItem(item) && item.slot === rule.id).map((item) => itemScore(item, context));
+  const raw = allItems
+    .filter((item) => eligibleItem(item) && item.slot === rule.id)
+    .map((item) => itemScore(item, context));
   const preferredIds = new Set(preferredItems.filter((item) => item.slot === rule.id).map((item) => String(item.id)));
-  const preferred = raw.filter((profile) => preferredIds.has(String(profile.item.id))).sort((a, b) => b.score - a.score);
+  const preferred = raw
+    .filter((profile) => preferredIds.has(String(profile.item.id)))
+    .sort((a, b) => b.score - a.score);
   const byScore = [...raw].sort((a, b) => b.score - a.score);
-  const byAp = [...raw].sort((a, b) => num(b.stats, 'ap') - num(a.stats, 'ap') || b.score - a.score).slice(0, 6);
-  const byMp = [...raw].sort((a, b) => num(b.stats, 'mp') - num(a.stats, 'mp') || b.score - a.score).slice(0, 6);
-  const conditionless = byScore.filter((profile) => !profile.item.conditions).slice(0, 8);
-  const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 8);
-  const realDofus = rule.id === 'dofus'
-    ? byScore.filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus')).slice(0, 10)
-    : [];
+  const byAp = [...raw].sort((a, b) => num(b.stats, 'ap') - num(a.stats, 'ap') || b.score - a.score).slice(0, 8);
+  const byMp = [...raw].sort((a, b) => num(b.stats, 'mp') - num(a.stats, 'mp') || b.score - a.score).slice(0, 8);
+  const conditionless = byScore.filter((profile) => !profile.item.conditions).slice(0, 10);
+  const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 10);
 
   const cap = Math.max(Number(rule.count || 0), SLOT_POOL_LIMIT[rule.id] || 14);
-  return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...realDofus, ...byScore], cap);
+  if (rule.id !== 'dofus') {
+    return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
+  }
+
+  // Dofus/trophies are the last six optimisation slots. Preserve offensive
+  // families explicitly so constraint trophies cannot crowd them out of the pool.
+  const realDofus = byScore
+    .filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus'))
+    .slice(0, 16);
+  const targetDamage = context.targetElement ? topByStat(raw, ELEMENT_DAMAGE[context.targetElement], 10) : [];
+  const offensiveReserves = [
+    ...byScore.slice(0, 18),
+    ...topByStat(raw, 'finalDamagePct', 10),
+    ...topByStat(raw, 'finalDamagePctT1', 8),
+    ...topByStat(raw, 'finalDamagePctT2', 8),
+    ...topByStat(raw, 'finalDamagePctT3', 8),
+    ...topByStat(raw, 'power', 10),
+    ...topByStat(raw, 'critDamage', 10),
+    ...topByStat(raw, 'crit', 10),
+    ...topByStat(raw, 'damage', 10),
+    ...targetDamage,
+    ...realDofus
+  ];
+
+  return uniqueProfiles([
+    ...offensiveReserves,
+    ...byAp,
+    ...byMp,
+    ...preferred.slice(0, 12),
+    ...conditionless,
+    ...passiveFree,
+    ...byScore
+  ], cap);
 }
 
 function choiceKey(items) {
   return items.map((item) => String(item.id)).sort().join('|');
 }
 
-function groupChoices(profiles, count, maxChoices) {
+function apMpBucket(ap, mp, prysma = 0) {
+  const boundedAp = Math.max(-4, Math.min(4, Math.round(Number(ap || 0))));
+  const boundedMp = Math.max(-4, Math.min(4, Math.round(Number(mp || 0))));
+  return `${boundedAp}:${boundedMp}:${prysma}`;
+}
+
+function roundRobinBuckets(states, limit) {
+  const buckets = new Map();
+  for (const state of [...states].sort((a, b) => b.score - a.score)) {
+    const key = apMpBucket(state.ap, state.mp, state.prysma);
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(state);
+  }
+  const lists = [...buckets.values()];
+  const output = [];
+  for (let rank = 0; output.length < limit; rank++) {
+    let added = false;
+    for (const list of lists) {
+      if (!list[rank]) continue;
+      output.push(list[rank]);
+      added = true;
+      if (output.length >= limit) break;
+    }
+    if (!added) break;
+  }
+  return output;
+}
+
+function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}) {
   if (count <= 0) return [{ items: [], score: 0 }];
   if (profiles.length < count) return [];
   if (count === 1) return profiles.slice(0, maxChoices).map((profile) => ({ items: [profile.item], score: profile.score }));
 
-  let states = [{ items: [], score: 0, next: 0, prysma: 0 }];
-  const beamWidth = count >= 5 ? 260 : 160;
+  let states = [{ items: [], score: 0, next: 0, prysma: 0, ap: 0, mp: 0 }];
+  const beamWidth = preserveApMp ? 520 : (count >= 5 ? 260 : 160);
   for (let pick = 0; pick < count; pick++) {
     const nextStates = [];
     const leftAfter = count - pick - 1;
@@ -155,16 +224,25 @@ function groupChoices(profiles, count, maxChoices) {
           items: [...state.items, profile.item],
           score: state.score + profile.score,
           next: index + 1,
-          prysma: nextPrysma
+          prysma: nextPrysma,
+          ap: state.ap + num(profile.stats, 'ap'),
+          mp: state.mp + num(profile.stats, 'mp')
         });
       }
     }
     nextStates.sort((a, b) => b.score - a.score);
     const deduped = [];
     const seen = new Set();
+    const perBucket = new Map();
     for (const state of nextStates) {
       const key = choiceKey(state.items);
       if (seen.has(key)) continue;
+      if (preserveApMp) {
+        const bucket = apMpBucket(state.ap, state.mp, state.prysma);
+        const used = perBucket.get(bucket) || 0;
+        if (used >= 28) continue;
+        perBucket.set(bucket, used + 1);
+      }
       seen.add(key);
       deduped.push(state);
       if (deduped.length >= beamWidth) break;
@@ -172,7 +250,11 @@ function groupChoices(profiles, count, maxChoices) {
     states = deduped;
     if (!states.length) break;
   }
-  return states.sort((a, b) => b.score - a.score).slice(0, maxChoices).map(({ items, score }) => ({ items, score }));
+
+  const finalStates = preserveApMp
+    ? roundRobinBuckets(states, maxChoices)
+    : states.sort((a, b) => b.score - a.score).slice(0, maxChoices);
+  return finalStates.map(({ items, score }) => ({ items, score }));
 }
 
 function slotCounts(items) {
@@ -203,8 +285,8 @@ function legalityPriority(items, heuristic, context) {
   const apMissing = Math.max(0, apTarget - ap);
   const mpMissing = Math.max(0, mpTarget - mp);
   const ready = apMissing === 0 && mpMissing === 0;
-  // Legality dominates offense while building the beam. Once 12/6 is reached,
-  // the original offensive heuristic decides between alternatives.
+  // PA/PM only matter until the target is reached. min() deliberately makes
+  // 13 PA and 12 PA equivalent here; offense then decides which state survives.
   const score = heuristic
     - apMissing * 240000
     - mpMissing * 180000
@@ -330,7 +412,7 @@ export function searchArchitecturesV2({
     const key = `${slot}:${count}`;
     if (choiceCache.has(key)) return choiceCache.get(key);
     const profiles = slotPools.get(slot) || [];
-    const choices = groupChoices(profiles, count, GROUP_CHOICE_LIMIT[slot] || 12);
+    const choices = groupChoices(profiles, count, GROUP_CHOICE_LIMIT[slot] || 12, { preserveApMp: slot === 'dofus' });
     choiceCache.set(key, choices);
     return choices;
   }
@@ -374,7 +456,13 @@ export function searchArchitecturesV2({
     const missing = SLOT_RULES
       .map((rule) => ({ ...rule, missing: Number(rule.count || 0) - (counts.get(rule.id) || 0) }))
       .filter((group) => group.missing > 0)
-      .sort((a, b) => choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length);
+      // Optimise equipment/set structure first, then fill the six Dofus slots
+      // against the PA/PM deficit that actually remains.
+      .sort((a, b) => {
+        if (a.id === 'dofus' && b.id !== 'dofus') return 1;
+        if (b.id === 'dofus' && a.id !== 'dofus') return -1;
+        return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
+      });
 
     for (const group of missing) {
       const choices = choicesFor(group.id, group.missing);
@@ -392,7 +480,7 @@ export function searchArchitecturesV2({
           expandedStates++;
         }
       }
-      states = keepDiverseStates(next, context, 180);
+      states = keepDiverseStates(next, context, group.id === 'dofus' ? 220 : 180);
       if (!states.length) break;
     }
 
@@ -405,7 +493,7 @@ export function searchArchitecturesV2({
 
     const readyStates = complete.filter((state) => legalityPriority(state.items, state.heuristic, context).ready);
     legalCandidates += readyStates.length;
-    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, 36);
+    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, 48);
 
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({
