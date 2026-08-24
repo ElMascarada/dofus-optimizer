@@ -44,18 +44,18 @@ test('mono-element prefilter drops purely off-element gear', () => {
   assert.equal(result.diagnostics.targetElement, 'earth');
 });
 
-test('classic equipment below level 200 is excluded from optimizer candidates', () => {
+test('normalized endgame equipment below level 200 remains eligible', () => {
   const result = prefilterItems({
     items: [
-      gear('level-200-hat', 'hat', { earth: 80 }),
-      { id: 'level-190-hat', slot: 'hat', level: 190, stats: { earth: 500 } }
+      gear('level-200-ring', 'ring', { earth: 80 }),
+      { id: 'level-197-ring', slot: 'ring', level: 197, stats: { earth: 500 } }
     ],
     selections: earthSelections,
     constraints: {},
-    slotRules: [{ id: 'hat', count: 1 }]
+    slotRules: [{ id: 'ring', count: 1 }]
   });
 
-  assert.deepEqual(ids(result), ['level-200-hat']);
+  assert.deepEqual(ids(result), ['level-197-ring', 'level-200-ring']);
 });
 
 test('mono-element prefilter keeps structural AP or MP pieces needed by hard constraints', () => {
