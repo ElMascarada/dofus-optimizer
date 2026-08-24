@@ -158,7 +158,7 @@ test('stacks Psychopath Mask, Inferno and Furia style buffs when that is the bes
     id: 'finisher',
     apCost: 4,
     base: 100,
-    maxCastPerTurn: 3,
+    maxCastPerTurn: 1,
     distanceOptions: ['melee']
   });
 
