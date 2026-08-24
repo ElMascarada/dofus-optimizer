@@ -25,8 +25,6 @@ export function evaluateCompleteBuild({
   character = BASE_CHARACTER,
   scenario = {}
 } = {}) {
-  // Structural slot legality is an invariant of the architecture generator.
-  // Keep the guard as a safety net, but generated candidates should never hit it.
   if (!specialSlotRulesAreValid(items)) return { result: null, reason: 'structural-invalid' };
 
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
@@ -45,9 +43,8 @@ export function evaluateCompleteBuild({
     baseVitality: 0
   });
 
-  // The architecture search already guarantees the permanent 12/6 target.
-  // If an equipment combination naturally exceeds it, cap the permanent display
-  // at 12/6; temporary combat effects are still applied afterwards and may exceed it.
+  // The optimizer models the permanent target as 12/6. Temporary combat effects
+  // are applied afterwards by the objective and may exceed these values.
   const permanentBase = capPermanentApMp(charResult.stats, constraints);
   const fm = optimizeFm({
     baseStats: permanentBase,
@@ -59,9 +56,13 @@ export function evaluateCompleteBuild({
   });
   if (!fm) return { result: null, reason: 'evaluation-failed' };
 
-  // IMPORTANT: these checks are diagnostic only. They must never remove an
-  // architecture from damage comparison. We compare every generated 12/6 build.
-  const itemConditionsSatisfied = itemConditionsAreValid(items, fm.stats, character.level);
+  // Equipment conditions are real Dofus legality rules. Unlike turn/benchmark
+  // feasibility they are not optional: an impossible trophy/item must never be
+  // shown in the ranking (e.g. a Remueur with too many set bonuses).
+  if (!itemConditionsAreValid(items, fm.stats, character.level)) {
+    return { result: null, reason: 'item-condition' };
+  }
+
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
@@ -71,8 +72,9 @@ export function evaluateCompleteBuild({
     scenario
   });
 
+  // Turn feasibility remains diagnostic. A single-spell benchmark intentionally
+  // compares damage values even when its requested cast count is not a real combo.
   const warnings = [];
-  if (!itemConditionsSatisfied) warnings.push('item-condition');
   if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
     warnings.push('unresolved-passive');
   }
@@ -95,7 +97,7 @@ export function evaluateCompleteBuild({
       },
       activeSets,
       warnings,
-      itemConditionsSatisfied,
+      itemConditionsSatisfied: true,
       turnFeasible: turnConstraints.meets,
       unresolvedPassiveContexts: [
         ...new Set([
