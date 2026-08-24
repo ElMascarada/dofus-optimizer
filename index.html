@@ -35,7 +35,7 @@
         <section class="panel">
           <h2>2. Objectif de calcul</h2>
           <label class="field">Mode
-            <select id="objective-mode">
+            <select id="objective-mode" autocomplete="off">
               <option value="combat" selected>Optimisation automatique · meilleur tour</option>
               <option value="manual">Benchmark / combo manuel</option>
             </select>
@@ -134,8 +134,26 @@
     </div>
   </main>
 
-  <script type="module" src="js/app-experimental.js?v=20260824-3"></script>
-  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-5"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-4').catch(() => {});</script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const mode = document.getElementById('objective-mode');
+      if (!mode) return;
+
+      // Browsers may restore the previous value of a <select> across reloads.
+      // Force the primary app experience to the real combat solver on every fresh page load.
+      mode.value = 'combat';
+      mode.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Never leave result cards from one objective visible after switching to another.
+      mode.addEventListener('change', () => {
+        const output = document.getElementById('results');
+        if (!output?.querySelector('.result-card')) return;
+        output.innerHTML = '<div class="empty">Mode changé : relance l’optimisation pour recalculer le stuff et le tour avec ce mode.</div>';
+      });
+    });
+  </script>
+  <script type="module" src="js/app-experimental.js?v=20260824-7"></script>
+  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-7"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-7').catch(() => {});</script>
 </body>
 </html>
