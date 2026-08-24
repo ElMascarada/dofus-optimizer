@@ -10,6 +10,7 @@ const snapshot = {
   gameVersion: { version: '3.6.10.10' },
   items: [
     { id: 'item-1', slot: 'hat', certified: true, stats: { power: 80 } },
+    { id: 'item-legendary', slot: 'boots', certified: false, staticOnly: true, stats: { ap: 1, mp: 1, power: 80 }, passives: [] },
     { id: 'item-2', slot: 'cape', certified: false, stats: {} }
   ],
   sets: [{ id: 'set-1', bonuses: { 2: { power: 20 } } }]
@@ -34,10 +35,12 @@ const spellSnapshot = {
   ]
 };
 
-test('browser loader keeps only explicitly certified equipment', () => {
+test('browser loader keeps certified equipment and explicit static-only items', () => {
   const data = validateDofusSnapshot(snapshot);
-  assert.equal(data.items.length, 1);
-  assert.equal(data.items[0].id, 'item-1');
+  assert.equal(data.items.length, 2);
+  assert.deepEqual(data.items.map((item) => item.id), ['item-1', 'item-legendary']);
+  assert.equal(data.items[1].staticOnly, true);
+  assert.deepEqual(data.items[1].passives, []);
   assert.equal(data.sets.length, 1);
   assert.equal(data.gameVersion.version, '3.6.10.10');
 });
@@ -67,11 +70,13 @@ test('loadDofusData uses the supplied fetch and validates its payload', async ()
     calls.push({ url, options });
     return { ok: true, json: async () => snapshot };
   });
-  assert.equal(data.items.length, 1);
+  assert.equal(data.items.length, 2);
   assert.deepEqual(calls, [{ url: '/snapshot.json', options: { cache: 'no-cache' } }]);
 });
 
-test('loadSpellData uses the supplied fetch and validates its payload', async () => {
+test('loadSpellData uses the supplied fetch and validates its payload', async () => ({ ok: true, json: async () => spellSnapshot }));
+
+test('loadSpellData validates supplied spell data', async () => {
   const data = await loadSpellData('/spells.json', async () => ({ ok: true, json: async () => spellSnapshot }));
   assert.equal(data.spells.length, 1);
   assert.equal(data.breeds[0].name, 'Féca');
