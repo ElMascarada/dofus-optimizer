@@ -1,0 +1,808 @@
+[
+  {
+    "path": "$.references.RefIds[17032].data",
+    "value": {
+      "apCost": 2,
+      "criticalEffect": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 25,
+            "diceSide": 30,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 209369,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 2,
+            "random": 0,
+            "spellId": 13123,
+            "targetId": 0,
+            "targetMask": "L,M,l,m,c",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 37,
+            "diceSide": 42,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 209436,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 3,
+            "random": 0,
+            "spellId": 13123,
+            "targetId": 0,
+            "targetMask": "J,j",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "criticalHitProbability": 5,
+      "effects": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 20,
+            "diceSide": 24,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 209368,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 0,
+            "random": 0,
+            "spellId": 13123,
+            "targetId": 0,
+            "targetMask": "L,M,l,m,c",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 30,
+            "diceSide": 34,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 209433,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 1,
+            "random": 0,
+            "spellId": 13123,
+            "targetId": 0,
+            "targetMask": "J,j",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "globalCooldown": 0,
+      "grade": 3,
+      "id": 41327,
+      "initialCooldown": 0,
+      "m_flags": 517,
+      "maxCastPerTarget": 3,
+      "maxCastPerTurn": 4,
+      "maxGlobalCastPerTarget": 0,
+      "maxGlobalCastPerTurn": 0,
+      "maxStack": 0,
+      "minCastInterval": 0,
+      "minPlayerLevel": 149,
+      "minRange": 1,
+      "previewZones": {
+        "Array": []
+      },
+      "range": 1,
+      "spellBreed": 8,
+      "spellId": 13123,
+      "statesCriterion": ""
+    }
+  },
+  {
+    "path": "$.references.RefIds[17056].data",
+    "value": {
+      "apCost": 5,
+      "criticalEffect": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 31,
+            "diceSide": 35,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 4,
+            "effectId": 98,
+            "effectTriggerDuration": 0,
+            "effectUid": 228422,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 2,
+            "random": 0,
+            "spellId": 13145,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 3,
+              "param2": 0,
+              "shape": 76
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 64,
+            "diceSide": 70,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 4,
+            "effectId": 1013,
+            "effectTriggerDuration": 0,
+            "effectUid": 228423,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 3,
+            "random": 0,
+            "spellId": 13145,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 3,
+              "param2": 0,
+              "shape": 76
+            }
+          }
+        ]
+      },
+      "criticalHitProbability": 25,
+      "effects": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 27,
+            "diceSide": 29,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 4,
+            "effectId": 98,
+            "effectTriggerDuration": 0,
+            "effectUid": 209464,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 0,
+            "random": 0,
+            "spellId": 13145,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 3,
+              "param2": 0,
+              "shape": 76
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 52,
+            "diceSide": 58,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 4,
+            "effectId": 1013,
+            "effectTriggerDuration": 0,
+            "effectUid": 209509,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 1,
+            "random": 0,
+            "spellId": 13145,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 3,
+              "param2": 0,
+              "shape": 76
+            }
+          }
+        ]
+      },
+      "globalCooldown": 0,
+      "grade": 1,
+      "id": 41355,
+      "initialCooldown": 0,
+      "m_flags": 517,
+      "maxCastPerTarget": 0,
+      "maxCastPerTurn": 1,
+      "maxGlobalCastPerTarget": 0,
+      "maxGlobalCastPerTurn": 0,
+      "maxStack": -1,
+      "minCastInterval": 0,
+      "minPlayerLevel": 180,
+      "minRange": 1,
+      "previewZones": {
+        "Array": []
+      },
+      "range": 3,
+      "spellBreed": 598,
+      "spellId": 13145,
+      "statesCriterion": ""
+    }
+  },
+  {
+    "path": "$.references.RefIds[17259].data",
+    "value": {
+      "apCost": 4,
+      "criticalEffect": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 37,
+            "diceSide": 42,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 269102,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 2,
+            "random": 0,
+            "spellId": 13358,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 2,
+              "param2": 0,
+              "shape": 76
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 13358,
+            "diceSide": 0,
+            "dispellable": 3,
+            "displayZero": 0,
+            "duration": 1,
+            "effectElement": -1,
+            "effectId": 293,
+            "effectTriggerDuration": 0,
+            "effectUid": 281364,
+            "group": 0,
+            "m_flags": 31,
+            "modificator": 0,
+            "order": 3,
+            "random": 0,
+            "spellId": 13358,
+            "targetId": 0,
+            "targetMask": "C",
+            "triggers": "CCMPARR",
+            "value": 5,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "criticalHitProbability": 20,
+      "effects": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 31,
+            "diceSide": 35,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 220473,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 0,
+            "random": 0,
+            "spellId": 13358,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 0,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 2,
+              "param2": 0,
+              "shape": 76
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 13358,
+            "diceSide": 0,
+            "dispellable": 3,
+            "displayZero": 0,
+            "duration": 1,
+            "effectElement": -1,
+            "effectId": 293,
+            "effectTriggerDuration": 0,
+            "effectUid": 281363,
+            "group": 0,
+            "m_flags": 31,
+            "modificator": 0,
+            "order": 1,
+            "random": 0,
+            "spellId": 13358,
+            "targetId": 0,
+            "targetMask": "C",
+            "triggers": "CCMPARR",
+            "value": 5,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "globalCooldown": 0,
+      "grade": 1,
+      "id": 41764,
+      "initialCooldown": 0,
+      "m_flags": 581,
+      "maxCastPerTarget": 0,
+      "maxCastPerTurn": 1,
+      "maxGlobalCastPerTarget": 0,
+      "maxGlobalCastPerTurn": 0,
+      "maxStack": -1,
+      "minCastInterval": 0,
+      "minPlayerLevel": 155,
+      "minRange": 1,
+      "previewZones": {
+        "Array": []
+      },
+      "range": 8,
+      "spellBreed": 607,
+      "spellId": 13358,
+      "statesCriterion": ""
+    }
+  },
+  {
+    "path": "$.references.RefIds[34044].data",
+    "value": {
+      "apCost": 4,
+      "criticalEffect": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 150,
+            "diceSide": 0,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 2,
+            "effectElement": 5,
+            "effectId": 186,
+            "effectTriggerDuration": 0,
+            "effectUid": 421637,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 3,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 43,
+            "diceSide": 48,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 1016,
+            "effectTriggerDuration": 0,
+            "effectUid": 420479,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 4,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 30,
+            "diceSide": 32,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 420478,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 5,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "criticalHitProbability": 20,
+      "effects": {
+        "Array": [
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 150,
+            "diceSide": 0,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 2,
+            "effectElement": 5,
+            "effectId": 186,
+            "effectTriggerDuration": 0,
+            "effectUid": 421636,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 0,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 36,
+            "diceSide": 40,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 1016,
+            "effectTriggerDuration": 0,
+            "effectUid": 420477,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 1,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          },
+          {
+            "baseEffectId": 0,
+            "delay": 0,
+            "diceNum": 25,
+            "diceSide": 27,
+            "dispellable": 1,
+            "displayZero": 0,
+            "duration": 0,
+            "effectElement": 1,
+            "effectId": 97,
+            "effectTriggerDuration": 0,
+            "effectUid": 420476,
+            "group": 0,
+            "m_flags": 15,
+            "modificator": 0,
+            "order": 2,
+            "random": 0,
+            "spellId": 32460,
+            "targetId": 0,
+            "targetMask": "a,A",
+            "triggers": "I",
+            "value": 0,
+            "zoneDescr": {
+              "cellIds": {
+                "Array": []
+              },
+              "damageDecreaseStepPercent": 10,
+              "forcedDirection": 0,
+              "includeCarried": 1,
+              "isStopAtTarget": 0,
+              "maxDamageDecreaseApplyCount": 4,
+              "onlyAffectIfInSightLine": 0,
+              "param1": 1,
+              "param2": 0,
+              "shape": 80
+            }
+          }
+        ]
+      },
+      "globalCooldown": 0,
+      "grade": 1,
+      "id": 85268,
+      "initialCooldown": 0,
+      "m_flags": 580,
+      "maxCastPerTarget": 1,
+      "maxCastPerTurn": 2,
+      "maxGlobalCastPerTarget": 0,
+      "maxGlobalCastPerTurn": 0,
+      "maxStack": 2,
+      "minCastInterval": 0,
+      "minPlayerLevel": 180,
+      "minRange": 3,
+      "previewZones": {
+        "Array": []
+      },
+      "range": 9,
+      "spellBreed": 594,
+      "spellId": 32460,
+      "statesCriterion": ""
+    }
+  }
+]
