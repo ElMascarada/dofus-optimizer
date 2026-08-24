@@ -40,3 +40,5 @@ jobs:
           fi
           git commit -m "assets: sync spell icons"
           git push
+
+# Keep this workflow lightweight: it only materializes local spell images.
