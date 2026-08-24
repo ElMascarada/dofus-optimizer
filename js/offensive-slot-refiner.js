@@ -8,7 +8,7 @@ import { evaluateCompleteBuild } from './complete-build-evaluator.js';
 import { isPrysmaradite } from './build-legality.js';
 
 const OFFENSIVE_SLOTS = new Set(['companion', 'dofus']);
-const COMPANION_LIMIT = 24;
+const COMPANION_LIMIT = 30;
 const DOFUS_POOL_LIMIT = 84;
 const DOFUS_COMBO_LIMIT = 72;
 const MAX_SKELETONS = 10;
@@ -120,6 +120,7 @@ function itemProfile(item, referenceStats, baseItems, baseline, selections, turn
     gain: Number.isFinite(score) ? score - baseline : -Infinity,
     ap: num(item.stats, 'ap'),
     mp: num(item.stats, 'mp'),
+    crit: num(item.stats, 'crit'),
     prysma: prysma ? 1 : 0,
     prysmaId: prysma ? String(item.id) : 'none'
   };
@@ -154,6 +155,13 @@ function topBy(profiles, getter, limit = 8) {
     .slice(0, limit);
 }
 
+function topByGainWhere(profiles, predicate, limit = 8) {
+  return [...profiles]
+    .filter(predicate)
+    .sort((a, b) => b.gain - a.gain)
+    .slice(0, limit);
+}
+
 function topByAnyElement(profiles, limit = 8) {
   return topBy(profiles, (profile) => Math.max(
     num(profile.item.stats, 'earth'),
@@ -182,6 +190,11 @@ function companionPool(items, referenceStats, skeleton, selections, turnMode, sc
   return uniqueProfiles([
     current,
     byGain.slice(0, 14),
+    // Keep both crit and non-crit companion archetypes alive until the exact
+    // combat pass. Otherwise one synthetic reference can crowd out the other
+    // before temporary 100%-crit effects are known.
+    topByGainWhere(profiles, (p) => p.crit > 0, 8),
+    topByGainWhere(profiles, (p) => p.crit <= 0, 8),
     topBy(profiles, (p) => num(p.item.stats, 'crit'), 8),
     topBy(profiles, (p) => num(p.item.stats, 'critDamage'), 8),
     topBy(profiles, (p) => num(p.item.stats, 'power'), 8),
@@ -218,6 +231,10 @@ function dofusPool(items, referenceStats, baseItems, selections, turnMode, scena
     current,
     allPrysmas,
     byGain.slice(0, 30),
+    // Same rule for Dofus/trophies: preserve both branches. The exact turn
+    // solver, not the API stat shape, decides whether static crit is useful.
+    topByGainWhere(candidates, (p) => p.crit > 0, 12),
+    topByGainWhere(candidates, (p) => p.crit <= 0, 12),
     topBy(candidates, (p) => num(p.item.stats, 'power'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'crit'), 10),
     topBy(candidates, (p) => num(p.item.stats, 'critDamage'), 10),
@@ -237,8 +254,13 @@ function comboKey(items) {
   return items.map((item) => String(item.id)).sort().join('|');
 }
 
-function apMpBucket(ap, mp, prysmaId) {
-  return `${Math.max(-3, Math.min(4, ap))}:${Math.max(-3, Math.min(4, mp))}:${prysmaId || 'none'}`;
+function critBand(crit) {
+  const value = Number.isFinite(Number(crit)) ? Number(crit) : 0;
+  return Math.max(-8, Math.min(16, Math.round(value / 5)));
+}
+
+function apMpBucket(ap, mp, prysmaId, crit) {
+  return `${Math.max(-3, Math.min(4, ap))}:${Math.max(-3, Math.min(4, mp))}:${prysmaId || 'none'}:c${critBand(crit)}`;
 }
 
 function keepComboDiversity(states, limit) {
@@ -249,7 +271,7 @@ function keepComboDiversity(states, limit) {
   for (const state of states) {
     const key = comboKey(state.items);
     if (seen.has(key)) continue;
-    const bucket = apMpBucket(state.ap, state.mp, state.prysmaId);
+    const bucket = apMpBucket(state.ap, state.mp, state.prysmaId, state.crit);
     const used = perBucket.get(bucket) || 0;
     if (used >= 20) continue;
     seen.add(key);
@@ -263,7 +285,7 @@ function keepComboDiversity(states, limit) {
 function dofusCombinations(profiles, count = 6) {
   if (profiles.length < count) return [];
   const ordered = [...profiles].sort((a, b) => String(a.item.id).localeCompare(String(b.item.id)));
-  let states = [{ items: [], score: 0, ap: 0, mp: 0, prysmaCount: 0, prysmaId: 'none', next: 0 }];
+  let states = [{ items: [], score: 0, ap: 0, mp: 0, crit: 0, prysmaCount: 0, prysmaId: 'none', next: 0 }];
   for (let pick = 0; pick < count; pick++) {
     const nextStates = [];
     const left = count - pick - 1;
@@ -278,6 +300,7 @@ function dofusCombinations(profiles, count = 6) {
           score: state.score + profile.gain,
           ap: state.ap + profile.ap,
           mp: state.mp + profile.mp,
+          crit: state.crit + profile.crit,
           prysmaCount,
           prysmaId: profile.prysma ? profile.prysmaId : state.prysmaId,
           next: index + 1
