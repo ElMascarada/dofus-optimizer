@@ -114,7 +114,10 @@ export function spellDamageBreakdown(spell, stats, turn = 1) {
 }
 
 export function spellExpectedDamage(spell, stats, turn = 1) {
-  return spellDamageBreakdown(spell, stats, turn).expected;
+  const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
+  const totals = spellRawTotals(spell, stats);
+  const expected = totals.nonCrit * (1 - critChance) + totals.crit * critChance;
+  return expected * damageMultiplier(spell, stats, turn);
 }
 
 // Safe upper bound used only by branch-and-bound. It deliberately allows each
