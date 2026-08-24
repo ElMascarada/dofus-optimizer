@@ -74,9 +74,11 @@ export function evaluateCompleteBuild({
     return { result: null, reason: 'unresolved-passive' };
   }
   if (!turnConstraints.meets) {
+    const baseMismatch = Object.keys(turnConstraints.baseApMpMismatches || {}).length > 0;
+    const turnDeficit = Object.keys(turnConstraints.deficitsByTurn || {}).length > 0;
     return {
       result: null,
-      reason: 'constraints',
+      reason: baseMismatch ? 'base-ap-mp' : turnDeficit ? 'turn-constraints' : 'constraints',
       deficitsByTurn: turnConstraints.deficitsByTurn,
       baseApMpMismatches: turnConstraints.baseApMpMismatches
     };
