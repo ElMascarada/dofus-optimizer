@@ -1,4 +1,4 @@
-const CACHE = 'dofus-optimizer-v0.11.5';
+const CACHE = 'dofus-optimizer-v0.11.6';
 const APP_SHELL = [
   './',
   './index.html',
