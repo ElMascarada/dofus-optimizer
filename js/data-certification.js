@@ -21,7 +21,9 @@ export function isInternalOrNonPlayerItem(item) {
 export function isPlayerEquipmentScope(item) {
   if (isInternalOrNonPlayerItem(item)) return false;
   if (item?.slot === 'dofus' || item?.slot === 'companion') return true;
-  return Number(item?.level) >= 190;
+  // The optimizer's classical equipment scope is level 200 only. Dofus,
+  // trophies, pets and mounts are intentionally exempt from this restriction.
+  return Number(item?.level) === 200;
 }
 
 export function equipmentForCoverage(items = []) {
