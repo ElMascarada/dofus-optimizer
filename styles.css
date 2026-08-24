@@ -111,6 +111,28 @@ body.modal-open { overflow: hidden; }
 .detail-empty, .muted { color: var(--muted); font-size: .75rem; }
 .detail-section pre { margin: 0; max-height: 220px; }
 
+.spell-damage-section { margin-top: 14px; }
+.spell-damage-heading { display: flex; justify-content: space-between; align-items: end; gap: 16px; margin-bottom: 10px; }
+.spell-damage-heading h3 { margin-bottom: 3px; }
+.spell-damage-heading p { margin: 0; font-size: .72rem; }
+.spell-damage-heading > small { color: var(--muted); font-size: .68rem; white-space: nowrap; }
+.spell-damage-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 8px; }
+.spell-damage-card { margin: 0; padding: 0; border: 1px solid #2b333c; border-radius: 13px; background: #171c22; overflow: hidden; }
+.spell-damage-card summary { list-style: none; display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 11px; color: var(--text); }
+.spell-damage-card summary::-webkit-details-marker { display: none; }
+.spell-damage-card summary:hover { background: rgba(255,255,255,.025); }
+.spell-damage-icon { width: 48px; height: 48px; border-radius: 10px; display: grid; place-items: center; background: #0c1014; border: 1px solid #28313a; overflow: hidden; color: var(--accent); font-weight: 900; }
+.spell-damage-icon img { width: 100%; height: 100%; object-fit: contain; grid-area: 1/1; }
+.spell-damage-icon > span { grid-area: 1/1; font-size: 1rem; }
+.spell-damage-meta { min-width: 0; }
+.spell-damage-meta strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .82rem; }
+.spell-damage-meta small { display: block; color: var(--muted); font-size: .66rem; margin-top: 3px; }
+.spell-damage-average { font-size: 1.05rem; color: var(--accent-2); white-space: nowrap; }
+.spell-damage-expanded { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; padding: 0 10px 10px; }
+.spell-damage-expanded > div { background: #11161b; border: 1px solid #252d35; border-radius: 9px; padding: 8px; }
+.spell-damage-expanded span { display: block; color: var(--muted); font-size: .64rem; margin-bottom: 3px; }
+.spell-damage-expanded b { font-size: .76rem; }
+
 @media (max-width: 1180px) {
   .build-detail-layout { grid-template-columns: 1fr 1.25fr; }
   .build-detail-layout > .detail-column:last-child { grid-column: 1/-1; grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -132,4 +154,6 @@ body.modal-open { overflow: hidden; }
   .build-detail-layout > .detail-column:last-child { grid-column: auto; grid-template-columns: 1fr; }
   .detail-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .detail-turns { grid-template-columns: repeat(3, 1fr); }
+  .spell-damage-heading { align-items: start; flex-direction: column; gap: 3px; }
+  .spell-damage-expanded { grid-template-columns: 1fr; }
 }
