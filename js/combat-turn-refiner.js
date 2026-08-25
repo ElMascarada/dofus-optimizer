@@ -1,4 +1,5 @@
 import { optimizeCombatSequence } from './turn-optimizer.js';
+import { combatPlanIsComplete } from './final-result-validator.js';
 
 function buildKey(build) {
   return (build?.items || []).map((item) => String(item.id)).sort().join('|');
@@ -37,12 +38,16 @@ function rememberPrysma(map, candidate) {
 }
 
 function candidateWithPlan(build, plan) {
+  const activeTurns = Array.isArray(plan?.objective?.activeTurns) ? plan.objective.activeTurns : [];
+  const perTurn = {};
+  for (const turn of activeTurns) perTurn[turn] = Number(plan?.perTurn?.[turn] || 0);
+  const normalizedPlan = { ...plan, perTurn };
   return {
     ...build,
     equipmentScore: Number.isFinite(Number(build.equipmentScore)) ? Number(build.equipmentScore) : Number(build.score || 0),
-    score: plan.score,
-    perTurn: plan.perTurn,
-    combatPlan: plan
+    score: normalizedPlan.score,
+    perTurn,
+    combatPlan: normalizedPlan
   };
 }
 
@@ -64,10 +69,11 @@ function sortedTrimmed(candidates, limit) {
   return candidates;
 }
 
-function uniqueTop(ranked, topN) {
+function uniqueTop(ranked, topN, turnMode) {
   const unique = [];
   const seen = new Set();
   for (const build of ranked) {
+    if (!combatPlanIsComplete(build, turnMode)) continue;
     const key = buildKey(build);
     if (seen.has(key)) continue;
     seen.add(key);
@@ -86,9 +92,20 @@ export function refineCombatTurns({
   onProgress = null
 } = {}) {
   const requestedTopN = Math.max(1, Number(topN || 10));
-  const multiTurn = ['sum', 'average', 'min'].includes(combatObjective?.turnMode);
+  const turnMode = combatObjective?.turnMode || 't1';
+  const multiTurn = ['sum', 'average', 'min'].includes(turnMode);
   let explored = 0;
   let evaluated = 0;
+  let incompletePlansRejected = 0;
+
+  function makeCandidate(build, plan) {
+    const candidate = candidateWithPlan(build, plan);
+    if (!combatPlanIsComplete(candidate, turnMode)) {
+      incompletePlansRejected++;
+      return null;
+    }
+    return candidate;
+  }
 
   // A single selected turn remains cheap enough to solve directly at the wider beam.
   if (!multiTurn) {
@@ -98,7 +115,8 @@ export function refineCombatTurns({
       const plan = planForBuild(build, spells, combatObjective, { beamWidth: 1400, interTurnWidth: 24 });
       explored += Number(plan.explored || 0);
       evaluated++;
-      const candidate = candidateWithPlan(build, plan);
+      const candidate = makeCandidate(build, plan);
+      if (!candidate) continue;
       refined.push(candidate);
       if (preservePrysmaradites) rememberPrysma(bestByPrysma, candidate);
       sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
@@ -110,7 +128,7 @@ export function refineCombatTurns({
           phase: 'combat-turn-refine',
           nodes: evaluated,
           visited: evaluated,
-          pruned: 0,
+          pruned: incompletePlansRejected,
           best: refined[0]?.score || 0,
           label: 'meilleur tour',
           partialResults
@@ -121,12 +139,13 @@ export function refineCombatTurns({
       ? retainPrysmaVariants(refined, bestByPrysma, requestedTopN)
       : refined;
     return {
-      results: uniqueTop(ranked, requestedTopN),
+      results: uniqueTop(ranked, requestedTopN, turnMode),
       diagnostics: {
         evaluated,
         explored,
         coarseEvaluated: 0,
         preciseEvaluated: evaluated,
+        incompletePlansRejected,
         prysmaraditeVariants: preservePrysmaradites ? bestByPrysma.size : 0
       }
     };
@@ -144,7 +163,8 @@ export function refineCombatTurns({
     explored += Number(plan.explored || 0);
     evaluated++;
     coarseEvaluated++;
-    const candidate = candidateWithPlan(build, plan);
+    const candidate = makeCandidate(build, plan);
+    if (!candidate) continue;
     coarse.push(candidate);
     if (preservePrysmaradites) rememberPrysma(coarsePrysmas, candidate);
     sortedTrimmed(coarse, coarseKeep);
@@ -156,7 +176,7 @@ export function refineCombatTurns({
         phase: 'combat-turn-coarse',
         nodes: evaluated,
         visited: coarseEvaluated,
-        pruned: 0,
+        pruned: incompletePlansRejected,
         best: coarse[0]?.score || 0,
         label: 'rotation rapide',
         partialResults
@@ -180,7 +200,8 @@ export function refineCombatTurns({
     explored += Number(plan.explored || 0);
     evaluated++;
     preciseEvaluated++;
-    const candidate = candidateWithPlan(build, plan);
+    const candidate = makeCandidate(build, plan);
+    if (!candidate) continue;
     refined.push(candidate);
     if (preservePrysmaradites) rememberPrysma(refinedPrysmas, candidate);
     sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
@@ -193,7 +214,7 @@ export function refineCombatTurns({
         phase: 'combat-turn-refine',
         nodes: evaluated,
         visited: preciseEvaluated,
-        pruned: Math.max(0, coarseEvaluated - refinePool.length),
+        pruned: Math.max(0, coarseEvaluated - refinePool.length) + incompletePlansRejected,
         best: refined[0]?.score || coarse[0]?.score || 0,
         label: `rotation précise ${preciseEvaluated}/${refinePool.length}`,
         partialResults: partialResults.length ? partialResults : coarse.slice(0, requestedTopN)
@@ -208,7 +229,7 @@ export function refineCombatTurns({
     : finalSource;
 
   return {
-    results: uniqueTop(ranked, requestedTopN),
+    results: uniqueTop(ranked, requestedTopN, turnMode),
     diagnostics: {
       evaluated,
       explored,
@@ -216,6 +237,7 @@ export function refineCombatTurns({
       preciseEvaluated,
       coarseCandidates: coarse.length,
       preciseCandidates: refinePool.length,
+      incompletePlansRejected,
       prysmaraditeVariants: preservePrysmaradites ? finalPrysmas.size : 0
     }
   };
