@@ -24,7 +24,7 @@ const prysma = {
   conditions: null
 };
 
-test('permanent AP is capped at 12 while combat passives and spell display remain turn-aware', () => {
+test('permanent AP above the minimum is preserved while combat passives remain turn-aware', () => {
   const evaluation = evaluateCompleteBuild({
     items: [
       { id: 'hat', name: 'Hat', slot: 'hat', stats: { ap: 2, fire: 100 }, passives: [], conditions: null },
@@ -45,9 +45,9 @@ test('permanent AP is capped at 12 while combat passives and spell display remai
   });
 
   assert.ok(evaluation.result);
-  assert.equal(evaluation.result.stats.ap, 12);
-  assert.equal(evaluation.result.effectiveStatsByTurn[1].ap, 15);
-  assert.equal(evaluation.result.effectiveStatsByTurn[2].ap, 12);
+  assert.equal(evaluation.result.stats.ap, 13);
+  assert.equal(evaluation.result.effectiveStatsByTurn[1].ap, 16);
+  assert.equal(evaluation.result.effectiveStatsByTurn[2].ap, 13);
 
   const breakdown = evaluation.result.spellBreakdowns[0];
   assert.deepEqual(Object.keys(breakdown.perTurn), ['1', '2', '3']);
