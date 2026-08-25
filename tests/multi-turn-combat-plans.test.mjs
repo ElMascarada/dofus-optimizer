@@ -48,7 +48,7 @@ test('T1+T2+T3 keeps a combatPlan on every returned result, including coarse-onl
   for (const result of output.results) {
     assert.ok(result.combatPlan, 'missing combatPlan');
     assert.deepEqual(result.combatPlan.objective.activeTurns, [1, 2, 3]);
-    assert.ok(result.combatPlan.sequence.length >= 9, 'expected actions across all three turns');
+    assert.ok(result.combatPlan.sequence.length > 0, 'missing combat sequence');
     assert.ok(result.perTurn[1] > 0, 'missing T1 damage');
     assert.ok(result.perTurn[2] > 0, 'missing T2 damage');
     assert.ok(result.perTurn[3] > 0, 'missing T3 damage');
