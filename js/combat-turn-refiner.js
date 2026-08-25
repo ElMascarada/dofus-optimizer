@@ -30,64 +30,41 @@ function retainPrysmaVariants(ranked, bestByPrysma, limit) {
   return output;
 }
 
-export function refineCombatTurns({
-  results = [],
-  spells = [],
-  combatObjective = {},
-  topN = 10,
-  preservePrysmaradites = false,
-  onProgress = null
-} = {}) {
-  const refined = [];
-  const bestByPrysma = new Map();
-  let explored = 0;
-  let evaluated = 0;
+function rememberPrysma(map, candidate) {
+  const key = prysmaKey(candidate);
+  const previous = map.get(key);
+  if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
+}
 
-  for (const build of results || []) {
-    const plan = optimizeCombatSequence({
-      baseStats: build.stats || {},
-      baseStatsByTurn: turnStats(build),
-      spells,
-      objective: combatObjective,
-      beamWidth: 1400,
-      maxActionsPerTurn: 12
-    });
-    explored += Number(plan.explored || 0);
-    evaluated++;
-    const candidate = {
-      ...build,
-      equipmentScore: build.score,
-      score: plan.score,
-      perTurn: plan.perTurn,
-      combatPlan: plan
-    };
-    refined.push(candidate);
-    if (preservePrysmaradites) {
-      const key = prysmaKey(candidate);
-      const previous = bestByPrysma.get(key);
-      if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) bestByPrysma.set(key, candidate);
-    }
-    refined.sort((a, b) => b.score - a.score || b.equipmentScore - a.equipmentScore);
-    if (refined.length > Math.max(topN * 3, 30)) refined.length = Math.max(topN * 3, 30);
-    if (onProgress) {
-      const partialResults = preservePrysmaradites
-        ? retainPrysmaVariants(refined, bestByPrysma, topN)
-        : refined.slice(0, topN);
-      onProgress({
-        phase: 'combat-turn-refine',
-        nodes: evaluated,
-        visited: evaluated,
-        pruned: 0,
-        best: refined[0]?.score || 0,
-        label: 'meilleur tour',
-        partialResults
-      });
-    }
-  }
+function candidateWithPlan(build, plan) {
+  return {
+    ...build,
+    equipmentScore: Number.isFinite(Number(build.equipmentScore)) ? Number(build.equipmentScore) : Number(build.score || 0),
+    score: plan.score,
+    perTurn: plan.perTurn,
+    combatPlan: plan
+  };
+}
 
-  const ranked = preservePrysmaradites
-    ? retainPrysmaVariants(refined, bestByPrysma, Math.max(1, Number(topN || 10)))
-    : refined;
+function planForBuild(build, spells, combatObjective, { beamWidth, interTurnWidth }) {
+  return optimizeCombatSequence({
+    baseStats: build.stats || {},
+    baseStatsByTurn: turnStats(build),
+    spells,
+    objective: combatObjective,
+    beamWidth,
+    interTurnWidth,
+    maxActionsPerTurn: 12
+  });
+}
+
+function sortedTrimmed(candidates, limit) {
+  candidates.sort((a, b) => b.score - a.score || b.equipmentScore - a.equipmentScore);
+  if (candidates.length > limit) candidates.length = limit;
+  return candidates;
+}
+
+function uniqueTop(ranked, topN) {
   const unique = [];
   const seen = new Set();
   for (const build of ranked) {
@@ -97,13 +74,149 @@ export function refineCombatTurns({
     unique.push(build);
     if (unique.length >= Math.max(1, Number(topN || 10))) break;
   }
+  return unique;
+}
+
+export function refineCombatTurns({
+  results = [],
+  spells = [],
+  combatObjective = {},
+  topN = 10,
+  preservePrysmaradites = false,
+  onProgress = null
+} = {}) {
+  const requestedTopN = Math.max(1, Number(topN || 10));
+  const multiTurn = ['sum', 'average', 'min'].includes(combatObjective?.turnMode);
+  let explored = 0;
+  let evaluated = 0;
+
+  // A single selected turn remains cheap enough to solve directly at the wider beam.
+  if (!multiTurn) {
+    const refined = [];
+    const bestByPrysma = new Map();
+    for (const build of results || []) {
+      const plan = planForBuild(build, spells, combatObjective, { beamWidth: 1400, interTurnWidth: 24 });
+      explored += Number(plan.explored || 0);
+      evaluated++;
+      const candidate = candidateWithPlan(build, plan);
+      refined.push(candidate);
+      if (preservePrysmaradites) rememberPrysma(bestByPrysma, candidate);
+      sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
+      if (onProgress) {
+        const partialResults = preservePrysmaradites
+          ? retainPrysmaVariants(refined, bestByPrysma, requestedTopN)
+          : refined.slice(0, requestedTopN);
+        onProgress({
+          phase: 'combat-turn-refine',
+          nodes: evaluated,
+          visited: evaluated,
+          pruned: 0,
+          best: refined[0]?.score || 0,
+          label: 'meilleur tour',
+          partialResults
+        });
+      }
+    }
+    const ranked = preservePrysmaradites
+      ? retainPrysmaVariants(refined, bestByPrysma, requestedTopN)
+      : refined;
+    return {
+      results: uniqueTop(ranked, requestedTopN),
+      diagnostics: {
+        evaluated,
+        explored,
+        coarseEvaluated: 0,
+        preciseEvaluated: evaluated,
+        prysmaraditeVariants: preservePrysmaradites ? bestByPrysma.size : 0
+      }
+    };
+  }
+
+  // T1+T2+T3 uses two passes. Pass 1 intentionally uses a small beam so every
+  // candidate gets a real playable rotation quickly. Pass 2 spends the wider
+  // search only on the candidates that survived that first ranking.
+  const coarse = [];
+  const coarsePrysmas = new Map();
+  const coarseKeep = Math.max(requestedTopN * 5, 50);
+  let coarseEvaluated = 0;
+  for (const build of results || []) {
+    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 140, interTurnWidth: 8 });
+    explored += Number(plan.explored || 0);
+    evaluated++;
+    coarseEvaluated++;
+    const candidate = candidateWithPlan(build, plan);
+    coarse.push(candidate);
+    if (preservePrysmaradites) rememberPrysma(coarsePrysmas, candidate);
+    sortedTrimmed(coarse, coarseKeep);
+    if (onProgress) {
+      const partialResults = preservePrysmaradites
+        ? retainPrysmaVariants(coarse, coarsePrysmas, requestedTopN)
+        : coarse.slice(0, requestedTopN);
+      onProgress({
+        phase: 'combat-turn-coarse',
+        nodes: evaluated,
+        visited: coarseEvaluated,
+        pruned: 0,
+        best: coarse[0]?.score || 0,
+        label: 'rotation rapide',
+        partialResults
+      });
+    }
+  }
+
+  const refineLimit = Math.min(
+    coarse.length,
+    Math.max(requestedTopN * 2, 20)
+  );
+  const refinePool = preservePrysmaradites
+    ? retainPrysmaVariants(coarse, coarsePrysmas, refineLimit)
+    : coarse.slice(0, refineLimit);
+  const refined = [];
+  const refinedPrysmas = new Map();
+  let preciseEvaluated = 0;
+
+  for (const build of refinePool) {
+    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 700, interTurnWidth: 24 });
+    explored += Number(plan.explored || 0);
+    evaluated++;
+    preciseEvaluated++;
+    const candidate = candidateWithPlan(build, plan);
+    refined.push(candidate);
+    if (preservePrysmaradites) rememberPrysma(refinedPrysmas, candidate);
+    sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
+
+    if (onProgress) {
+      const partialResults = preservePrysmaradites
+        ? retainPrysmaVariants(refined, refinedPrysmas, requestedTopN)
+        : refined.slice(0, requestedTopN);
+      onProgress({
+        phase: 'combat-turn-refine',
+        nodes: evaluated,
+        visited: preciseEvaluated,
+        pruned: Math.max(0, coarseEvaluated - refinePool.length),
+        best: refined[0]?.score || coarse[0]?.score || 0,
+        label: `rotation précise ${preciseEvaluated}/${refinePool.length}`,
+        partialResults: partialResults.length ? partialResults : coarse.slice(0, requestedTopN)
+      });
+    }
+  }
+
+  const finalSource = refined.length ? refined : coarse;
+  const finalPrysmas = refined.length ? refinedPrysmas : coarsePrysmas;
+  const ranked = preservePrysmaradites
+    ? retainPrysmaVariants(finalSource, finalPrysmas, requestedTopN)
+    : finalSource;
 
   return {
-    results: unique,
+    results: uniqueTop(ranked, requestedTopN),
     diagnostics: {
       evaluated,
       explored,
-      prysmaraditeVariants: preservePrysmaradites ? bestByPrysma.size : 0
+      coarseEvaluated,
+      preciseEvaluated,
+      coarseCandidates: coarse.length,
+      preciseCandidates: refinePool.length,
+      prysmaraditeVariants: preservePrysmaradites ? finalPrysmas.size : 0
     }
   };
 }
