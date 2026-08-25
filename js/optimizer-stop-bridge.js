@@ -16,13 +16,15 @@
       requestId: null,
       payload: null,
       latestProgress: null,
-      latestPartialResults: []
+      latestPartialResults: [],
+      maxNodes: 0
     };
 
     worker.addEventListener('message', (event) => {
       const message = event.data || {};
       if (message.type === 'progress') {
         tracker.latestProgress = message.progress || tracker.latestProgress;
+        tracker.maxNodes = Math.max(tracker.maxNodes, Number(message.progress?.nodes || 0));
         const partial = message.progress?.partialResults;
         if (Array.isArray(partial) && partial.length) tracker.latestPartialResults = partial;
       } else if (message.type === 'result') {
@@ -38,6 +40,7 @@
         tracker.payload = message.payload || {};
         tracker.latestProgress = null;
         tracker.latestPartialResults = [];
+        tracker.maxNodes = 0;
         bridge.active = tracker;
       }
       return nativePostMessage(...postArgs);
@@ -59,7 +62,7 @@
     const progress = tracker.latestProgress || {};
     return {
       visited: Number(progress.visited || 0),
-      nodes: Number(progress.nodes || 0),
+      nodes: Number(tracker.maxNodes || progress.nodes || 0),
       pruned: Number(progress.pruned || 0),
       fallbackUsed: false,
       stoppedEarly: true,
@@ -69,7 +72,7 @@
 
   function dispatchStoppedResult(tracker, output, suffix = '') {
     const diagnostics = document.getElementById('diagnostics');
-    const nodeCount = Number(tracker.latestProgress?.nodes || 0).toLocaleString('fr-FR');
+    const nodeCount = Number(tracker.maxNodes || tracker.latestProgress?.nodes || 0).toLocaleString('fr-FR');
     const count = Array.isArray(output?.results) ? output.results.length : 0;
 
     tracker.worker.dispatchEvent(new MessageEvent('message', {
@@ -113,7 +116,10 @@
     const diagnostics = document.getElementById('diagnostics');
     const payload = tracker.payload || {};
     const topN = Math.max(1, Number(payload.topN || 10));
-    const candidateLimit = Math.max(topN, Math.min(20, tracker.latestPartialResults.length));
+    const candidateLimit = Math.min(
+      tracker.latestPartialResults.length,
+      Math.max(topN, 20)
+    );
 
     tracker.nativeTerminate();
     if (button) {
@@ -122,7 +128,7 @@
     }
     if (diagnostics) diagnostics.textContent = `Arrêt demandé · calcul des rotations des ${candidateLimit} meilleurs stuffs déjà trouvés…`;
 
-    const finalizer = new NativeWorker(new URL('./partial-finalizer-worker.js', document.baseURI), { type: 'module' });
+    const finalizer = new NativeWorker(new URL('./js/partial-finalizer-worker.js', document.baseURI), { type: 'module' });
     finalizer.addEventListener('message', (event) => {
       const message = event.data || {};
       if (message.requestId !== tracker.requestId) return;
