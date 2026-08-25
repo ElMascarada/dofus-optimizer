@@ -1,5 +1,5 @@
 import { BASE_CHARACTER } from './config.js';
-import { addStats, emptyStats } from './stats.js';
+import { addStats, constraintDeficits, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import {
   estimateElementValues,
@@ -108,6 +108,23 @@ export function evaluateCompleteBuild({
     return { result: null, reason: 'item-condition' };
   }
 
+  // User constraints describe the permanent stuff first. A temporary T1 bonus
+  // must never be allowed to "rescue" a build that is intrinsically below the
+  // requested Vitality, range or resistances. We then run the turn-aware check
+  // below as a second gate so temporary penalties (e.g. PA/PM loss) can still
+  // invalidate the selected turn.
+  const staticConstraintDeficits = constraintDeficits(fm.stats, constraints);
+  if (Object.keys(staticConstraintDeficits).length) {
+    return {
+      result: null,
+      reason: 'constraint',
+      constraintDiagnostics: {
+        meets: false,
+        staticConstraintDeficits
+      }
+    };
+  }
+
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
@@ -123,7 +140,10 @@ export function evaluateCompleteBuild({
     return {
       result: null,
       reason: 'constraint',
-      constraintDiagnostics: turnConstraints
+      constraintDiagnostics: {
+        ...turnConstraints,
+        staticConstraintDeficits
+      }
     };
   }
 
