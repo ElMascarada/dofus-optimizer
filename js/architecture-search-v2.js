@@ -70,7 +70,11 @@ function constraintWeight(key) {
 
 function constraintItemBonus(item, constraints = {}) {
   let score = 0;
-  for (const key of positiveConstraintKeys(constraints)) {
+  // AP/MP already have dedicated structural reserves and state buckets. Giving
+  // them an item-level constraint bonus over-ranks redundant PA/PM trophies
+  // before set bonuses and the rest of the equipment have been assembled.
+  for (const key of EXTRA_CONSTRAINT_KEYS) {
+    if (Number(constraints?.[key] || 0) <= 0) continue;
     const target = Math.max(1, Number(constraints[key] || 0));
     const actual = Math.max(0, num(item?.stats, key));
     if (!actual) continue;
@@ -441,7 +445,7 @@ function mutationVariants(architecture) {
   const weakest = [...baseIds].sort((a, b) => (scoreById.get(a) || 0) - (scoreById.get(b) || 0));
   if (weakest.length >= 2) {
     const removed = new Set(weakest.slice(0, 2));
-    variants.push({ label: `${architecture.key} · -2 standalones`, anchorIds: baseIds.filter((id) => !removed.has(id)) });
+    variants.push({ label: `${architecture.key} · -2 standalones`, anchorIds: baseIds.filter((id) => !removed.has(id) });
   }
   const seen = new Set();
   return variants.filter((variant) => {
