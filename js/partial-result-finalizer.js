@@ -1,5 +1,6 @@
 import { refineCombatTurns } from './combat-turn-refiner.js';
 import { diversifyBuilds } from './result-diversity.js';
+import { keepCompleteCombatPlans } from './final-result-validator.js';
 
 function spellMatchesElement(spell, element = 'multi') {
   if (element === 'multi' || !element) return Array.isArray(spell?.hits) && spell.hits.length > 0;
@@ -54,7 +55,8 @@ export function finalizePartialCombatResults({
     preservePrysmaradites: diversityMode === 'prysma',
     onProgress
   });
-  const diversified = diversifyBuilds(refined.results, diversityMode, requestedTopN);
+  const complete = keepCompleteCombatPlans(refined.results, combatObjective.turnMode || 't1');
+  const diversified = diversifyBuilds(complete, diversityMode, requestedTopN);
 
   return {
     results: diversified,
@@ -63,6 +65,7 @@ export function finalizePartialCombatResults({
       candidates: candidates.length,
       spellPool: spells.length,
       returned: diversified.length,
+      incompletePlansRejected: Math.max(0, refined.results.length - complete.length),
       stoppedEarly: true
     }
   };
