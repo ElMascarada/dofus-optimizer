@@ -10,11 +10,11 @@ Cette architecture est décrite telle qu'elle est réellement exécutée par le 
 
 `index.html` est le shell HTML unique chargé en production.
 
-Le module UI réellement exécuté est :
+Le module UI réellement exécuté et retenu comme entrée canonique pour la migration est :
 
 - `js/app-experimental.js` — orchestration UI actuelle, chargement des données, collecte des paramètres, lancement du Worker et rendu des résultats.
 
-`js/app.js` est une ancienne UI. Il n'est chargé ni par `index.html` ni par le service worker actuel et contient encore des attentes d'anciens contrôles. Il est donc une duplication historique candidate à suppression dans cette PR.
+L'ancienne UI `js/app.js` n'était chargée ni par `index.html` ni par le service worker et dépendait encore d'anciens contrôles. Cette duplication clairement morte est supprimée dans la PR de fondation.
 
 Deux scripts classiques s'insèrent actuellement avant l'application :
 
@@ -107,7 +107,7 @@ Le moteur contient encore une mécanique Huppermage codée en dur (`breedId`, no
 
 Les mécaniques Iop récemment ajoutées passent déjà davantage par les données normalisées (`selfCharge`, modificateurs retardés), ce qui constitue la direction à généraliser.
 
-Aucune extraction de la logique Huppermage n'est faite dans cette PR de fondation afin de ne pas changer le résultat des rotations.
+La fondation ajoute `combat-mechanics-registry.js` comme interface déclarative générique, mais ne migre aucune mécanique existante afin de ne pas changer les rotations.
 
 ## Arrêt manuel
 
@@ -161,7 +161,16 @@ La fondation introduit `js/runtime-meta.js` comme source runtime canonique pour 
 - epoch de calcul ;
 - nombre maximal d'entrées.
 
-Les suffixes `?v=YYYYMMDD-N` présents dans `index.html` restent pour cette PR un identifiant de révision d'assets, distinct de la version applicative. Leur suppression pourra être traitée avec le futur bootstrap V2.
+`package.json` n'expose plus de version applicative indépendante. Les suffixes `?v=YYYYMMDD-N` présents dans `index.html` restent pour cette PR un identifiant de révision d'assets, distinct de la version applicative.
+
+## Interfaces préparatoires
+
+La fondation ajoute sans les brancher sur le comportement courant :
+
+- `optimizer-protocol.js` — forme stable des messages Worker ;
+- `combat-mechanics-registry.js` — registre déclaratif générique destiné à recevoir les mécaniques de classes dans une PR dédiée.
+
+Ces interfaces ne remplacent encore aucun composant de production.
 
 ## Données
 
@@ -194,9 +203,9 @@ La PR ajoute une baseline transversale dédiée V2 et un benchmark reproductible
 
 ## Code historique / expérimental
 
-### Clairement mort
+### Supprimé comme duplication clairement morte
 
-- `js/app.js` : ancienne UI, non chargée par le runtime actuel et non présente dans l'APP_SHELL du service worker.
+- `js/app.js` : ancienne UI, non chargée par le runtime actuel et absente de l'APP_SHELL du service worker.
 
 ### Historique mais encore conservé
 
@@ -217,7 +226,7 @@ Ils ne sont pas la voie appelée par `optimizer-worker.js`, mais restent référ
 1. remplacer les patches globaux `window.Worker` par un `OptimizerClient` explicite ;
 2. déplacer l'UI d'items imposés dans le rendu canonique ;
 3. supprimer le `MutationObserver` de la modal principale ;
-4. extraire Huppermage vers un registre déclaratif de mécaniques ;
+4. migrer Huppermage vers le registre déclaratif ;
 5. rendre le préfiltrage équipement réellement unique ;
 6. centraliser les constantes beam/search ;
 7. remplacer le cache principal `localStorage` par un repository IndexedDB ;
