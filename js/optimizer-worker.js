@@ -114,6 +114,20 @@ function mergeBuildCandidates(groups = [], limit = 60) {
   return [...seen.values()].slice(0, Math.max(1, Number(limit || 60)));
 }
 
+function normalizedRequiredIds(payload = {}) {
+  return [...new Set((payload?.requiredItemIds || []).map(String).filter(Boolean))];
+}
+
+function buildHasRequiredItems(build, requiredIds = []) {
+  if (!requiredIds.length) return true;
+  const equipped = new Set((build?.items || []).map((item) => String(item.id)));
+  return requiredIds.every((id) => equipped.has(String(id)));
+}
+
+function keepRequiredBuilds(builds = [], requiredIds = []) {
+  return (builds || []).filter((build) => buildHasRequiredItems(build, requiredIds));
+}
+
 function diversityModeFor(payload = {}) {
   const mode = String(payload?.diversityMode || 'gear');
   return DIVERSITY_MODES.has(mode) ? mode : 'gear';
@@ -128,6 +142,7 @@ self.addEventListener('message', (event) => {
     const combatObjective = payload?.combatObjective || {};
     const turnMode = combatMode ? (combatObjective.turnMode || payload?.turnMode || 't1') : (payload?.turnMode || 'sum');
     const diversityMode = diversityModeFor(payload);
+    const requiredIds = normalizedRequiredIds(payload);
     const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
     const rawSelections = combatMode
       ? combatGearSelections(combatSpells, combatObjective)
@@ -144,6 +159,7 @@ self.addEventListener('message', (event) => {
 
     const normalizedPayload = {
       ...payload,
+      requiredItemIds: requiredIds,
       items: preferCompanionVitalityOnTies(payload?.items || []),
       selections,
       turnMode,
@@ -153,8 +169,6 @@ self.addEventListener('message', (event) => {
 
     const requestedTopN = Math.max(1, Number(payload?.topN || 10));
     const diversifiedSearch = diversityMode !== 'score';
-    // Keep a wider bench when the user asks for genuinely different answers.
-    // The final list is still capped to requestedTopN after rotation scoring.
     const searchTopN = combatMode
       ? Math.max(diversifiedSearch ? 90 : 60, requestedTopN * (diversifiedSearch ? 9 : 6))
       : diversifiedSearch ? Math.max(50, requestedTopN * 5) : requestedTopN;
@@ -166,8 +180,9 @@ self.addEventListener('message', (event) => {
 
     let output = primary;
 
-    if ((primary.results || []).length < searchTopN) {
-      const conditionlessItems = (normalizedPayload.items || []).filter((item) => !item.conditions);
+    if ((primary.results || []).length < searchTopN && !primary.diagnostics?.impossible) {
+      const requiredSet = new Set(requiredIds);
+      const conditionlessItems = (normalizedPayload.items || []).filter((item) => !item.conditions || requiredSet.has(String(item.id)));
       const fallback = searchArchitecturesV2({
         ...normalizedPayload,
         items: conditionlessItems,
@@ -183,17 +198,20 @@ self.addEventListener('message', (event) => {
       output = mergeOutputs(primary, fallback, searchTopN);
     }
 
+    output.results = keepRequiredBuilds(output.results, requiredIds);
+
     if (output.results?.length) {
+      const beforeRefine = output.results;
       const refined = refineOffensiveSlots({
         ...normalizedPayload,
-        results: output.results,
+        results: beforeRefine,
         topN: searchTopN,
         preservePrysmaradites: combatMode || diversityMode === 'prysma',
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       output = {
         ...output,
-        results: refined.results,
+        results: keepRequiredBuilds(mergeBuildCandidates([refined.results, beforeRefine], searchTopN), requiredIds),
         diagnostics: {
           ...(output.diagnostics || {}),
           offensiveRefine: refined.diagnostics
@@ -202,9 +220,6 @@ self.addEventListener('message', (event) => {
     }
 
     if (combatMode && output.results?.length) {
-      // Pass 1: solve real rotations on a broad bench while reserving the best
-      // candidate for each Prysmaradite. This is what lets a +PA/-PM Prysmaradite
-      // survive long enough for its extra casts to be valued by the real solver.
       const feedbackPlanCount = Math.min(searchTopN, Math.max(50, requestedTopN * 5));
       const firstCombat = refineCombatTurns({
         results: output.results,
@@ -214,6 +229,7 @@ self.addEventListener('message', (event) => {
         preservePrysmaradites: true,
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
+      firstCombat.results = keepRequiredBuilds(firstCombat.results, requiredIds);
 
       const feedbackSelections = buildCombatFeedbackSelections({
         results: firstCombat.results,
@@ -242,10 +258,10 @@ self.addEventListener('message', (event) => {
           selections: feedbackSelections.length,
           ...feedbackRefined.diagnostics
         };
-        finalCandidates = mergeBuildCandidates([
+        finalCandidates = keepRequiredBuilds(mergeBuildCandidates([
           feedbackRefined.results,
           firstCombat.results
-        ], Math.min(searchTopN, Math.max(70, requestedTopN * 7)));
+        ], Math.min(searchTopN, Math.max(70, requestedTopN * 7))), requiredIds);
       }
 
       const finalBenchCount = diversityMode === 'score'
@@ -259,12 +275,14 @@ self.addEventListener('message', (event) => {
         preservePrysmaradites: diversityMode === 'prysma',
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
+      combat.results = keepRequiredBuilds(combat.results, requiredIds);
       const diversified = diversifyBuilds(combat.results, diversityMode, requestedTopN);
       output = {
         ...output,
         results: diversified,
         diagnostics: {
           ...(output.diagnostics || {}),
+          requiredItemIds: requiredIds,
           combatFeedback: feedbackDiagnostics,
           resultDiversity: {
             mode: diversityMode,
@@ -280,10 +298,11 @@ self.addEventListener('message', (event) => {
         }
       };
     } else if (output.results?.length) {
-      const diversified = diversifyBuilds(output.results, diversityMode, requestedTopN);
+      const diversified = diversifyBuilds(keepRequiredBuilds(output.results, requiredIds), diversityMode, requestedTopN);
       output.results = diversified;
       output.diagnostics = {
         ...(output.diagnostics || {}),
+        requiredItemIds: requiredIds,
         resultDiversity: {
           mode: diversityMode,
           candidates: Math.min(searchTopN, output.results.length),
@@ -292,6 +311,7 @@ self.addEventListener('message', (event) => {
       };
     }
 
+    output.results = keepRequiredBuilds(output.results, requiredIds);
     self.postMessage({ type: 'result', requestId, output });
   } catch (error) {
     self.postMessage({
