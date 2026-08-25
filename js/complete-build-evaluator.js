@@ -1,5 +1,5 @@
 import { BASE_CHARACTER } from './config.js';
-import { addStats, emptyStats } from './stats.js';
+import { addStats, constraintDeficits, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import {
   estimateElementValues,
@@ -106,6 +106,23 @@ export function evaluateCompleteBuild({
 
   if (!itemConditionsAreValid(items, fm.stats, character.level)) {
     return { result: null, reason: 'item-condition' };
+  }
+
+  // User constraints describe the permanent stuff shown in the result card.
+  // Temporary T1/T2/T3 passives may improve those values for combat, but they
+  // must never rescue a build whose displayed Vita/PO/resistances are below the
+  // requested minimums. We still run the per-turn validation afterwards so a
+  // temporary penalty (for example PA/PM loss) can invalidate the relevant turn.
+  const permanentDeficits = constraintDeficits(fm.stats, constraints);
+  if (Object.keys(permanentDeficits).length) {
+    return {
+      result: null,
+      reason: 'constraint',
+      constraintDiagnostics: {
+        permanentDeficits,
+        permanentStats: { ...fm.stats }
+      }
+    };
   }
 
   const turnConstraints = evaluateTurnConstraints({
