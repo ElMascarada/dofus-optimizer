@@ -6,6 +6,25 @@
     active: null
   };
 
+  function requestedTurns(payload = {}) {
+    const mode = payload?.combatObjective?.turnMode || payload?.turnMode || 't1';
+    if (mode === 't1') return [1];
+    if (mode === 't2') return [2];
+    if (mode === 't3') return [3];
+    return [1, 2, 3];
+  }
+
+  function hasCompletePlan(build, payload = {}) {
+    const plan = build?.combatPlan;
+    if (!plan?.perTurn || !Array.isArray(plan?.objective?.activeTurns)) return false;
+    const activeTurns = plan.objective.activeTurns.map(Number);
+    return requestedTurns(payload).every((turn) =>
+      activeTurns.includes(turn)
+      && Object.prototype.hasOwnProperty.call(plan.perTurn, turn)
+      && Number.isFinite(Number(plan.perTurn[turn]))
+    );
+  }
+
   function trackedWorker(...args) {
     const worker = new NativeWorker(...args);
     const nativePostMessage = worker.postMessage.bind(worker);
@@ -88,8 +107,12 @@
     }
   }
 
+  function completeReadyResults(tracker) {
+    return tracker.latestPartialResults.filter((build) => hasCompletePlan(build, tracker.payload));
+  }
+
   function finishAlreadyRefined(tracker) {
-    const ready = tracker.latestPartialResults.filter((build) => build?.combatPlan);
+    const ready = completeReadyResults(tracker);
     if (!ready.length) return false;
     const topN = Math.max(1, Number(tracker.payload?.topN || 10));
     const results = ready.slice(0, topN);
@@ -109,6 +132,30 @@
       })
     }, ' · rotations déjà calculées');
     return true;
+  }
+
+  function dispatchNoUnsafeFallback(tracker, reason) {
+    const ready = completeReadyResults(tracker);
+    const topN = Math.max(1, Number(tracker.payload?.topN || 10));
+    const results = ready.slice(0, topN);
+    dispatchStoppedResult(tracker, {
+      results,
+      diagnostics: diagnosticsFromTracker(tracker, {
+        combatRefine: {
+          evaluated: results.length,
+          spellPool: Number(tracker.payload?.classSpells?.length || 0),
+          stoppedEarly: true,
+          finalizationFailed: true
+        },
+        resultDiversity: {
+          mode: tracker.payload?.diversityMode || 'gear',
+          candidates: ready.length,
+          returned: results.length
+        }
+      })
+    }, results.length
+      ? ` · ${reason} · seules les rotations complètes sont conservées`
+      : ` · ${reason} · aucun stuff affiché sans tours complets`);
   }
 
   function finalizeCurrentCandidates(tracker) {
@@ -143,18 +190,15 @@
 
       if (message.type === 'error') {
         finalizer.terminate();
-        const fallback = tracker.latestPartialResults.slice(0, topN);
-        dispatchStoppedResult(tracker, {
-          results: fallback,
-          diagnostics: diagnosticsFromTracker(tracker)
-        }, ` · finalisation des rotations impossible : ${message.message || 'erreur inconnue'}`);
+        dispatchNoUnsafeFallback(tracker, `finalisation impossible : ${message.message || 'erreur inconnue'}`);
         return;
       }
 
       if (message.type !== 'result') return;
       finalizer.terminate();
+      const completeResults = (message.output?.results || []).filter((build) => hasCompletePlan(build, payload));
       const output = {
-        results: message.output?.results || [],
+        results: completeResults,
         diagnostics: diagnosticsFromTracker(tracker, {
           combatRefine: {
             ...(message.output?.diagnostics || {}),
@@ -164,7 +208,7 @@
           resultDiversity: {
             mode: payload.diversityMode || 'gear',
             candidates: Number(message.output?.diagnostics?.candidates || candidateLimit),
-            returned: Number(message.output?.results?.length || 0)
+            returned: completeResults.length
           }
         })
       };
@@ -173,11 +217,7 @@
 
     finalizer.addEventListener('error', (event) => {
       finalizer.terminate();
-      const fallback = tracker.latestPartialResults.slice(0, topN);
-      dispatchStoppedResult(tracker, {
-        results: fallback,
-        diagnostics: diagnosticsFromTracker(tracker)
-      }, ` · finalisation des rotations impossible : ${event.message || 'erreur worker'}`);
+      dispatchNoUnsafeFallback(tracker, `erreur worker : ${event.message || 'erreur inconnue'}`);
     });
 
     finalizer.postMessage({
