@@ -1,14 +1,19 @@
-const CACHE = 'dofus-optimizer-v0.13.9';
+const CACHE = 'dofus-optimizer-v0.14.0';
 const APP_SHELL = [
   './',
   './index.html',
   './styles.css',
   './styles-experimental.css',
+  './styles-session.css',
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
   './js/app-experimental.js',
   './js/spell-ui-enhancements.js',
+  './js/optimizer-session-bridge.js',
+  './js/optimizer-stop-bridge.js',
+  './js/partial-finalizer-worker.js',
+  './js/partial-result-finalizer.js',
   './js/config.js',
   './js/data-loader.js',
   './js/curated-runtime-rules.js',

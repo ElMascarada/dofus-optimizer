@@ -1,0 +1,99 @@
+.required-equipment-suggestions {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--line, #2b3038);
+  border-radius: 10px;
+  background: var(--panel-strong, #11151b);
+  max-height: 300px;
+  overflow: auto;
+}
+
+.required-equipment-suggestions[hidden] { display: none; }
+
+.required-equipment-suggestions button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.required-equipment-suggestions button:hover {
+  border-color: var(--line, #343b46);
+  background: rgba(255, 255, 255, .04);
+}
+
+.required-equipment-suggestions button span,
+.required-equipment-chip small { color: var(--muted, #8993a4); }
+
+.required-equipment-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.required-equipment-chip {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 8px;
+  border: 1px solid var(--line, #2b3038);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.required-equipment-chip img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+
+.required-equipment-chip span { min-width: 0; display: grid; gap: 2px; }
+.required-equipment-chip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.required-equipment-chip small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.required-equipment-chip button,
+.impose-result-item,
+.required-equipment-actions button {
+  border: 1px solid var(--line, #343b46);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .04);
+  color: inherit;
+  cursor: pointer;
+}
+
+.required-equipment-chip button { width: 30px; height: 30px; font-size: 18px; }
+.required-equipment-chip button:hover,
+.impose-result-item:hover,
+.required-equipment-actions button:hover { background: rgba(255, 255, 255, .09); }
+
+.required-equipment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.required-equipment-actions button { padding: 8px 10px; }
+
+.detail-gear-row .impose-result-item {
+  margin-left: auto;
+  padding: 6px 9px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.detail-gear-row .impose-result-item:disabled {
+  opacity: .55;
+  cursor: default;
+}

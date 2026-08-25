@@ -10,7 +10,7 @@ test('primary UI exposes only the automatic combat solver', () => {
   assert.doesNotMatch(index, /<option value="manual">/);
   assert.match(index, /addEventListener\('click', forceAutomaticMode, true\)/);
   assert.match(index, /addEventListener\('pageshow', forceAutomaticMode\)/);
-  assert.match(index, /AUTO ROTATION · build 20260824-9/);
+  assert.match(index, /AUTO ROTATION · build \d{8}-\d+/);
 });
 
 test('fresh service worker activates immediately', () => {

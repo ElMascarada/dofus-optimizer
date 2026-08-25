@@ -230,7 +230,7 @@ test('temporary MP cannot replace the permanent 6 MP target', () => {
   assert.equal(unresolved.diagnostics.rejectedUnresolvedPassives, 1);
 });
 
-test('AP and MP targets reject permanent overcap builds', () => {
+test('AP and MP targets are minimums and preserve permanent overcap builds', () => {
   const item = { id: 'overcap', name: 'overcap', slot: 'hat', stats: { mp: 1 } };
   const output = optimizeBuild({
     items: [item],
@@ -243,7 +243,9 @@ test('AP and MP targets reject permanent overcap builds', () => {
     topN: 1
   });
 
-  assert.equal(output.results.length, 0);
+  assert.equal(output.results.length, 1);
+  assert.equal(output.results[0].stats.ap, 12);
+  assert.equal(output.results[0].stats.mp, 7);
 });
 
 test('Pryximite melee bonus is ignored by spell scoring, even when its context is resolved', () => {
