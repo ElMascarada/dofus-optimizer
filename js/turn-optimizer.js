@@ -248,6 +248,7 @@ export function optimizeCombatSequence({
   spells = [],
   objective = {},
   beamWidth = 1600,
+  interTurnWidth = 24,
   maxActionsPerTurn = 12
 } = {}) {
   const selected = objectiveTurns(objective);
@@ -282,9 +283,17 @@ export function optimizeCombatSequence({
     sequence: []
   }];
   let explored = 0;
+  const bridgeWidth = Math.max(1, Math.min(Math.max(1, Number(beamWidth || 1)), Math.max(1, Number(interTurnWidth || 1))));
 
   for (let index = 0; index < selected.turns.length; index++) {
     const turn = selected.turns[index];
+    if (index > 0) {
+      const previousTurn = selected.turns[index - 1];
+      // Carry only the best strategic end states into the next turn. Previously
+      // every state in the full beam started another full turn search, producing
+      // roughly beamWidth² work for T1+T2+T3.
+      frontier = keepBestStates(frontier, previousTurn, bridgeWidth);
+    }
     const turnResults = [];
     for (const previous of frontier) {
       const start = index === 0 ? previous : startTurnState(previous, turn);
