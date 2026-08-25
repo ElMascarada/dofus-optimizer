@@ -445,7 +445,7 @@ function mutationVariants(architecture) {
   const weakest = [...baseIds].sort((a, b) => (scoreById.get(a) || 0) - (scoreById.get(b) || 0));
   if (weakest.length >= 2) {
     const removed = new Set(weakest.slice(0, 2));
-    variants.push({ label: `${architecture.key} · -2 standalones`, anchorIds: baseIds.filter((id) => !removed.has(id) });
+    variants.push({ label: `${architecture.key} · -2 standalones`, anchorIds: baseIds.filter((id) => !removed.has(id)) });
   }
   const seen = new Set();
   return variants.filter((variant) => {
