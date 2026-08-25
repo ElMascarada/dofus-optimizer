@@ -2,10 +2,13 @@
   const NativeWorker = window.Worker;
   if (typeof NativeWorker !== 'function') return;
 
-  const CACHE_STORAGE_KEY = 'dofus-optimizer.search-cache.v1';
-  const REQUIRED_STORAGE_KEY = 'dofus-optimizer.required-items.v1';
-  const CACHE_EPOCH = '20260825-required-gear-v1';
-  const MAX_CACHE_ENTRIES = 12;
+  const searchCache = window.DofusOptimizerRuntime?.searchCache;
+  if (!searchCache) throw new Error('Runtime cache metadata unavailable.');
+
+  const CACHE_STORAGE_KEY = searchCache.storageKey;
+  const REQUIRED_STORAGE_KEY = searchCache.requiredItemsKey;
+  const CACHE_EPOCH = searchCache.epoch;
+  const MAX_CACHE_ENTRIES = searchCache.maxEntries;
   const SLOT_CAPS = Object.freeze({
     hat: 1,
     cape: 1,
