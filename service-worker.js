@@ -1,4 +1,4 @@
-const CACHE = 'dofus-optimizer-v0.14.1';
+const CACHE = 'dofus-optimizer-v0.14.2';
 const APP_SHELL = [
   './',
   './index.html',
@@ -9,6 +9,7 @@ const APP_SHELL = [
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
   './js/cache-migration-20260825-hard-survivability.js',
+  './js/cache-migration-20260825-iop-multiturn.js',
   './js/app-experimental.js',
   './js/spell-ui-enhancements.js',
   './js/optimizer-session-bridge.js',
