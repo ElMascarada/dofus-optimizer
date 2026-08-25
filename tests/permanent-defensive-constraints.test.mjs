@@ -29,8 +29,9 @@ const temporaryDefense = {
   passives: [{
     id: 't1-defense',
     rules: [{
-      trigger: { type: 'turn_in', turns: [1] },
-      stats: { vit: 1000, resEarth: 20 }
+      id: 't1-defense-rule',
+      conditions: { turns: [1] },
+      effect: { stats: { vit: 1000, resEarth: 20 } }
     }]
   }],
   conditions: null
