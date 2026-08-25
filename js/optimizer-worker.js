@@ -3,6 +3,7 @@ import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 import { diversifyBuilds } from './result-diversity.js';
+import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
   'deep-purple',
@@ -88,6 +89,14 @@ function resultKey(result) {
   return (result?.items || []).map((item) => String(item.id)).sort().join('|');
 }
 
+function mergeItemLists(groups = []) {
+  const seen = new Map();
+  for (const group of groups) {
+    for (const item of group || []) seen.set(String(item.id), item);
+  }
+  return [...seen.values()];
+}
+
 function mergeOutputs(primary, fallback, topN) {
   const seen = new Map();
   for (const result of [...(primary?.results || []), ...(fallback?.results || [])]) {
@@ -99,6 +108,7 @@ function mergeOutputs(primary, fallback, topN) {
   return {
     ...(primary || {}),
     results: merged,
+    candidateItems: mergeItemLists([primary?.candidateItems, fallback?.candidateItems]),
     diagnostics: {
       ...(primary?.diagnostics || {}),
       fallbackUsed: Boolean(fallback),
@@ -108,7 +118,7 @@ function mergeOutputs(primary, fallback, topN) {
   };
 }
 
-function mergeBuildCandidates(groups = [], limit = 60) {
+function mergeBuildCandidates(groups = [], limit = Infinity) {
   const seen = new Map();
   for (const group of groups) {
     for (const build of group || []) {
@@ -117,7 +127,8 @@ function mergeBuildCandidates(groups = [], limit = 60) {
       if (!previous || Number(build.score || 0) > Number(previous.score || 0)) seen.set(key, build);
     }
   }
-  return [...seen.values()].slice(0, Math.max(1, Number(limit || 60)));
+  const values = [...seen.values()];
+  return Number.isFinite(limit) ? values.slice(0, Math.max(1, Number(limit))) : values;
 }
 
 function normalizedRequiredIds(payload = {}) {
@@ -139,6 +150,10 @@ function diversityModeFor(payload = {}) {
   return DIVERSITY_MODES.has(mode) ? mode : 'gear';
 }
 
+function capped(floor, multiplier, requestedTopN, ceiling = Infinity) {
+  return Math.min(ceiling, Math.max(floor, requestedTopN * multiplier));
+}
+
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'optimize') return;
   const { requestId, payload } = event.data;
@@ -151,21 +166,22 @@ self.addEventListener('message', (event) => {
     const diversityMode = diversityModeFor(payload);
     const requiredIds = normalizedRequiredIds(payload);
     const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
-    const rawSelections = combatMode
-      ? combatGearSelections(combatSpells, combatObjective)
-      : payload?.selections;
+    const rawSelections = combatMode ? combatGearSelections(combatSpells, combatObjective) : payload?.selections;
     const selections = selectionsForTurnMode(rawSelections, turnMode);
     const scenario = scenarioForUi(payload?.scenario, turnMode);
     const enabledSpellCount = selections.filter((selection) => selection.enabled).length;
+    const searchProfileName = String(payload?.searchProfile || 'BALANCED').toUpperCase();
+    const searchProfile = getSearchProfile(searchProfileName);
+    const budget = searchProfile.worker;
 
     if (combatMode || enabledSpellCount <= 1) scenario.requiredApByTurn = {};
-
     if (combatMode && !selections.length) {
       throw new Error(`Aucun sort offensif ${combatObjective.element || 'multi'} certifié pour cette classe.`);
     }
 
     const normalizedPayload = {
       ...payload,
+      searchProfile: searchProfileName,
       requiredItemIds: requiredIds,
       items: preferCompanionVitalityOnTies(payload?.items || []),
       selections,
@@ -177,14 +193,20 @@ self.addEventListener('message', (event) => {
     const requestedTopN = Math.max(1, Number(payload?.topN || 10));
     const diversifiedSearch = diversityMode !== 'score';
     const searchTopN = combatMode
-      ? Math.max(diversifiedSearch ? 90 : 60, requestedTopN * (diversifiedSearch ? 9 : 6))
-      : diversifiedSearch ? Math.max(50, requestedTopN * 5) : requestedTopN;
+      ? capped(
+          diversifiedSearch ? budget.structureCombatDiversityFloor : budget.structureCombatScoreFloor,
+          diversifiedSearch ? budget.structureCombatDiversityMultiplier : budget.structureCombatScoreMultiplier,
+          requestedTopN
+        )
+      : diversifiedSearch
+        ? capped(budget.structureNonCombatDiversityFloor, budget.structureNonCombatDiversityMultiplier, requestedTopN)
+        : requestedTopN;
+
     const primary = searchArchitecturesV2({
       ...normalizedPayload,
       topN: searchTopN,
       onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
     });
-
     let output = primary;
 
     if ((primary.results || []).length < searchTopN && !primary.diagnostics?.impossible) {
@@ -194,23 +216,23 @@ self.addEventListener('message', (event) => {
         ...normalizedPayload,
         items: conditionlessItems,
         topN: searchTopN,
-        onProgress: (progress) => {
-          self.postMessage({
-            type: 'progress',
-            requestId,
-            progress: { ...progress, label: `fallback légal · ${progress.label || ''}` }
-          });
-        }
+        onProgress: (progress) => self.postMessage({
+          type: 'progress',
+          requestId,
+          progress: { ...progress, label: `fallback légal · ${progress.label || ''}` }
+        })
       });
       output = mergeOutputs(primary, fallback, searchTopN);
     }
 
     output.results = keepRequiredBuilds(output.results, requiredIds);
+    const candidateItems = output.candidateItems?.length ? output.candidateItems : normalizedPayload.items;
 
     if (output.results?.length) {
       const beforeRefine = output.results;
       const refined = refineOffensiveSlots({
         ...normalizedPayload,
+        items: candidateItems,
         results: beforeRefine,
         topN: searchTopN,
         preservePrysmaradites: combatMode || diversityMode === 'prysma',
@@ -228,14 +250,15 @@ self.addEventListener('message', (event) => {
 
     if (combatMode && output.results?.length) {
       const feedbackPlanCount = multiTurn
-        ? Math.min(searchTopN, Math.max(20, requestedTopN * 2))
-        : Math.min(searchTopN, Math.max(50, requestedTopN * 5));
+        ? Math.min(searchTopN, capped(budget.multiFeedbackFloor, budget.multiFeedbackMultiplier, requestedTopN))
+        : Math.min(searchTopN, capped(budget.singleFeedbackFloor, budget.singleFeedbackMultiplier, requestedTopN));
       const firstCombat = refineCombatTurns({
         results: output.results,
         spells: combatSpells,
         combatObjective: { ...combatObjective, turnMode },
         topN: feedbackPlanCount,
         preservePrysmaradites: true,
+        searchProfile: searchProfileName,
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       firstCombat.results = keepRequiredBuilds(firstCombat.results, requiredIds);
@@ -244,18 +267,18 @@ self.addEventListener('message', (event) => {
         results: firstCombat.results,
         spells: combatSpells,
         turnMode,
-        maxPlans: multiTurn ? 8 : 10
+        maxPlans: multiTurn ? budget.feedbackSelectionMulti : budget.feedbackSelectionSingle
       });
 
       let finalCandidates = firstCombat.results;
       let feedbackDiagnostics = { selections: feedbackSelections.length, refined: 0 };
-
       if (feedbackSelections.length) {
         const feedbackTopN = multiTurn
-          ? Math.min(searchTopN, Math.max(30, requestedTopN * 3))
-          : Math.min(searchTopN, Math.max(60, requestedTopN * 6));
+          ? Math.min(searchTopN, capped(budget.multiFeedbackRefineFloor, budget.multiFeedbackRefineMultiplier, requestedTopN))
+          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackRefineMultiplier, requestedTopN));
         const feedbackRefined = refineOffensiveSlots({
           ...normalizedPayload,
+          items: candidateItems,
           selections: feedbackSelections,
           results: firstCombat.results,
           topN: feedbackTopN,
@@ -266,32 +289,28 @@ self.addEventListener('message', (event) => {
             progress: { ...progress, label: `raffinage sur combo réel · ${progress.label || ''}` }
           })
         });
-        feedbackDiagnostics = {
-          selections: feedbackSelections.length,
-          ...feedbackRefined.diagnostics
-        };
+        feedbackDiagnostics = { selections: feedbackSelections.length, ...feedbackRefined.diagnostics };
         const mergeLimit = multiTurn
-          ? Math.min(searchTopN, Math.max(36, requestedTopN * 4))
-          : Math.min(searchTopN, Math.max(70, requestedTopN * 7));
+          ? Math.min(searchTopN, capped(budget.multiMergeFloor, budget.multiMergeMultiplier, requestedTopN))
+          : Math.min(searchTopN, capped(budget.singleMergeFloor, budget.singleMergeMultiplier, requestedTopN));
         finalCandidates = keepRequiredBuilds(mergeBuildCandidates([
           feedbackRefined.results,
           firstCombat.results
         ], mergeLimit), requiredIds);
       }
 
-      const finalBenchCount = multiTurn
-        ? (diversityMode === 'score'
-            ? requestedTopN
-            : Math.min(searchTopN, Math.max(30, requestedTopN * 3)))
-        : (diversityMode === 'score'
-            ? requestedTopN
-            : Math.min(searchTopN, Math.max(60, requestedTopN * 6)));
+      const finalBenchCount = diversityMode === 'score'
+        ? requestedTopN
+        : multiTurn
+          ? Math.min(searchTopN, capped(budget.multiFeedbackRefineFloor, budget.multiFeedbackRefineMultiplier, requestedTopN))
+          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackRefineMultiplier, requestedTopN));
       const combat = refineCombatTurns({
         results: finalCandidates,
         spells: combatSpells,
         combatObjective: { ...combatObjective, turnMode },
         topN: finalBenchCount,
         preservePrysmaradites: diversityMode === 'prysma',
+        searchProfile: searchProfileName,
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       combat.results = keepRequiredBuilds(combat.results, requiredIds);
@@ -302,6 +321,7 @@ self.addEventListener('message', (event) => {
         diagnostics: {
           ...(output.diagnostics || {}),
           requiredItemIds: requiredIds,
+          searchProfile: searchProfileName,
           combatFeedback: feedbackDiagnostics,
           resultDiversity: {
             mode: diversityMode,
@@ -322,6 +342,7 @@ self.addEventListener('message', (event) => {
       output.diagnostics = {
         ...(output.diagnostics || {}),
         requiredItemIds: requiredIds,
+        searchProfile: searchProfileName,
         resultDiversity: {
           mode: diversityMode,
           candidates: Math.min(searchTopN, output.results.length),

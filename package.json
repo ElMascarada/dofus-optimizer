@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "check": "node --check js/*.js && node --check scripts/*.mjs",
+    "check": "node --check js/*.js && node --check optimizer/*.js && node --check scripts/*.mjs",
     "benchmark:v2": "node scripts/benchmark-v2-baseline.mjs",
     "benchmark:search": "node scripts/benchmark-candidate-search.mjs",
     "report:spell-support": "node scripts/report-spell-support.mjs",
