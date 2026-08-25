@@ -21,7 +21,7 @@
   <main>
     <section class="panel intro">
       <div><strong>Base de jeu certifiée</strong><p id="data-status">Chargement des bases certifiées…</p></div>
-      <span class="status">AUTO ROTATION · build 20260825-4</span>
+      <span class="status">AUTO ROTATION · build 20260825-5</span>
     </section>
 
     <div class="layout">
@@ -109,7 +109,7 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
-          <p class="hint">PA/PM sont des minimums, pas des valeurs forcées : tu peux demander 11/5, et un stuff 12/6 reste valide. Les contraintes doivent aussi être respectées sur chaque tour optimisé après les passifs temporaires : un Diadème de Ganymède en T1 compte donc bien avec sa perte de PA/PM.</p>
+          <p class="hint">Les valeurs affichées du stuff doivent respecter ces minimums en permanence : un bonus temporaire T1 ne peut plus compenser une Vita/PO/résistance trop basse. PA/PM restent aussi vérifiés sur chaque tour optimisé après les passifs temporaires : un Diadème de Ganymède structurellement 12/6 compte donc bien 11/5 en T1.</p>
         </section>
 
         <section class="panel">
@@ -132,8 +132,9 @@
     </div>
   </main>
 
-  <script src="js/optimizer-session-bridge.js?v=20260825-4"></script>
-  <script src="js/optimizer-stop-bridge.js?v=20260825-4"></script>
+  <script src="js/cache-migration.js?v=20260825-5"></script>
+  <script src="js/optimizer-session-bridge.js?v=20260825-5"></script>
+  <script src="js/optimizer-stop-bridge.js?v=20260825-5"></script>
   <script>
     (() => {
       function forceAutomaticMode() {
@@ -150,8 +151,8 @@
       });
     })();
   </script>
-  <script type="module" src="js/app-experimental.js?v=20260825-4"></script>
-  <script type="module" src="js/spell-ui-enhancements.js?v=20260825-4"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260825-4', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script type="module" src="js/app-experimental.js?v=20260825-5"></script>
+  <script type="module" src="js/spell-ui-enhancements.js?v=20260825-5"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260825-5', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
