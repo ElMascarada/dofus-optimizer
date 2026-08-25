@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFile } from 'node:fs/promises';
 
+const runtimeMetaSource = await readFile(new URL('../js/runtime-meta.js', import.meta.url), 'utf8');
 const bridgeSource = await readFile(new URL('../js/optimizer-session-bridge.js', import.meta.url), 'utf8');
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
@@ -22,9 +23,8 @@ function bridgeApi() {
     getElementById() { return null; },
     querySelectorAll() { return []; }
   };
-  const window = { Worker: FakeWorker };
-  vm.runInNewContext(bridgeSource, {
-    window,
+  const sandbox = {
+    Worker: FakeWorker,
     document,
     localStorage,
     queueMicrotask,
@@ -40,8 +40,12 @@ function bridgeApi() {
     Date,
     JSON,
     Math
-  });
-  return window.DofusOptimizerSession;
+  };
+  sandbox.window = sandbox;
+  const context = vm.createContext(sandbox);
+  vm.runInContext(runtimeMetaSource, context);
+  vm.runInContext(bridgeSource, context);
+  return sandbox.DofusOptimizerSession;
 }
 
 function payload(overrides = {}) {
@@ -79,10 +83,12 @@ test('required equipment participates in the local cache key independent of id o
   assert.equal(harebourg, sameHarebourg);
 });
 
-test('session bridge loads before stop bridge and the UI cache assets are wired', () => {
+test('runtime metadata and session bridge load before stop bridge', () => {
+  const runtimeIndex = index.indexOf('js/runtime-meta.js');
   const sessionIndex = index.indexOf('js/optimizer-session-bridge.js');
   const stopIndex = index.indexOf('js/optimizer-stop-bridge.js');
-  assert.ok(sessionIndex >= 0);
+  assert.ok(runtimeIndex >= 0);
+  assert.ok(sessionIndex > runtimeIndex, 'runtime metadata must load before the session bridge');
   assert.ok(stopIndex > sessionIndex, 'session bridge must patch Worker before the stop bridge');
   assert.match(index, /styles-session\.css/);
   assert.match(bridgeSource, /5\. Équipement imposé/);
