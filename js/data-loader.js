@@ -1,4 +1,5 @@
 import { isOptimizerAvailableItem } from './item-availability.js';
+import { applyCuratedItemRules, applyCuratedSpellRules } from './curated-runtime-rules.js';
 
 export function validateDofusSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') throw new Error('Snapshot Dofus invalide.');
@@ -10,7 +11,7 @@ export function validateDofusSnapshot(snapshot) {
     && item?.id
     && item?.slot
     && isOptimizerAvailableItem(item)
-  );
+  ).map(applyCuratedItemRules);
   const itemIds = new Set(items.map((item) => String(item.id)));
   const sets = snapshot.sets
     .filter((set) => set?.id && set?.bonuses && typeof set.bonuses === 'object')
@@ -44,7 +45,7 @@ export function validateSpellSnapshot(snapshot) {
     if (!Array.isArray(spell?.hits) || !Array.isArray(spell?.combatModifiers || [])) return false;
     if (!Number.isFinite(Number(spell.apCost))) return false;
     return spell.hits.length > 0 || (spell.combatModifiers || []).length > 0;
-  });
+  }).map(applyCuratedSpellRules);
   const spellIds = new Set(spells.map((spell) => spell.id));
   const breeds = snapshot.breeds
     .filter((breed) => breed?.id && breed?.name)
