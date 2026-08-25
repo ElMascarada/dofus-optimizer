@@ -1,11 +1,11 @@
 {
   "name": "dofus-optimizer",
-  "version": "0.13.3",
   "private": true,
   "type": "module",
   "scripts": {
     "test": "node --test",
     "check": "node --check js/*.js && node --check scripts/*.mjs",
+    "benchmark:v2": "node scripts/benchmark-v2-baseline.mjs",
     "sync:data": "node scripts/sync-dofusdude.mjs",
     "sync:spells": "node scripts/sync-spells.mjs",
     "normalize:data": "node scripts/normalize-dofusdude.mjs",

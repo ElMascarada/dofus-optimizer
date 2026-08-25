@@ -1,4 +1,6 @@
-const CACHE = 'dofus-optimizer-v0.14.2';
+importScripts('./js/runtime-meta.js');
+
+const CACHE = self.DofusOptimizerRuntime.serviceWorkerCache;
 const APP_SHELL = [
   './',
   './index.html',
@@ -8,6 +10,7 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
+  './js/runtime-meta.js',
   './js/cache-migration-20260825-hard-survivability.js',
   './js/cache-migration-20260825-iop-multiturn.js',
   './js/app-experimental.js',
