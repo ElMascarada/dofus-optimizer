@@ -70,8 +70,8 @@ function modifierSignature(modifier) {
 }
 
 // The search-state signature deliberately keeps scheduled modifiers too. Two
-// otherwise identical states are not equivalent if one of them already owes a
-// delayed penalty (for example Iop's Précipitation on the next turn).
+// otherwise identical states are not equivalent if one already owes a delayed
+// modifier on a future turn.
 export function combatModifierSignature(modifiers = [], turn = 1) {
   return retainedModifiersFromTurn(modifiers, turn)
     .map(modifierSignature)
