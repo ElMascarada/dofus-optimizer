@@ -15,15 +15,6 @@ import {
   specialSlotRulesAreValid
 } from './build-legality.js';
 
-function capPermanentApMp(stats, constraints = {}) {
-  const capped = { ...stats };
-  for (const key of ['ap', 'mp']) {
-    const cap = Number(constraints?.[key] || 0);
-    if (Number.isFinite(cap) && cap > 0 && Number(capped[key] || 0) > cap) capped[key] = cap;
-  }
-  return capped;
-}
-
 function average(values = []) {
   const numbers = values.map(Number).filter(Number.isFinite);
   if (!numbers.length) return 0;
@@ -101,9 +92,10 @@ export function evaluateCompleteBuild({
   });
   if (!charResult.requirementsSatisfied) return { result: null, reason: 'item-condition' };
 
-  const permanentBase = capPermanentApMp(charResult.stats, constraints);
+  // PA/PM constraints are minimums, never caps. A 12/6 build remains 12/6 when
+  // the user asks for 11/5, so its extra resources are still valued by rotations.
   const fm = optimizeFm({
-    baseStats: permanentBase,
+    baseStats: charResult.stats,
     items,
     selections,
     turnMode,
@@ -125,12 +117,18 @@ export function evaluateCompleteBuild({
     scenario
   });
 
-  const warnings = [];
-  if (fm.objective.unresolvedPassiveContexts?.length || turnConstraints.unresolvedPassiveContexts?.length) {
-    warnings.push('unresolved-passive');
+  // Constraints are hard legality rules. Do not surface a build with a warning
+  // when it actually misses the user's PA/PM/PO/Vita/resistance requirements.
+  if (!turnConstraints.meets) {
+    return {
+      result: null,
+      reason: 'constraint',
+      constraintDiagnostics: turnConstraints
+    };
   }
-  if (Object.keys(turnConstraints.baseApMpMismatches || {}).length) warnings.push('base-ap-mp');
-  if (Object.keys(turnConstraints.deficitsByTurn || {}).length) warnings.push('turn-constraints');
+
+  const warnings = [];
+  if (fm.objective.unresolvedPassiveContexts?.length) warnings.push('unresolved-passive');
 
   const effectiveStatsByTurn = {};
   for (const turn of [1, 2, 3]) effectiveStatsByTurn[turn] = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
@@ -155,13 +153,8 @@ export function evaluateCompleteBuild({
       activeSets,
       warnings,
       itemConditionsSatisfied: true,
-      turnFeasible: turnConstraints.meets,
-      unresolvedPassiveContexts: [
-        ...new Set([
-          ...(fm.objective.unresolvedPassiveContexts || []),
-          ...(turnConstraints.unresolvedPassiveContexts || [])
-        ])
-      ]
+      turnFeasible: true,
+      unresolvedPassiveContexts: [...new Set(fm.objective.unresolvedPassiveContexts || [])]
     },
     reason: null,
     warnings
