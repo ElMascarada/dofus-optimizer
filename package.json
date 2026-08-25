@@ -10,7 +10,8 @@
     "sync:spells": "node scripts/sync-spells.mjs",
     "normalize:data": "node scripts/normalize-dofusdude.mjs",
     "normalize:spells": "node scripts/normalize-spells.mjs",
+    "apply:curated": "node scripts/apply-curated-snapshot-rules.mjs",
     "sync:spell-icons": "node scripts/sync-spell-icons.mjs",
-    "sync:normalize": "npm run sync:data && npm run sync:spells && npm run normalize:data && npm run normalize:spells && npm run sync:spell-icons"
+    "sync:normalize": "npm run sync:data && npm run sync:spells && npm run normalize:data && npm run normalize:spells && npm run apply:curated && npm run sync:spell-icons"
   }
 }
