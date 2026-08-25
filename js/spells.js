@@ -21,12 +21,12 @@ const FLAT_DAMAGE_STAT = {
 // but only one elemental branch is actually resolved on a cast. Treating the
 // four effects as four simultaneous hits grossly overvalues them.
 const HUPPERMAGE_ONE_OF_ELEMENT_IDS = new Set([
-  'spell-13670', // Runification
-  'spell-13672', // Drain Élémentaire
-  'spell-13683', // Traversée
-  'spell-13710', // Manifestation
-  'spell-13724', // Surcharge Runique
-  'spell-14342' // Torrent Arcanique
+  'spell-13670',
+  'spell-13672',
+  'spell-13683',
+  'spell-13710',
+  'spell-13724',
+  'spell-14342'
 ]);
 
 function midpoint(range) {
@@ -78,7 +78,6 @@ export function spellHitVariants(spell) {
     return elemental.map((hit) => ({ hits: [hit], element: hit.element }));
   }
 
-  // Safe fallback if Ankama changes the payload shape: never invent branching.
   const elements = [...new Set(hits.map((hit) => hit?.element).filter(Boolean))];
   return [{ hits, element: elements.length === 1 ? elements[0] : null }];
 }
@@ -146,8 +145,6 @@ function damageMultiplierDetails(spell, stats, turn) {
   const position = positionDamage(spell, stats);
   const finalPct = stat(stats, 'finalDamagePct') + stat(stats, `finalDamagePctT${turn}`);
 
-  // Dofus damage families are separate multiplicative layers. Do not add them
-  // together: 10% spell and 10% melee is 1.10 * 1.10, not 1.20.
   const multiplier = (1 + sourcePct / 100)
     * (1 + position.pct / 100)
     * (1 + finalPct / 100);
@@ -172,9 +169,7 @@ function breakdownForHits(spell, hits, stats, turn, element = null) {
 }
 
 export function spellDamageVariants(spell, stats, turn = 1) {
-  return spellHitVariants(spell).map((variant) =>
-    breakdownForHits(spell, variant.hits, stats, turn, variant.element)
-  );
+  return spellHitVariants(spell).map((variant) => breakdownForHits(spell, variant.hits, stats, turn, variant.element));
 }
 
 export function spellDamageBreakdown(spell, stats, turn = 1) {
@@ -189,10 +184,6 @@ export function spellExpectedDamage(spell, stats, turn = 1) {
   return spellDamageBreakdown(spell, stats, turn).expected;
 }
 
-// Safe upper bound used only by branch-and-bound. It deliberately allows each
-// spell to choose whichever of its normal/critical outcomes is larger instead
-// of assuming one shared achievable critical chance. That can overestimate a
-// build, but it can never prune away a real optimum.
 export function spellDamageUpperBound(spell, stats, turn = 1) {
   const { multiplier } = damageMultiplierDetails(spell, stats, turn);
   let best = 0;
@@ -230,13 +221,13 @@ function aggregateTurnScores(perTurn, turnMode) {
   return score;
 }
 
-function exactBaseApMpMismatches(stats = {}, constraints = {}) {
+function minimumBaseApMpMismatches(stats = {}, constraints = {}) {
   const mismatches = {};
   for (const key of ['ap', 'mp']) {
     const target = Number(constraints?.[key] || 0);
     if (!Number.isFinite(target) || target <= 0) continue;
     const actual = stat(stats, key);
-    if (actual !== target) mismatches[key] = { actual, target };
+    if (actual < target) mismatches[key] = { actual, target };
   }
   return mismatches;
 }
@@ -246,8 +237,9 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
   const deficitsByTurn = {};
   const requiredApByTurn = {};
   const unresolvedPassiveContexts = new Set();
+  const hasExplicitApPlan = Object.prototype.hasOwnProperty.call(scenario || {}, 'requiredApByTurn');
   const explicitApByTurn = scenario?.requiredApByTurn || {};
-  const baseApMpMismatches = exactBaseApMpMismatches(stats, constraints);
+  const baseApMpMismatches = minimumBaseApMpMismatches(stats, constraints);
 
   for (const turn of selectedTurnsForMode(turnMode)) {
     const turnResult = statsForTurnDetailed(stats, items, turn, scenario);
@@ -255,11 +247,14 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
     for (const unresolved of turnResult.unresolved || []) {
       for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
     }
-    const requiredAp = Math.max(
-      requiredApForTurn(selections, turn),
-      Math.max(0, Number(explicitApByTurn?.[turn] || 0))
-    );
+
+    // Automatic best-turn mode passes an explicit empty AP plan because the
+    // solver chooses casts itself. Manual/legacy callers can pass exact AP needs.
+    const requiredAp = hasExplicitApPlan
+      ? Math.max(0, Number(explicitApByTurn?.[turn] || 0))
+      : requiredApForTurn(selections, turn);
     requiredApByTurn[turn] = requiredAp;
+
     const turnConstraints = {
       ...constraints,
       ap: Math.max(Math.max(0, Number(constraints.ap || 0)), requiredAp)
