@@ -14,6 +14,11 @@ const GENERIC_OFFENSE = [
   'meleeDamagePct', 'rangedDamagePct',
   'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
 ];
+const HARD_CONSTRAINT_KEYS = [
+  'ap', 'mp', 'range', 'vit',
+  'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir'
+];
+const EXTRA_CONSTRAINT_KEYS = HARD_CONSTRAINT_KEYS.filter((key) => !['ap', 'mp'].includes(key));
 
 const SLOT_POOL_LIMIT = Object.freeze({
   dofus: 52,
@@ -44,6 +49,43 @@ const GROUP_CHOICE_LIMIT = Object.freeze({
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
   return Number.isFinite(value) ? value : 0;
+}
+
+function positiveConstraintKeys(constraints = {}) {
+  return HARD_CONSTRAINT_KEYS.filter((key) => Number(constraints?.[key] || 0) > 0);
+}
+
+function hasExtraConstraints(constraints = {}) {
+  return EXTRA_CONSTRAINT_KEYS.some((key) => Number(constraints?.[key] || 0) > 0);
+}
+
+function constraintWeight(key) {
+  if (key === 'ap') return 2.4;
+  if (key === 'mp') return 2.1;
+  if (key === 'range') return 1.8;
+  if (key === 'vit') return 1.1;
+  if (key.startsWith('res')) return 2.2;
+  return 1;
+}
+
+function constraintItemBonus(item, constraints = {}) {
+  let score = 0;
+  // AP/MP already have dedicated structural reserves and state buckets. Giving
+  // them an item-level constraint bonus over-ranks redundant PA/PM trophies
+  // before set bonuses and the rest of the equipment have been assembled.
+  for (const key of EXTRA_CONSTRAINT_KEYS) {
+    if (Number(constraints?.[key] || 0) <= 0) continue;
+    const target = Math.max(1, Number(constraints[key] || 0));
+    const actual = Math.max(0, num(item?.stats, key));
+    if (!actual) continue;
+    const ratio = Math.min(1, actual / target);
+    const scale = key.startsWith('res') ? 700000
+      : key === 'range' ? 500000
+        : key === 'vit' ? 220000
+          : 320000;
+    score += ratio * scale;
+  }
+  return score;
 }
 
 function resultKey(result) {
@@ -78,8 +120,8 @@ function itemScore(item, context) {
     ? Math.max(0, objective - Number(context.baselineObjective || 0))
     : 0;
 
-  let score = objectiveGain * 100;
-  if (Number(context.constraints?.range || 0) > 0) score += Math.max(0, num(stats, 'range')) * 1200;
+  let score = objectiveGain * 100 + constraintItemBonus(item, context.constraints);
+  if (Number(context.constraints?.range || 0) > 0) score += Math.max(0, num(item.stats, 'range')) * 1200;
 
   if (context.targetElement) {
     score += Math.max(0, num(stats, context.targetElement)) * 1.25;
@@ -121,27 +163,41 @@ function topByStat(raw, key, limit = 8) {
     .slice(0, limit);
 }
 
+function topByStaticStat(raw, key, limit = 8) {
+  return [...raw]
+    .filter((profile) => num(profile.item?.stats, key) > 0)
+    .sort((a, b) => num(b.item?.stats, key) - num(a.item?.stats, key) || b.score - a.score)
+    .slice(0, limit);
+}
+
+function constraintReserves(raw, context, limitPerStat = 10) {
+  return positiveConstraintKeys(context.constraints)
+    .flatMap((key) => topByStaticStat(raw, key, limitPerStat));
+}
+
 function buildSlotPool(allItems, preferredItems, rule, context) {
   const raw = allItems.filter((item) => item.slot === rule.id).map((item) => itemScore(item, context));
   const preferredIds = new Set(preferredItems.filter((item) => item.slot === rule.id).map((item) => String(item.id)));
   const preferred = raw.filter((profile) => preferredIds.has(String(profile.item.id))).sort((a, b) => b.score - a.score);
   const byScore = [...raw].sort((a, b) => b.score - a.score);
-  const byAp = [...raw].sort((a, b) => num(b.stats, 'ap') - num(a.stats, 'ap') || b.score - a.score).slice(0, 8);
-  const byMp = [...raw].sort((a, b) => num(b.stats, 'mp') - num(a.stats, 'mp') || b.score - a.score).slice(0, 8);
+  const byAp = [...raw].sort((a, b) => num(b.item.stats, 'ap') - num(a.item.stats, 'ap') || b.score - a.score).slice(0, 8);
+  const byMp = [...raw].sort((a, b) => num(b.item.stats, 'mp') - num(a.item.stats, 'mp') || b.score - a.score).slice(0, 8);
+  const constraints = constraintReserves(raw, context, 10);
   const conditionless = byScore.filter((profile) => !profile.item.conditions).slice(0, 10);
   const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 10);
-  const cap = Math.max(Number(rule.count || 0), SLOT_POOL_LIMIT[rule.id] || 14);
+  const extraCapacity = context.extraConstraints ? Math.min(14, positiveConstraintKeys(context.constraints).length * 4) : 0;
+  const cap = Math.max(Number(rule.count || 0), (SLOT_POOL_LIMIT[rule.id] || 14) + extraCapacity);
 
   if (rule.id === 'companion') {
     const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 8) : [];
     return uniqueProfiles([
-      ...byScore.slice(0, 12), ...topByStat(raw, 'power', 8), ...topByStat(raw, 'crit', 8),
+      ...constraints, ...byScore.slice(0, 12), ...topByStat(raw, 'power', 8), ...topByStat(raw, 'crit', 8),
       ...topByStat(raw, 'critDamage', 8), ...topByStat(raw, 'damage', 8), ...targetElement,
       ...byAp, ...byMp, ...preferred, ...conditionless, ...passiveFree
     ], cap);
   }
 
-  if (rule.id !== 'dofus') return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
+  if (rule.id !== 'dofus') return uniqueProfiles([...constraints, ...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
 
   const realDofus = byScore.filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus')).slice(0, 18);
   const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 10) : [];
@@ -154,7 +210,7 @@ function buildSlotPool(allItems, preferredItems, rule, context) {
     ...topByStat(raw, 'critDamage', 10), ...topByStat(raw, 'crit', 10), ...topByStat(raw, 'damage', 10),
     ...targetElement, ...targetDamage, ...realDofus
   ];
-  return uniqueProfiles([...offensiveReserves, ...byAp, ...byMp, ...preferred.slice(0, 16), ...conditionless, ...passiveFree, ...byScore], cap);
+  return uniqueProfiles([...constraints, ...offensiveReserves, ...byAp, ...byMp, ...preferred.slice(0, 16), ...conditionless, ...passiveFree, ...byScore], cap);
 }
 
 function choiceKey(items) {
@@ -210,8 +266,8 @@ function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}
           score: state.score + profile.score,
           next: index + 1,
           prysma: nextPrysma,
-          ap: state.ap + num(profile.stats, 'ap'),
-          mp: state.mp + num(profile.stats, 'mp')
+          ap: state.ap + num(profile.item.stats, 'ap'),
+          mp: state.mp + num(profile.item.stats, 'mp')
         });
       }
     }
@@ -300,22 +356,48 @@ function staticBuildStats(items, setsById) {
   return stats;
 }
 
+function searchableConstraintActual(stats, key) {
+  const actual = num(stats, key);
+  if (key === 'vit') return actual + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+  return actual;
+}
+
+function constraintProgress(stats, constraints = {}) {
+  const keys = positiveConstraintKeys(constraints);
+  if (!keys.length) return { ready: true, coverage: 0, missing: 0, signature: '' };
+  let coverage = 0;
+  let missing = 0;
+  const signature = [];
+  for (const key of keys) {
+    const target = Math.max(1, Number(constraints[key] || 0));
+    const actual = Math.max(0, searchableConstraintActual(stats, key));
+    const ratio = Math.min(1, actual / target);
+    const weight = constraintWeight(key);
+    coverage += ratio * weight;
+    missing += (1 - ratio) * weight;
+    signature.push(`${key}:${Math.min(4, Math.floor(ratio * 4))}`);
+  }
+  return { ready: missing < 1e-9, coverage, missing, signature: signature.join(',') };
+}
+
 function legalityPriority(items, heuristic, context) {
   const stats = staticBuildStats(items, context.setsById);
-  const apTarget = Math.max(0, Number(context.constraints.ap || 0));
-  const mpTarget = Math.max(0, Number(context.constraints.mp || 0));
+  const progress = constraintProgress(stats, context.constraints);
   const ap = num(stats, 'ap');
   const mp = num(stats, 'mp');
-  const apMissing = Math.max(0, apTarget - ap);
-  const mpMissing = Math.max(0, mpTarget - mp);
-  const ready = apMissing === 0 && mpMissing === 0;
   const score = heuristic
-    - apMissing * 240000
-    - mpMissing * 180000
-    + Math.min(ap, apTarget || ap) * 9000
-    + Math.min(mp, mpTarget || mp) * 7000
-    + (ready ? 500000 : 0);
-  return { score, ap, mp, ready };
+    + progress.coverage * 260000
+    - progress.missing * 900000
+    + (progress.ready ? 1800000 : 0);
+  return {
+    score,
+    ap,
+    mp,
+    ready: progress.ready,
+    constraintCoverage: progress.coverage,
+    constraintMissing: progress.missing,
+    constraintSignature: progress.signature
+  };
 }
 
 function stateBucket(priority, items) {
@@ -326,12 +408,14 @@ function stateBucket(priority, items) {
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
     .map(([id, count]) => `${id}:${Math.min(count, 4)}`)
     .join(',');
-  return `${Math.min(priority.ap, 12)}:${Math.min(priority.mp, 6)}:${setSignature}`;
+  return `${Math.min(priority.ap, 12)}:${Math.min(priority.mp, 6)}:${priority.constraintSignature}:${setSignature}`;
 }
 
 function keepDiverseStates(states, context, limit = 160) {
   for (const state of states) state.priority = legalityPriority(state.items, state.heuristic, context);
-  states.sort((a, b) => b.priority.score - a.priority.score);
+  states.sort((a, b) => Number(b.priority.ready) - Number(a.priority.ready)
+    || b.priority.score - a.priority.score
+    || b.priority.constraintCoverage - a.priority.constraintCoverage);
   const perBucket = new Map();
   const output = [];
   for (const state of states) {
@@ -408,12 +492,14 @@ export function searchArchitecturesV2({
 
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
+  const extraConstraints = hasExtraConstraints(constraints);
   const context = {
     selections,
     constraints,
     turnMode,
     scenario,
     targetElement,
+    extraConstraints,
     baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
     setsById: Object.fromEntries((sets || []).map((set) => [set.id, set]))
   };
@@ -425,8 +511,8 @@ export function searchArchitecturesV2({
     constraints,
     turnMode,
     scenario,
-    maxRelevantSets: 14,
-    constraintReservePerStat: 4
+    maxRelevantSets: extraConstraints ? 18 : 14,
+    constraintReservePerStat: extraConstraints ? 10 : 4
   });
   const synergy = buildSetSynergyIndex({
     items,
@@ -435,7 +521,7 @@ export function searchArchitecturesV2({
     constraints,
     turnMode,
     scenario,
-    maxPlans: 24,
+    maxPlans: extraConstraints ? 30 : 24,
     maxArchitectures: 90
   });
 
@@ -459,16 +545,20 @@ export function searchArchitecturesV2({
     const key = `${slot}:${count}`;
     if (choiceCache.has(key)) return choiceCache.get(key);
     const profiles = slotPools.get(slot) || [];
-    const choices = groupChoices(profiles, count, GROUP_CHOICE_LIMIT[slot] || 12, { preserveApMp: slot === 'dofus' });
+    const baseLimit = GROUP_CHOICE_LIMIT[slot] || 12;
+    const choiceLimit = extraConstraints ? Math.ceil(baseLimit * 1.5) : baseLimit;
+    const choices = groupChoices(profiles, count, choiceLimit, { preserveApMp: slot === 'dofus' });
     choiceCache.set(key, choices);
     return choices;
   }
 
   const queue = [];
+  const standaloneEntry = { architecture: null, variant: { label: 'standalones', anchorIds: [] } };
+  if (extraConstraints) queue.push(standaloneEntry);
   for (const architecture of synergy.architectures) {
     for (const variant of mutationVariants(architecture)) queue.push({ architecture, variant });
   }
-  queue.push({ architecture: null, variant: { label: 'standalones', anchorIds: [] } });
+  if (!extraConstraints) queue.push(standaloneEntry);
 
   const results = [];
   const rejectReasons = new Map();
@@ -526,7 +616,10 @@ export function searchArchitecturesV2({
           expandedStates++;
         }
       }
-      states = keepDiverseStates(next, context, group.id === 'dofus' ? 260 : 220);
+      const stateLimit = group.id === 'dofus'
+        ? (extraConstraints ? 320 : 260)
+        : (extraConstraints ? 280 : 220);
+      states = keepDiverseStates(next, context, stateLimit);
       if (!states.length) break;
     }
 
@@ -539,7 +632,8 @@ export function searchArchitecturesV2({
 
     const readyStates = complete.filter((state) => legalityPriority(state.items, state.heuristic, context).ready);
     legalCandidates += readyStates.length;
-    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, 64);
+    const evaluationLimit = extraConstraints ? 96 : 64;
+    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, evaluationLimit);
 
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({
@@ -573,6 +667,8 @@ export function searchArchitecturesV2({
       architectures: synergy.architectures.length,
       architectureVariants: queue.length,
       requiredItemIds: required.ids,
+      extraConstraintSearch: extraConstraints,
+      constrainedStats: positiveConstraintKeys(constraints),
       evaluated,
       valid,
       legalCandidates,

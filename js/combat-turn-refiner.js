@@ -10,6 +10,11 @@ function prysmaKey(build) {
   return item ? String(item.id) : 'none';
 }
 
+function equipmentScore(build) {
+  const value = Number(build?.equipmentScore ?? build?.score ?? 0);
+  return Number.isFinite(value) ? value : 0;
+}
+
 function turnStats(build) {
   const result = {};
   for (const turn of [1, 2, 3]) result[turn] = { ...(build?.effectiveStatsByTurn?.[turn] || build?.stats || {}) };
@@ -35,6 +40,40 @@ function rememberPrysma(map, candidate) {
   const key = prysmaKey(candidate);
   const previous = map.get(key);
   if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
+}
+
+function shortlistMultiTurnInputs(results, limit, preservePrysmaradites) {
+  const ranked = [...(results || [])]
+    .sort((a, b) => equipmentScore(b) - equipmentScore(a));
+  const output = [];
+  const seen = new Set();
+
+  // Keep a small Prysmaradite reserve because their temporary turn effects can
+  // invert the gear-only ranking. The rest of the shortlist stays performance
+  // based, so preserving diversity does not make us solve dozens of rotations.
+  if (preservePrysmaradites) {
+    const bestByPrysma = new Map();
+    for (const build of ranked) {
+      const key = prysmaKey(build);
+      if (!bestByPrysma.has(key)) bestByPrysma.set(key, build);
+    }
+    const reserveLimit = Math.min(Math.max(4, Math.ceil(limit / 3)), bestByPrysma.size);
+    for (const build of [...bestByPrysma.values()].sort((a, b) => equipmentScore(b) - equipmentScore(a)).slice(0, reserveLimit)) {
+      const key = buildKey(build);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      output.push(build);
+    }
+  }
+
+  for (const build of ranked) {
+    const key = buildKey(build);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    output.push(build);
+    if (output.length >= limit) break;
+  }
+  return output;
 }
 
 function candidateWithPlan(build, plan) {
@@ -107,7 +146,8 @@ export function refineCombatTurns({
     return candidate;
   }
 
-  // A single selected turn remains cheap enough to solve directly at the wider beam.
+  // T1/T2/T3 alone deliberately keep the previous wide search. The user-facing
+  // slowdown was the combinatorial bridge across all three turns, not T1.
   if (!multiTurn) {
     const refined = [];
     const bestByPrysma = new Map();
@@ -143,6 +183,8 @@ export function refineCombatTurns({
       diagnostics: {
         evaluated,
         explored,
+        inputCandidates: (results || []).length,
+        preselectedCandidates: (results || []).length,
         coarseEvaluated: 0,
         preciseEvaluated: evaluated,
         incompletePlansRejected,
@@ -151,15 +193,18 @@ export function refineCombatTurns({
     };
   }
 
-  // T1+T2+T3 uses two passes. Pass 1 intentionally uses a small beam so every
-  // candidate gets a real playable rotation quickly. Pass 2 spends the wider
-  // search only on the candidates that survived that first ranking.
+  // Three-turn solving is orders of magnitude more expensive than gear scoring.
+  // Rank gear cheaply first, keep a bounded strategic/Prysmaradite shortlist,
+  // then spend the combat beam only where it can affect the final Top 10.
+  const inputLimit = Math.min((results || []).length, Math.max(24, Math.min(36, requestedTopN * 2)));
+  const preselected = shortlistMultiTurnInputs(results, inputLimit, preservePrysmaradites);
   const coarse = [];
   const coarsePrysmas = new Map();
-  const coarseKeep = Math.max(requestedTopN * 5, 50);
+  const coarseKeep = Math.min(preselected.length, Math.max(requestedTopN * 2, 20));
   let coarseEvaluated = 0;
-  for (const build of results || []) {
-    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 140, interTurnWidth: 8 });
+
+  for (const build of preselected) {
+    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 90, interTurnWidth: 6 });
     explored += Number(plan.explored || 0);
     evaluated++;
     coarseEvaluated++;
@@ -170,15 +215,15 @@ export function refineCombatTurns({
     sortedTrimmed(coarse, coarseKeep);
     if (onProgress) {
       const partialResults = preservePrysmaradites
-        ? retainPrysmaVariants(coarse, coarsePrysmas, requestedTopN)
+        ? retainPrysmaVariants(coarse, coarsePrysmas, Math.min(requestedTopN, coarse.length))
         : coarse.slice(0, requestedTopN);
       onProgress({
         phase: 'combat-turn-coarse',
         nodes: evaluated,
         visited: coarseEvaluated,
-        pruned: incompletePlansRejected,
+        pruned: Math.max(0, (results || []).length - preselected.length) + incompletePlansRejected,
         best: coarse[0]?.score || 0,
-        label: 'rotation rapide',
+        label: `rotation rapide ${coarseEvaluated}/${preselected.length}`,
         partialResults
       });
     }
@@ -186,7 +231,7 @@ export function refineCombatTurns({
 
   const refineLimit = Math.min(
     coarse.length,
-    Math.max(requestedTopN * 2, 20)
+    Math.max(10, Math.min(14, requestedTopN))
   );
   const refinePool = preservePrysmaradites
     ? retainPrysmaVariants(coarse, coarsePrysmas, refineLimit)
@@ -196,7 +241,7 @@ export function refineCombatTurns({
   let preciseEvaluated = 0;
 
   for (const build of refinePool) {
-    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 700, interTurnWidth: 24 });
+    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 420, interTurnWidth: 12 });
     explored += Number(plan.explored || 0);
     evaluated++;
     preciseEvaluated++;
@@ -204,17 +249,19 @@ export function refineCombatTurns({
     if (!candidate) continue;
     refined.push(candidate);
     if (preservePrysmaradites) rememberPrysma(refinedPrysmas, candidate);
-    sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
+    sortedTrimmed(refined, Math.max(requestedTopN * 2, 20));
 
     if (onProgress) {
       const partialResults = preservePrysmaradites
-        ? retainPrysmaVariants(refined, refinedPrysmas, requestedTopN)
+        ? retainPrysmaVariants(refined, refinedPrysmas, Math.min(requestedTopN, refined.length))
         : refined.slice(0, requestedTopN);
       onProgress({
         phase: 'combat-turn-refine',
         nodes: evaluated,
         visited: preciseEvaluated,
-        pruned: Math.max(0, coarseEvaluated - refinePool.length) + incompletePlansRejected,
+        pruned: Math.max(0, (results || []).length - preselected.length)
+          + Math.max(0, coarseEvaluated - refinePool.length)
+          + incompletePlansRejected,
         best: refined[0]?.score || coarse[0]?.score || 0,
         label: `rotation précise ${preciseEvaluated}/${refinePool.length}`,
         partialResults: partialResults.length ? partialResults : coarse.slice(0, requestedTopN)
@@ -233,6 +280,9 @@ export function refineCombatTurns({
     diagnostics: {
       evaluated,
       explored,
+      inputCandidates: (results || []).length,
+      preselectedCandidates: preselected.length,
+      inputPruned: Math.max(0, (results || []).length - preselected.length),
       coarseEvaluated,
       preciseEvaluated,
       coarseCandidates: coarse.length,

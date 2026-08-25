@@ -36,14 +36,19 @@ function baseStatsForTurn(state, turn) {
   return state.baseStatsByTurn?.[turn] || state.baseStats || {};
 }
 
-function spellUsableOnTurn(spell, state, turn) {
+function targetCastKey(spellId, targetKind) {
+  return `${targetKind}:${String(spellId)}`;
+}
+
+function spellUsableOnTurn(spell, state, turn, targetKind = 'enemy') {
   const cost = Math.max(0, num(spell.apCost, 0));
   if (cost > state.apRemaining) return false;
   const id = String(spell.id);
-  const castCount = state.castCounts[id] || 0;
+  const totalCastCount = state.castCounts[id] || 0;
   const perTurn = positiveInt(spell.maxCastPerTurn || 99, 99);
   const perTarget = positiveInt(spell.maxCastPerTarget || perTurn, perTurn);
-  if (castCount >= Math.min(perTurn, perTarget)) return false;
+  if (totalCastCount >= perTurn) return false;
+  if ((state.targetCastCounts?.[targetCastKey(id, targetKind)] || 0) >= perTarget) return false;
   const readyTurn = num(state.cooldowns[id], 1);
   if (readyTurn > turn) return false;
   const initialCooldown = Math.max(0, num(spell.initialCooldown || 0));
@@ -100,34 +105,80 @@ function applyHuppermageTargetState(state, spell, variant, turn) {
   };
 }
 
-function castSpellVariant(spell, variant, state, turn, objective) {
+function activeSpellCharges(charges = {}, turn = 1) {
+  const result = {};
+  for (const [spellId, charge] of Object.entries(charges || {})) {
+    if (Number(charge?.appliedTurn || 1) > turn) continue;
+    if (Number(charge?.expiresAfterTurn || 0) < turn) continue;
+    result[spellId] = { ...charge };
+  }
+  return result;
+}
+
+function chargeSignature(charges = {}, turn = 1) {
+  return Object.entries(activeSpellCharges(charges, turn))
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([id, charge]) => `${id}:${Number(charge.bonus || 0).toFixed(3)}:${charge.expiresAfterTurn}`)
+    .join('|');
+}
+
+function addToRange(range, amount) {
+  if (!Array.isArray(range)) return range;
+  return range.map((value) => Number(value || 0) + amount);
+}
+
+function spellWithActiveCharge(spell, state, turn) {
+  const charge = activeSpellCharges(state.spellCharges, turn)[String(spell.id)];
+  if (!charge || !(spell.hits || []).length) return spell;
+  const bonus = Number(charge.bonus || 0);
+  return {
+    ...spell,
+    hits: spell.hits.map((hit, index) => index === 0 ? {
+      ...hit,
+      normal: addToRange(hit.normal, bonus),
+      crit: addToRange(hit.crit ?? hit.normal, bonus)
+    } : hit)
+  };
+}
+
+function applySpellState(spell, state, turn, targetKind) {
+  const cost = Math.max(0, num(spell.apCost, 0));
+  let modifiers = applyTimedModifiers(state.modifiers, spell.combatModifiers || [], spell.id, turn);
+  modifiers = applyTimedModifiers(modifiers, spell.delayedCombatModifiers || [], spell.id, turn);
+  let apRemaining = state.apRemaining - cost;
+
+  // Only modifiers that start now change the current PA pool. Delayed modifiers
+  // are kept in state and become active when startTurnState reaches their turn.
+  for (const modifier of (spell.combatModifiers || [])) {
+    if ((modifier.scope || 'self') !== 'self') continue;
+    if (Math.max(0, Number(modifier.delayTurns || 0)) > 0) continue;
+    apRemaining += num(modifier.stats?.ap, 0);
+  }
+
+  const id = String(spell.id);
+  const castCounts = { ...state.castCounts, [id]: (state.castCounts[id] || 0) + 1 };
+  const key = targetCastKey(id, targetKind);
+  const targetCastCounts = { ...state.targetCastCounts, [key]: (state.targetCastCounts?.[key] || 0) + 1 };
+  const cooldowns = { ...state.cooldowns };
+  const interval = Math.max(0, num(spell.minCastInterval || spell.cooldown || 0));
+  if (interval > 0) cooldowns[id] = turn + interval;
+
+  return { cost, modifiers, apRemaining, castCounts, targetCastCounts, cooldowns };
+}
+
+function castSpellVariant(spell, variant, state, turn, objective, targetKind = 'enemy') {
   const dealt = variant
     ? variant.expected
       * targetDamageMultiplier(state, turn)
       * areaMultiplier(spell, objective)
     : 0;
 
-  const cost = Math.max(0, num(spell.apCost, 0));
-  const modifiers = applyTimedModifiers(state.modifiers, spell.combatModifiers || [], spell.id, turn);
-  let apRemaining = state.apRemaining - cost;
-
-  for (const modifier of (spell.combatModifiers || [])) {
-    if ((modifier.scope || 'self') !== 'self') continue;
-    apRemaining += Math.max(0, num(modifier.stats?.ap, 0));
-  }
-
-  const castCounts = { ...state.castCounts, [spell.id]: (state.castCounts[spell.id] || 0) + 1 };
-  const cooldowns = { ...state.cooldowns };
-  const interval = Math.max(0, num(spell.minCastInterval || spell.cooldown || 0));
-  if (interval > 0) cooldowns[spell.id] = turn + interval;
-
-  const hupperTarget = applyHuppermageTargetState(state, spell, variant, turn);
+  const next = applySpellState(spell, state, turn, targetKind);
+  const hupperTarget = variant ? applyHuppermageTargetState(state, spell, variant, turn) : state.hupperTarget;
+  const charge = activeSpellCharges(state.spellCharges, turn)[String(spell.id)];
   return {
     ...state,
-    apRemaining,
-    modifiers,
-    castCounts,
-    cooldowns,
+    ...next,
     hupperTarget,
     damage: state.damage + dealt,
     sequence: [...state.sequence, {
@@ -135,36 +186,112 @@ function castSpellVariant(spell, variant, state, turn, objective) {
       spellId: spell.id,
       name: spell.name,
       iconId: spell.iconId,
-      apCost: cost,
+      apCost: next.cost,
+      apRemainingAfterCast: next.apRemaining,
       expectedDamage: dealt,
       element: variant?.element || null,
       distance: variant?.distance || null,
       critChancePct: variant?.critChancePct || 0,
       targetDamageMultiplier: targetDamageMultiplier(state, turn),
       areaTargets: areaMultiplier(spell, objective),
-      appliedModifiers: (spell.combatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } }))
+      chargeBonusApplied: charge ? Number(charge.bonus || 0) : 0,
+      appliedModifiers: (spell.combatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } })),
+      scheduledModifiers: (spell.delayedCombatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } }))
     }]
   };
 }
 
-function castSpellCandidates(spell, state, turn, objective) {
+function castSelfCharge(spell, state, turn) {
+  const next = applySpellState(spell, state, turn, 'self');
   const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
-  const variants = (spell.hits || []).length ? spellDamageVariants(spell, selfStats, turn) : [null];
-  return variants.map((variant) => castSpellVariant(spell, variant, state, turn, objective));
+  const config = spell.selfCharge || {};
+  const critChance = Math.max(0, Math.min(1, (num(spell.baseCritPct, 0) + num(selfStats.crit, 0)) / 100));
+  const normalBonus = Math.max(0, num(config.baseDamageBonus, 0));
+  const critBonus = Math.max(normalBonus, num(config.critBaseDamageBonus, normalBonus));
+  const expectedBonus = normalBonus * (1 - critChance) + critBonus * critChance;
+  const targetSpellId = String(config.targetSpellId || spell.id);
+  const durationTurns = Math.max(1, Number(config.durationTurns || 1));
+  const spellCharges = {
+    ...activeSpellCharges(state.spellCharges, turn),
+    [targetSpellId]: {
+      id: String(config.id || `${spell.id}-charge`),
+      sourceSpellId: String(spell.id),
+      bonus: expectedBonus,
+      normalBonus,
+      critBonus,
+      critChancePct: critChance * 100,
+      appliedTurn: turn,
+      expiresAfterTurn: turn + durationTurns - 1
+    }
+  };
+
+  return {
+    ...state,
+    ...next,
+    spellCharges,
+    sequence: [...state.sequence, {
+      turn,
+      spellId: spell.id,
+      name: spell.name,
+      iconId: spell.iconId,
+      apCost: next.cost,
+      apRemainingAfterCast: next.apRemaining,
+      expectedDamage: 0,
+      element: null,
+      distance: 'self',
+      critChancePct: critChance * 100,
+      selfCast: true,
+      chargeApplied: {
+        targetSpellId,
+        expectedBaseDamageBonus: expectedBonus,
+        durationTurns
+      },
+      appliedModifiers: (spell.combatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } })),
+      scheduledModifiers: (spell.delayedCombatModifiers || []).map((modifier) => ({ ...modifier, stats: { ...(modifier.stats || {}) } }))
+    }]
+  };
+}
+
+function castAttackCandidates(spell, state, turn, objective) {
+  const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
+  const chargedSpell = spellWithActiveCharge(spell, state, turn);
+  const variants = (chargedSpell.hits || []).length ? spellDamageVariants(chargedSpell, selfStats, turn) : [null];
+  return variants.map((variant) => castSpellVariant(spell, variant, state, turn, objective, (spell.hits || []).length ? 'enemy' : 'support'));
+}
+
+function actionCandidatesForSpell(spell, state, turn, objective) {
+  const candidates = [];
+  const hasDamage = (spell.hits || []).length > 0;
+  const hasModifiers = (spell.combatModifiers || []).length > 0 || (spell.delayedCombatModifiers || []).length > 0;
+
+  if ((hasDamage || hasModifiers) && (hasDamage || objective.allowSupport)) {
+    const targetKind = hasDamage ? 'enemy' : 'support';
+    if (spellUsableOnTurn(spell, state, turn, targetKind)) {
+      candidates.push(...castAttackCandidates(spell, state, turn, objective));
+    }
+  }
+
+  if (spell.selfCharge && objective.allowSupport && spellUsableOnTurn(spell, state, turn, 'self')) {
+    candidates.push(castSelfCharge(spell, state, turn));
+  }
+  return candidates;
 }
 
 function stateKey(state, turn) {
   const casts = Object.entries(state.castCounts || {}).sort(([a], [b]) => a.localeCompare(b)).map(([id, count]) => `${id}:${count}`).join(',');
+  const targetCasts = Object.entries(state.targetCastCounts || {}).sort(([a], [b]) => a.localeCompare(b)).map(([id, count]) => `${id}:${count}`).join(',');
   const cooldowns = Object.entries(state.cooldowns || {}).filter(([, ready]) => num(ready, 0) > turn).sort(([a], [b]) => a.localeCompare(b)).map(([id, ready]) => `${id}:${ready}`).join(',');
   const hupper = state.hupperTarget?.turn === turn
     ? `${state.hupperTarget?.element || '-'}:${num(state.hupperTarget?.vulnerabilityPct, 0)}`
     : '-:0';
-  return `${Math.round(state.apRemaining * 100) / 100}|${combatModifierSignature(state.modifiers, turn)}|${hupper}|${casts}|${cooldowns}`;
+  return `${Math.round(state.apRemaining * 100) / 100}|${combatModifierSignature(state.modifiers, turn)}|${chargeSignature(state.spellCharges, turn)}|${hupper}|${casts}|${targetCasts}|${cooldowns}`;
 }
 
 function supportPotential(state, turn) {
   const selfStats = statsWithCombatModifiers({}, state.modifiers, turn, 'self');
   const targetStats = statsWithCombatModifiers({}, state.modifiers, turn, 'target');
+  const chargePotential = Object.values(activeSpellCharges(state.spellCharges, turn))
+    .reduce((sum, charge) => sum + Math.max(0, num(charge.bonus, 0)) * 18, 0);
   return num(selfStats.power) * 0.8
     + num(selfStats.damage) * 3
     + num(selfStats.crit) * 4
@@ -174,6 +301,7 @@ function supportPotential(state, turn) {
     + Math.max(num(selfStats.meleeDamagePct), num(selfStats.rangedDamagePct)) * 12
     + num(targetStats.finalDamageTakenPct) * 14
     + num(state.hupperTarget?.vulnerabilityPct, 0) * 14
+    + chargePotential
     + Math.max(0, state.apRemaining) * 3;
 }
 
@@ -197,9 +325,7 @@ function optimizeSingleTurn({ spells, state, turn, objective, beamWidth = 1600, 
     for (const current of frontier) {
       let expanded = false;
       for (const spell of spells) {
-        if (!spellUsableOnTurn(spell, current, turn)) continue;
-        if (!objective.allowSupport && !(spell.hits || []).length) continue;
-        for (const candidate of castSpellCandidates(spell, current, turn, objective)) {
+        for (const candidate of actionCandidatesForSpell(spell, current, turn, objective)) {
           if (candidate.apRemaining < -0.001) continue;
           next.push(candidate);
           expanded = true;
@@ -216,15 +342,20 @@ function optimizeSingleTurn({ spells, state, turn, objective, beamWidth = 1600, 
 
 function startTurnState(previous, turn) {
   const modifiers = expireCombatModifiers(previous.modifiers, turn);
+  const spellCharges = activeSpellCharges(previous.spellCharges, turn);
   const turnBase = baseStatsForTurn(previous, turn);
   const stats = statsWithCombatModifiers(turnBase, modifiers, turn, 'self');
+  const startAp = Math.max(0, num(stats.ap, turnBase.ap || 0));
   return {
     ...previous,
     turn,
     modifiers,
+    spellCharges,
     hupperTarget: { turn, element: null, vulnerabilityPct: 0, vulnerabilityTurn: turn },
-    apRemaining: Math.max(0, num(stats.ap, turnBase.ap || 0)),
-    castCounts: {}
+    apRemaining: startAp,
+    turnStartAp: { ...(previous.turnStartAp || {}), [turn]: startAp },
+    castCounts: {},
+    targetCastCounts: {}
   };
 }
 
@@ -266,18 +397,25 @@ export function optimizeCombatSequence({
   const candidates = (spells || []).filter((spell) =>
     spell?.combatRelevant !== false
     && Math.max(0, num(spell.apCost, 0)) <= Math.max(0, num(firstTurnBase.ap, 0) + 12)
-    && ((spell.hits || []).length || (spell.combatModifiers || []).length)
+    && ((spell.hits || []).length
+      || (spell.combatModifiers || []).length
+      || (spell.delayedCombatModifiers || []).length
+      || spell.selfCharge)
   );
-  if (!candidates.length) return { score: 0, totalDamage: 0, sequence: [], perTurn: {}, objective: normalizedObjective, explored: 0 };
+  if (!candidates.length) return { score: 0, totalDamage: 0, sequence: [], perTurn: {}, turnStartAp: {}, objective: normalizedObjective, explored: 0 };
 
+  const initialAp = Math.max(0, num(firstTurnBase.ap, 0));
   let frontier = [{
     turn: firstTurn,
     baseStats: { ...baseStats },
     baseStatsByTurn: baseStatsByTurn ? Object.fromEntries(Object.entries(baseStatsByTurn).map(([turn, stats]) => [turn, { ...stats }])) : null,
-    apRemaining: Math.max(0, num(firstTurnBase.ap, 0)),
+    apRemaining: initialAp,
+    turnStartAp: { [firstTurn]: initialAp },
     modifiers: [],
+    spellCharges: {},
     hupperTarget: { turn: firstTurn, element: null, vulnerabilityPct: 0, vulnerabilityTurn: firstTurn },
     castCounts: {},
+    targetCastCounts: {},
     cooldowns: {},
     damage: 0,
     sequence: []
@@ -289,9 +427,6 @@ export function optimizeCombatSequence({
     const turn = selected.turns[index];
     if (index > 0) {
       const previousTurn = selected.turns[index - 1];
-      // Carry only the best strategic end states into the next turn. Previously
-      // every state in the full beam started another full turn search, producing
-      // roughly beamWidth² work for T1+T2+T3.
       frontier = keepBestStates(frontier, previousTurn, bridgeWidth);
     }
     const turnResults = [];
@@ -321,6 +456,7 @@ export function optimizeCombatSequence({
     totalDamage: best?.damage || 0,
     sequence: best?.sequence || [],
     perTurn,
+    turnStartAp: { ...(best?.turnStartAp || {}) },
     objective: normalizedObjective,
     explored
   };

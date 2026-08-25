@@ -1,4 +1,6 @@
 const CONCENTRATION_ANKAMA_ID = 13123;
+const PRECIPITATION_ANKAMA_ID = 13114;
+const ACCUMULATION_ANKAMA_ID = 13138;
 const GANYMEDE_ANKAMA_ID = 20360;
 
 export const GANYMEDE_PASSIVE = Object.freeze({
@@ -31,6 +33,10 @@ function clonePassive(passive) {
   };
 }
 
+function cloneModifier(modifier) {
+  return { ...modifier, stats: { ...(modifier.stats || {}) } };
+}
+
 export function applyCuratedItemRules(item = {}) {
   if (Number(item?.ankamaId) !== GANYMEDE_ANKAMA_ID) return item;
   const passives = Array.isArray(item.passives) ? item.passives : [];
@@ -41,8 +47,7 @@ export function applyCuratedItemRules(item = {}) {
   };
 }
 
-export function applyCuratedSpellRules(spell = {}) {
-  if (Number(spell?.ankamaId) !== CONCENTRATION_ANKAMA_ID) return spell;
+function concentrationRule(spell) {
   const hits = Array.isArray(spell.hits) ? spell.hits : [];
   if (hits.length <= 1) return spell;
 
@@ -58,4 +63,53 @@ export function applyCuratedSpellRules(spell = {}) {
     })),
     curatedDamageRule: 'exclude-summon-only-secondary-hit'
   };
+}
+
+function precipitationRule(spell) {
+  const delayed = (spell.delayedCombatModifiers || []).map(cloneModifier);
+  if (!delayed.some((modifier) => modifier.id === 'iop-precipitation-next-turn-debt')) {
+    delayed.push({
+      id: 'iop-precipitation-next-turn-debt',
+      scope: 'self',
+      stats: { ap: -5 },
+      delayTurns: 1,
+      durationTurns: 1,
+      stacking: 'replace-source'
+    });
+  }
+  return {
+    ...spell,
+    combatModifiers: (spell.combatModifiers || []).map(cloneModifier),
+    delayedCombatModifiers: delayed,
+    curatedCombatRule: 'precipitation-plus-5-ap-then-minus-5-ap-next-turn',
+    combatRelevant: true
+  };
+}
+
+function accumulationRule(spell) {
+  return {
+    ...spell,
+    // Accumulation can target the Iop instead of an enemy. The self-cast deals
+    // no damage and charges the next Accumulation casts for three turns. The
+    // combat solver models the charge as state rather than pretending this is a
+    // direct stat buff, because it only modifies this spell's base damage.
+    selfCharge: {
+      id: 'iop-accumulation-charge',
+      targetSpellId: String(spell.id || 'spell-13138'),
+      durationTurns: 3,
+      baseDamageBonus: 20,
+      critBaseDamageBonus: 24,
+      maxStacks: 1
+    },
+    curatedCombatRule: 'accumulation-self-charge',
+    combatRelevant: true
+  };
+}
+
+export function applyCuratedSpellRules(spell = {}) {
+  const ankamaId = Number(spell?.ankamaId);
+  if (ankamaId === CONCENTRATION_ANKAMA_ID) return concentrationRule(spell);
+  if (ankamaId === PRECIPITATION_ANKAMA_ID) return precipitationRule(spell);
+  if (ankamaId === ACCUMULATION_ANKAMA_ID) return accumulationRule(spell);
+  return spell;
 }

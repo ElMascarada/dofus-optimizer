@@ -21,6 +21,10 @@ function activeTurns(turnMode) {
   return [1, 2, 3];
 }
 
+function isMultiTurnMode(turnMode) {
+  return ['sum', 'average', 'min'].includes(String(turnMode || ''));
+}
+
 function selectionsForTurnMode(selections = [], turnMode = 'sum') {
   const allowed = new Set(activeTurns(turnMode));
   return (selections || []).map((selection) => ({
@@ -41,7 +45,9 @@ function spellMatchesElement(spell, element = 'multi') {
 function combatSpellPool(classSpells = [], combatObjective = {}) {
   const element = combatObjective.element || 'multi';
   return (classSpells || []).filter((spell) => {
-    const support = Array.isArray(spell?.combatModifiers) && spell.combatModifiers.length > 0;
+    const support = (Array.isArray(spell?.combatModifiers) && spell.combatModifiers.length > 0)
+      || (Array.isArray(spell?.delayedCombatModifiers) && spell.delayedCombatModifiers.length > 0)
+      || Boolean(spell?.selfCharge);
     return support || spellMatchesElement(spell, element);
   });
 }
@@ -141,6 +147,7 @@ self.addEventListener('message', (event) => {
     const combatMode = payload?.objectiveMode === 'combat';
     const combatObjective = payload?.combatObjective || {};
     const turnMode = combatMode ? (combatObjective.turnMode || payload?.turnMode || 't1') : (payload?.turnMode || 'sum');
+    const multiTurn = combatMode && isMultiTurnMode(turnMode);
     const diversityMode = diversityModeFor(payload);
     const requiredIds = normalizedRequiredIds(payload);
     const combatSpells = combatMode ? combatSpellPool(payload?.classSpells || [], combatObjective) : [];
@@ -220,7 +227,9 @@ self.addEventListener('message', (event) => {
     }
 
     if (combatMode && output.results?.length) {
-      const feedbackPlanCount = Math.min(searchTopN, Math.max(50, requestedTopN * 5));
+      const feedbackPlanCount = multiTurn
+        ? Math.min(searchTopN, Math.max(20, requestedTopN * 2))
+        : Math.min(searchTopN, Math.max(50, requestedTopN * 5));
       const firstCombat = refineCombatTurns({
         results: output.results,
         spells: combatSpells,
@@ -235,18 +244,21 @@ self.addEventListener('message', (event) => {
         results: firstCombat.results,
         spells: combatSpells,
         turnMode,
-        maxPlans: 10
+        maxPlans: multiTurn ? 8 : 10
       });
 
       let finalCandidates = firstCombat.results;
       let feedbackDiagnostics = { selections: feedbackSelections.length, refined: 0 };
 
       if (feedbackSelections.length) {
+        const feedbackTopN = multiTurn
+          ? Math.min(searchTopN, Math.max(30, requestedTopN * 3))
+          : Math.min(searchTopN, Math.max(60, requestedTopN * 6));
         const feedbackRefined = refineOffensiveSlots({
           ...normalizedPayload,
           selections: feedbackSelections,
           results: firstCombat.results,
-          topN: Math.min(searchTopN, Math.max(60, requestedTopN * 6)),
+          topN: feedbackTopN,
           preservePrysmaradites: true,
           onProgress: (progress) => self.postMessage({
             type: 'progress',
@@ -258,15 +270,22 @@ self.addEventListener('message', (event) => {
           selections: feedbackSelections.length,
           ...feedbackRefined.diagnostics
         };
+        const mergeLimit = multiTurn
+          ? Math.min(searchTopN, Math.max(36, requestedTopN * 4))
+          : Math.min(searchTopN, Math.max(70, requestedTopN * 7));
         finalCandidates = keepRequiredBuilds(mergeBuildCandidates([
           feedbackRefined.results,
           firstCombat.results
-        ], Math.min(searchTopN, Math.max(70, requestedTopN * 7))), requiredIds);
+        ], mergeLimit), requiredIds);
       }
 
-      const finalBenchCount = diversityMode === 'score'
-        ? requestedTopN
-        : Math.min(searchTopN, Math.max(60, requestedTopN * 6));
+      const finalBenchCount = multiTurn
+        ? (diversityMode === 'score'
+            ? requestedTopN
+            : Math.min(searchTopN, Math.max(30, requestedTopN * 3)))
+        : (diversityMode === 'score'
+            ? requestedTopN
+            : Math.min(searchTopN, Math.max(60, requestedTopN * 6)));
       const combat = refineCombatTurns({
         results: finalCandidates,
         spells: combatSpells,
