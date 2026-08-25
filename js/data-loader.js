@@ -1,5 +1,6 @@
 import { isOptimizerAvailableItem } from './item-availability.js';
 import { applyCuratedItemRules, applyCuratedSpellRules } from './curated-runtime-rules.js';
+import { buildSpellSupportReport, withSpellSupport } from './spell-support.js';
 
 export function validateDofusSnapshot(snapshot) {
   if (!snapshot || typeof snapshot !== 'object') throw new Error('Snapshot Dofus invalide.');
@@ -45,7 +46,7 @@ export function validateSpellSnapshot(snapshot) {
     if (!Array.isArray(spell?.hits) || !Array.isArray(spell?.combatModifiers || [])) return false;
     if (!Number.isFinite(Number(spell.apCost))) return false;
     return spell.hits.length > 0 || (spell.combatModifiers || []).length > 0;
-  }).map(applyCuratedSpellRules);
+  }).map(applyCuratedSpellRules).map(withSpellSupport);
   const spellIds = new Set(spells.map((spell) => spell.id));
   const breeds = snapshot.breeds
     .filter((breed) => breed?.id && breed?.name)
@@ -68,7 +69,8 @@ export function validateSpellSnapshot(snapshot) {
     model: snapshot.model || 'unknown',
     coverage: snapshot.coverage || {},
     breeds,
-    spells
+    spells,
+    supportReport: buildSpellSupportReport({ spells, breeds })
   };
 }
 

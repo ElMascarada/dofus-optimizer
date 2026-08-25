@@ -17,18 +17,6 @@ const FLAT_DAMAGE_STAT = {
   air: 'damageAir'
 };
 
-// These Huppermage spells expose one damage effect per element in Ankama data,
-// but only one elemental branch is actually resolved on a cast. Treating the
-// four effects as four simultaneous hits grossly overvalues them.
-const HUPPERMAGE_ONE_OF_ELEMENT_IDS = new Set([
-  'spell-13670',
-  'spell-13672',
-  'spell-13683',
-  'spell-13710',
-  'spell-13724',
-  'spell-14342'
-]);
-
 function midpoint(range) {
   if (Array.isArray(range)) return (Number(range[0]) + Number(range[1])) / 2;
   return Number(range || 0);
@@ -66,8 +54,7 @@ export function spellHitVariants(spell) {
   const hits = Array.isArray(spell?.hits) ? spell.hits : [];
   if (!hits.length) return [];
 
-  const id = String(spell?.id || '');
-  if (!HUPPERMAGE_ONE_OF_ELEMENT_IDS.has(id)) {
+  if (spell?.damageSelection !== 'one-of-elements') {
     const elements = [...new Set(hits.map((hit) => hit?.element).filter(Boolean))];
     return [{ hits, element: elements.length === 1 ? elements[0] : null }];
   }
@@ -248,8 +235,6 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
       for (const key of unresolved.missingKeys || []) unresolvedPassiveContexts.add(key);
     }
 
-    // Automatic best-turn mode passes an explicit empty AP plan because the
-    // solver chooses casts itself. Manual/legacy callers can pass exact AP needs.
     const requiredAp = hasExplicitApPlan
       ? Math.max(0, Number(explicitApByTurn?.[turn] || 0))
       : requiredApForTurn(selections, turn);
