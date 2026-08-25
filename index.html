@@ -20,7 +20,7 @@
   <main>
     <section class="panel intro">
       <div><strong>Base de jeu certifiée</strong><p id="data-status">Chargement des bases certifiées…</p></div>
-      <span class="status">AUTO ROTATION · build 20260824-9</span>
+      <span class="status">AUTO ROTATION · build 20260825-2</span>
     </section>
 
     <div class="layout">
@@ -99,8 +99,8 @@
         <section class="panel">
           <h2>4. Contraintes</h2>
           <div class="form-grid">
-            <label class="field">PA permanent<input id="min-ap" type="number" value="12" readonly></label>
-            <label class="field">PM permanent<input id="min-mp" type="number" value="6" readonly></label>
+            <label class="field">PA minimum<input id="min-ap" type="number" min="6" max="20" step="1" value="12"></label>
+            <label class="field">PM minimum<input id="min-mp" type="number" min="0" max="12" step="1" value="6"></label>
             <label class="field">PO min<input id="min-range" type="number" min="0"></label>
             <label class="field">Vitalité min<input id="min-vit" type="number" min="0"></label>
             <label class="field">Res Terre %<input id="res-earth" type="number" min="0" max="50"></label>
@@ -108,7 +108,7 @@
             <label class="field">Res Eau %<input id="res-water" type="number" min="0" max="50"></label>
             <label class="field">Res Air %<input id="res-air" type="number" min="0" max="50"></label>
           </div>
-          <p class="hint">Le +1 PA et le +1 PM structurels sont intégrés directement à la base. Les PA/PM temporaires gagnés en combat peuvent dépasser 12/6 et sont calculés dans le tour concerné.</p>
+          <p class="hint">PA/PM sont des minimums, pas des valeurs forcées : tu peux demander 11/5, et un stuff 12/6 reste valide. Les contraintes doivent aussi être respectées sur chaque tour optimisé après les passifs temporaires : un Diadème de Ganymède en T1 compte donc bien avec sa perte de PA/PM.</p>
         </section>
 
         <section class="panel">
@@ -147,8 +147,8 @@
       });
     })();
   </script>
-  <script type="module" src="js/app-experimental.js?v=20260824-9"></script>
-  <script type="module" src="js/spell-ui-enhancements.js?v=20260824-9"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260824-9', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script type="module" src="js/app-experimental.js?v=20260825-2"></script>
+  <script type="module" src="js/spell-ui-enhancements.js?v=20260825-2"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260825-2', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
