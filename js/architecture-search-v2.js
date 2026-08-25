@@ -78,13 +78,8 @@ function itemScore(item, context) {
     ? Math.max(0, objective - Number(context.baselineObjective || 0))
     : 0;
 
-  // Candidate ranking must not decide that 60 Agility is intrinsically better
-  // than 80 Power, 6% spell damage or a crit package. Those interactions are
-  // resolved on complete builds. Here we only create a broad, synergy-safe pool.
   let score = objectiveGain * 100;
-  if (Number(context.constraints?.range || 0) > 0) {
-    score += Math.max(0, num(stats, 'range')) * 1200;
-  }
+  if (Number(context.constraints?.range || 0) > 0) score += Math.max(0, num(stats, 'range')) * 1200;
 
   if (context.targetElement) {
     score += Math.max(0, num(stats, context.targetElement)) * 1.25;
@@ -97,9 +92,8 @@ function itemScore(item, context) {
   score += Math.max(0, num(stats, 'finalDamagePctT3')) * 1000;
   score += Math.max(0, num(stats, 'meleeDamagePct')) * 700;
   score += Math.max(0, num(stats, 'rangedDamagePct')) * 700;
-  for (const key of ['power', 'damage', 'crit', 'critDamage']) score += Math.max(0, num(stats, key));
+  for (const key of GENERIC_OFFENSE) score += Math.max(0, num(stats, key));
 
-  // Keep standalone/legendary candidates competitive once a set skeleton exists.
   if (!item.setId && item.slot !== 'dofus' && item.slot !== 'companion') score += 2200;
   if (!item.conditions) score += 1000;
   if (!(item.passives || []).length) score += 700;
@@ -128,77 +122,39 @@ function topByStat(raw, key, limit = 8) {
 }
 
 function buildSlotPool(allItems, preferredItems, rule, context) {
-  const raw = allItems
-    .filter((item) => item.slot === rule.id)
-    .map((item) => itemScore(item, context));
+  const raw = allItems.filter((item) => item.slot === rule.id).map((item) => itemScore(item, context));
   const preferredIds = new Set(preferredItems.filter((item) => item.slot === rule.id).map((item) => String(item.id)));
-  const preferred = raw
-    .filter((profile) => preferredIds.has(String(profile.item.id)))
-    .sort((a, b) => b.score - a.score);
+  const preferred = raw.filter((profile) => preferredIds.has(String(profile.item.id))).sort((a, b) => b.score - a.score);
   const byScore = [...raw].sort((a, b) => b.score - a.score);
   const byAp = [...raw].sort((a, b) => num(b.stats, 'ap') - num(a.stats, 'ap') || b.score - a.score).slice(0, 8);
   const byMp = [...raw].sort((a, b) => num(b.stats, 'mp') - num(a.stats, 'mp') || b.score - a.score).slice(0, 8);
   const conditionless = byScore.filter((profile) => !profile.item.conditions).slice(0, 10);
   const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 10);
-
   const cap = Math.max(Number(rule.count || 0), SLOT_POOL_LIMIT[rule.id] || 14);
 
   if (rule.id === 'companion') {
     const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 8) : [];
     return uniqueProfiles([
-      ...byScore.slice(0, 12),
-      ...topByStat(raw, 'power', 8),
-      ...topByStat(raw, 'crit', 8),
-      ...topByStat(raw, 'critDamage', 8),
-      ...topByStat(raw, 'damage', 8),
-      ...targetElement,
-      ...byAp,
-      ...byMp,
-      ...preferred,
-      ...conditionless,
-      ...passiveFree
+      ...byScore.slice(0, 12), ...topByStat(raw, 'power', 8), ...topByStat(raw, 'crit', 8),
+      ...topByStat(raw, 'critDamage', 8), ...topByStat(raw, 'damage', 8), ...targetElement,
+      ...byAp, ...byMp, ...preferred, ...conditionless, ...passiveFree
     ], cap);
   }
 
-  if (rule.id !== 'dofus') {
-    return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
-  }
+  if (rule.id !== 'dofus') return uniqueProfiles([...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
 
-  // Dofus/trophies are structural and offensive slots at the same time. Preserve
-  // every important offensive family explicitly, including multiplicative spell
-  // damage, so a raw-stat trophy cannot eject it before complete-build scoring.
-  const realDofus = byScore
-    .filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus'))
-    .slice(0, 18);
+  const realDofus = byScore.filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus')).slice(0, 18);
   const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 10) : [];
   const targetDamage = context.targetElement ? topByStat(raw, ELEMENT_DAMAGE[context.targetElement], 10) : [];
   const offensiveReserves = [
-    ...byScore.slice(0, 20),
-    ...topByStat(raw, 'spellDamagePct', 10),
-    ...topByStat(raw, 'meleeDamagePct', 8),
-    ...topByStat(raw, 'rangedDamagePct', 8),
-    ...topByStat(raw, 'finalDamagePct', 10),
-    ...topByStat(raw, 'finalDamagePctT1', 8),
-    ...topByStat(raw, 'finalDamagePctT2', 8),
-    ...topByStat(raw, 'finalDamagePctT3', 8),
-    ...topByStat(raw, 'power', 10),
-    ...topByStat(raw, 'critDamage', 10),
-    ...topByStat(raw, 'crit', 10),
-    ...topByStat(raw, 'damage', 10),
-    ...targetElement,
-    ...targetDamage,
-    ...realDofus
+    ...byScore.slice(0, 20), ...topByStat(raw, 'spellDamagePct', 10), ...topByStat(raw, 'meleeDamagePct', 8),
+    ...topByStat(raw, 'rangedDamagePct', 8), ...topByStat(raw, 'finalDamagePct', 10),
+    ...topByStat(raw, 'finalDamagePctT1', 8), ...topByStat(raw, 'finalDamagePctT2', 8),
+    ...topByStat(raw, 'finalDamagePctT3', 8), ...topByStat(raw, 'power', 10),
+    ...topByStat(raw, 'critDamage', 10), ...topByStat(raw, 'crit', 10), ...topByStat(raw, 'damage', 10),
+    ...targetElement, ...targetDamage, ...realDofus
   ];
-
-  return uniqueProfiles([
-    ...offensiveReserves,
-    ...byAp,
-    ...byMp,
-    ...preferred.slice(0, 16),
-    ...conditionless,
-    ...passiveFree,
-    ...byScore
-  ], cap);
+  return uniqueProfiles([...offensiveReserves, ...byAp, ...byMp, ...preferred.slice(0, 16), ...conditionless, ...passiveFree, ...byScore], cap);
 }
 
 function choiceKey(items) {
@@ -280,9 +236,7 @@ function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}
     if (!states.length) break;
   }
 
-  const finalStates = preserveApMp
-    ? roundRobinBuckets(states, maxChoices)
-    : states.sort((a, b) => b.score - a.score).slice(0, maxChoices);
+  const finalStates = preserveApMp ? roundRobinBuckets(states, maxChoices) : states.sort((a, b) => b.score - a.score).slice(0, maxChoices);
   return finalStates.map(({ items, score }) => ({ items, score }));
 }
 
@@ -290,6 +244,47 @@ function slotCounts(items) {
   const counts = new Map();
   for (const item of items) counts.set(item.slot, (counts.get(item.slot) || 0) + 1);
   return counts;
+}
+
+function slotCapacity(slot) {
+  return Number(SLOT_RULES.find((rule) => rule.id === slot)?.count || 0);
+}
+
+function requiredConstraint(items, requiredItemIds = []) {
+  const originalById = new Map((items || []).map((item) => [String(item.id), item]));
+  const ids = [...new Set((requiredItemIds || []).map(String).filter(Boolean))];
+  const missingIds = ids.filter((id) => !originalById.has(id));
+  const requiredItems = ids.map((id) => originalById.get(id)).filter(Boolean);
+  const counts = slotCounts(requiredItems);
+  const overfilledSlots = [...counts.entries()]
+    .filter(([slot, count]) => count > slotCapacity(slot))
+    .map(([slot]) => slot);
+  const validSpecialSlots = specialSlotRulesAreValid(requiredItems);
+  return {
+    ids,
+    requiredItems,
+    missingIds,
+    overfilledSlots,
+    valid: !missingIds.length && !overfilledSlots.length && validSpecialSlots
+  };
+}
+
+function mergeRequiredAnchors(requiredItems, optionalItems = []) {
+  const output = [...requiredItems];
+  const ids = new Set(output.map((item) => String(item.id)));
+  const counts = slotCounts(output);
+  for (const item of optionalItems) {
+    const id = String(item.id);
+    if (ids.has(id)) continue;
+    const current = counts.get(item.slot) || 0;
+    if (current >= slotCapacity(item.slot)) continue;
+    const candidate = [...output, item];
+    if (!specialSlotRulesAreValid(candidate)) continue;
+    output.push(item);
+    ids.add(id);
+    counts.set(item.slot, current + 1);
+  }
+  return output;
 }
 
 function fullShape(items) {
@@ -314,8 +309,6 @@ function legalityPriority(items, heuristic, context) {
   const apMissing = Math.max(0, apTarget - ap);
   const mpMissing = Math.max(0, mpTarget - mp);
   const ready = apMissing === 0 && mpMissing === 0;
-  // PA/PM only matter until the target is reached. min() deliberately makes
-  // 13 PA and 12 PA equivalent here; offense then decides which state survives.
   const score = heuristic
     - apMissing * 240000
     - mpMissing * 180000
@@ -379,6 +372,25 @@ function mutationVariants(architecture) {
   }).slice(0, 6);
 }
 
+function impossibleRequiredResult(required) {
+  return {
+    results: [],
+    diagnostics: {
+      mode: 'architecture-search-v2',
+      impossible: true,
+      reason: required.missingIds.length ? 'required-item-missing' : required.overfilledSlots.length ? 'required-slot-overflow' : 'required-special-slot-rule',
+      requiredItemIds: required.ids,
+      missingRequiredItemIds: required.missingIds,
+      overfilledRequiredSlots: required.overfilledSlots,
+      evaluated: 0,
+      valid: 0,
+      nodes: 0,
+      visited: 0,
+      pruned: 0
+    }
+  };
+}
+
 export function searchArchitecturesV2({
   items = [],
   sets = [],
@@ -387,9 +399,13 @@ export function searchArchitecturesV2({
   fmPolicy = {},
   turnMode = 'sum',
   scenario = {},
+  requiredItemIds = [],
   topN = 10,
   onProgress = null
 } = {}) {
+  const required = requiredConstraint(items, requiredItemIds);
+  if (!required.valid) return impossibleRequiredResult(required);
+
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
   const context = {
@@ -423,12 +439,10 @@ export function searchArchitecturesV2({
     maxArchitectures: 90
   });
 
-  // Data normalization owns the endgame scope. Do not apply a second level
-  // filter here: a level-197 ring that survives certification must compete with
-  // level-200 rings on its actual offensive value.
   const rawEligible = items || [];
   const preferredById = new Map(prefilter.items.map((item) => [String(item.id), item]));
   const originalById = new Map(items.map((item) => [String(item.id), item]));
+  for (const item of required.requiredItems) preferredById.set(String(item.id), item);
   for (const plan of synergy.plans) {
     for (const id of plan.memberIds || []) {
       const item = originalById.get(String(id));
@@ -474,13 +488,14 @@ export function searchArchitecturesV2({
       partialResults: results.length ? [...results] : null,
       seeded: true,
       phase: 'architectures-v2',
-      label,
+      label: required.ids.length ? `${label} · ${required.ids.length} imposé${required.ids.length > 1 ? 's' : ''}` : label,
       rejected: Object.fromEntries(rejectReasons)
     });
   }
 
   for (const entry of queue) {
-    const anchors = entry.variant.anchorIds.map((id) => originalById.get(String(id))).filter(Boolean);
+    const optionalAnchors = entry.variant.anchorIds.map((id) => originalById.get(String(id))).filter(Boolean);
+    const anchors = mergeRequiredAnchors(required.requiredItems, optionalAnchors);
     const anchorIds = new Set(anchors.map((item) => String(item.id)));
     const counts = slotCounts(anchors);
     if (SLOT_RULES.some((rule) => (counts.get(rule.id) || 0) > Number(rule.count || 0))) continue;
@@ -489,9 +504,6 @@ export function searchArchitecturesV2({
     const missing = SLOT_RULES
       .map((rule) => ({ ...rule, missing: Number(rule.count || 0) - (counts.get(rule.id) || 0) }))
       .filter((group) => group.missing > 0)
-      // Dofus/trophies now participate in the structure before remaining gear is
-      // frozen. This lets Ocre free an AP item slot and lets that slot compete for
-      // a stronger damage piece instead of treating Dofus as leftover filler.
       .sort((a, b) => {
         if (a.id === 'dofus' && b.id !== 'dofus') return -1;
         if (b.id === 'dofus' && a.id !== 'dofus') return 1;
@@ -560,6 +572,7 @@ export function searchArchitecturesV2({
       targetElement: synergy.targetElement,
       architectures: synergy.architectures.length,
       architectureVariants: queue.length,
+      requiredItemIds: required.ids,
       evaluated,
       valid,
       legalCandidates,
