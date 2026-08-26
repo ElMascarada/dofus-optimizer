@@ -67,6 +67,10 @@ jobs:
         if: always()
         shell: bash
         run: npm run benchmark:v2 2>&1 | tee benchmark-v2-output.txt
+      - name: Candidate search benchmark
+        if: always()
+        shell: bash
+        run: npm run benchmark:search 2>&1 | tee benchmark-candidate-search-output.txt
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -75,6 +79,7 @@ jobs:
           path: |
             test-output.txt
             benchmark-v2-output.txt
+            benchmark-candidate-search-output.txt
           if-no-files-found: error
       - name: Fail when tests failed
         if: steps.tests.outputs.status != '0'

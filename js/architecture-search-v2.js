@@ -1,91 +1,24 @@
 import { BASE_CHARACTER, SLOT_RULES } from './config.js';
-import { prefilterItems, activeSpellElements } from './candidate-prefilter.js';
+import { prefilterItems } from './candidate-prefilter.js';
 import { buildSetSynergyIndex } from './set-synergy-index.js';
 import { evaluateCompleteBuild } from './complete-build-evaluator.js';
-import { evaluateObjectiveUpperBound } from './spells.js';
-import { optimisticItemStats } from './search-space.js';
-import { addStats, emptyStats } from './stats.js';
-import { applySetBonuses } from './sets.js';
-import { isPrysmaradite, specialSlotRulesAreValid } from './build-legality.js';
-
-const ELEMENT_DAMAGE = { earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' };
-const GENERIC_OFFENSE = [
-  'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
-  'meleeDamagePct', 'rangedDamagePct',
-  'finalDamagePct', 'finalDamagePctT1', 'finalDamagePctT2', 'finalDamagePctT3'
-];
-const HARD_CONSTRAINT_KEYS = [
-  'ap', 'mp', 'range', 'vit',
-  'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir'
-];
-const EXTRA_CONSTRAINT_KEYS = HARD_CONSTRAINT_KEYS.filter((key) => !['ap', 'mp'].includes(key));
-
-const SLOT_POOL_LIMIT = Object.freeze({
-  dofus: 52,
-  ring: 22,
-  companion: 22,
-  weapon: 16,
-  hat: 14,
-  cape: 14,
-  amulet: 14,
-  belt: 14,
-  boots: 14,
-  shield: 14
-});
-
-const GROUP_CHOICE_LIMIT = Object.freeze({
-  dofus: 160,
-  ring: 36,
-  companion: 18,
-  weapon: 12,
-  hat: 12,
-  cape: 12,
-  amulet: 12,
-  belt: 12,
-  boots: 12,
-  shield: 12
-});
+import { specialSlotRulesAreValid } from './build-legality.js';
+import {
+  constraintProgressForStats,
+  positiveConstraintKeys
+} from '../optimizer/candidate-policy.js';
+import {
+  branchFeasibility,
+  buildGroupChoices,
+  fastPartialRank,
+  offensiveUpperBound,
+  staticBuildStats
+} from '../optimizer/candidate-search.js';
+import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
   return Number.isFinite(value) ? value : 0;
-}
-
-function positiveConstraintKeys(constraints = {}) {
-  return HARD_CONSTRAINT_KEYS.filter((key) => Number(constraints?.[key] || 0) > 0);
-}
-
-function hasExtraConstraints(constraints = {}) {
-  return EXTRA_CONSTRAINT_KEYS.some((key) => Number(constraints?.[key] || 0) > 0);
-}
-
-function constraintWeight(key) {
-  if (key === 'ap') return 2.4;
-  if (key === 'mp') return 2.1;
-  if (key === 'range') return 1.8;
-  if (key === 'vit') return 1.1;
-  if (key.startsWith('res')) return 2.2;
-  return 1;
-}
-
-function constraintItemBonus(item, constraints = {}) {
-  let score = 0;
-  // AP/MP already have dedicated structural reserves and state buckets. Giving
-  // them an item-level constraint bonus over-ranks redundant PA/PM trophies
-  // before set bonuses and the rest of the equipment have been assembled.
-  for (const key of EXTRA_CONSTRAINT_KEYS) {
-    if (Number(constraints?.[key] || 0) <= 0) continue;
-    const target = Math.max(1, Number(constraints[key] || 0));
-    const actual = Math.max(0, num(item?.stats, key));
-    if (!actual) continue;
-    const ratio = Math.min(1, actual / target);
-    const scale = key.startsWith('res') ? 700000
-      : key === 'range' ? 500000
-        : key === 'vit' ? 220000
-          : 320000;
-    score += ratio * scale;
-  }
-  return score;
 }
 
 function resultKey(result) {
@@ -105,200 +38,9 @@ function insertTop(results, result, limit) {
   if (results.length > limit) results.length = limit;
 }
 
-function itemScore(item, context) {
-  const stats = optimisticItemStats(item, {
-    includePassives: true,
-    turnMode: context.turnMode,
-    scenario: context.scenario
-  }).stats;
-  const objective = evaluateObjectiveUpperBound({
-    stats,
-    selections: context.selections,
-    turnMode: context.turnMode
-  }).score;
-  const objectiveGain = Number.isFinite(objective)
-    ? Math.max(0, objective - Number(context.baselineObjective || 0))
-    : 0;
-
-  let score = objectiveGain * 100 + constraintItemBonus(item, context.constraints);
-  if (Number(context.constraints?.range || 0) > 0) score += Math.max(0, num(item.stats, 'range')) * 1200;
-
-  if (context.targetElement) {
-    score += Math.max(0, num(stats, context.targetElement)) * 1.25;
-    score += Math.max(0, num(stats, ELEMENT_DAMAGE[context.targetElement])) * 1.5;
-  }
-  score += Math.max(0, num(stats, 'spellDamagePct')) * 1200;
-  score += Math.max(0, num(stats, 'finalDamagePct')) * 1200;
-  score += Math.max(0, num(stats, 'finalDamagePctT1')) * 1000;
-  score += Math.max(0, num(stats, 'finalDamagePctT2')) * 1000;
-  score += Math.max(0, num(stats, 'finalDamagePctT3')) * 1000;
-  score += Math.max(0, num(stats, 'meleeDamagePct')) * 700;
-  score += Math.max(0, num(stats, 'rangedDamagePct')) * 700;
-  for (const key of GENERIC_OFFENSE) score += Math.max(0, num(stats, key));
-
-  if (!item.setId && item.slot !== 'dofus' && item.slot !== 'companion') score += 2200;
-  if (!item.conditions) score += 1000;
-  if (!(item.passives || []).length) score += 700;
-
-  return { item, stats, score };
-}
-
-function uniqueProfiles(profiles, limit) {
-  const seen = new Set();
-  const output = [];
-  for (const profile of profiles) {
-    const id = String(profile.item.id);
-    if (seen.has(id)) continue;
-    seen.add(id);
-    output.push(profile);
-    if (output.length >= limit) break;
-  }
-  return output;
-}
-
-function topByStat(raw, key, limit = 8) {
-  return [...raw]
-    .filter((profile) => num(profile.stats, key) > 0)
-    .sort((a, b) => num(b.stats, key) - num(a.stats, key) || b.score - a.score)
-    .slice(0, limit);
-}
-
-function topByStaticStat(raw, key, limit = 8) {
-  return [...raw]
-    .filter((profile) => num(profile.item?.stats, key) > 0)
-    .sort((a, b) => num(b.item?.stats, key) - num(a.item?.stats, key) || b.score - a.score)
-    .slice(0, limit);
-}
-
-function constraintReserves(raw, context, limitPerStat = 10) {
-  return positiveConstraintKeys(context.constraints)
-    .flatMap((key) => topByStaticStat(raw, key, limitPerStat));
-}
-
-function buildSlotPool(allItems, preferredItems, rule, context) {
-  const raw = allItems.filter((item) => item.slot === rule.id).map((item) => itemScore(item, context));
-  const preferredIds = new Set(preferredItems.filter((item) => item.slot === rule.id).map((item) => String(item.id)));
-  const preferred = raw.filter((profile) => preferredIds.has(String(profile.item.id))).sort((a, b) => b.score - a.score);
-  const byScore = [...raw].sort((a, b) => b.score - a.score);
-  const byAp = [...raw].sort((a, b) => num(b.item.stats, 'ap') - num(a.item.stats, 'ap') || b.score - a.score).slice(0, 8);
-  const byMp = [...raw].sort((a, b) => num(b.item.stats, 'mp') - num(a.item.stats, 'mp') || b.score - a.score).slice(0, 8);
-  const constraints = constraintReserves(raw, context, 10);
-  const conditionless = byScore.filter((profile) => !profile.item.conditions).slice(0, 10);
-  const passiveFree = byScore.filter((profile) => !(profile.item.passives || []).length).slice(0, 10);
-  const extraCapacity = context.extraConstraints ? Math.min(14, positiveConstraintKeys(context.constraints).length * 4) : 0;
-  const cap = Math.max(Number(rule.count || 0), (SLOT_POOL_LIMIT[rule.id] || 14) + extraCapacity);
-
-  if (rule.id === 'companion') {
-    const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 8) : [];
-    return uniqueProfiles([
-      ...constraints, ...byScore.slice(0, 12), ...topByStat(raw, 'power', 8), ...topByStat(raw, 'crit', 8),
-      ...topByStat(raw, 'critDamage', 8), ...topByStat(raw, 'damage', 8), ...targetElement,
-      ...byAp, ...byMp, ...preferred, ...conditionless, ...passiveFree
-    ], cap);
-  }
-
-  if (rule.id !== 'dofus') return uniqueProfiles([...constraints, ...preferred, ...byAp, ...byMp, ...conditionless, ...passiveFree, ...byScore], cap);
-
-  const realDofus = byScore.filter((profile) => String(profile.item.typeName || '').toLowerCase().includes('dofus')).slice(0, 18);
-  const targetElement = context.targetElement ? topByStat(raw, context.targetElement, 10) : [];
-  const targetDamage = context.targetElement ? topByStat(raw, ELEMENT_DAMAGE[context.targetElement], 10) : [];
-  const offensiveReserves = [
-    ...byScore.slice(0, 20), ...topByStat(raw, 'spellDamagePct', 10), ...topByStat(raw, 'meleeDamagePct', 8),
-    ...topByStat(raw, 'rangedDamagePct', 8), ...topByStat(raw, 'finalDamagePct', 10),
-    ...topByStat(raw, 'finalDamagePctT1', 8), ...topByStat(raw, 'finalDamagePctT2', 8),
-    ...topByStat(raw, 'finalDamagePctT3', 8), ...topByStat(raw, 'power', 10),
-    ...topByStat(raw, 'critDamage', 10), ...topByStat(raw, 'crit', 10), ...topByStat(raw, 'damage', 10),
-    ...targetElement, ...targetDamage, ...realDofus
-  ];
-  return uniqueProfiles([...constraints, ...offensiveReserves, ...byAp, ...byMp, ...preferred.slice(0, 16), ...conditionless, ...passiveFree, ...byScore], cap);
-}
-
-function choiceKey(items) {
-  return items.map((item) => String(item.id)).sort().join('|');
-}
-
-function apMpBucket(ap, mp, prysma = 0) {
-  const boundedAp = Math.max(-4, Math.min(4, Math.round(Number(ap || 0))));
-  const boundedMp = Math.max(-4, Math.min(4, Math.round(Number(mp || 0))));
-  return `${boundedAp}:${boundedMp}:${prysma}`;
-}
-
-function roundRobinBuckets(states, limit) {
-  const buckets = new Map();
-  for (const state of [...states].sort((a, b) => b.score - a.score)) {
-    const key = apMpBucket(state.ap, state.mp, state.prysma);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(state);
-  }
-  const lists = [...buckets.values()];
-  const output = [];
-  for (let rank = 0; output.length < limit; rank++) {
-    let added = false;
-    for (const list of lists) {
-      if (!list[rank]) continue;
-      output.push(list[rank]);
-      added = true;
-      if (output.length >= limit) break;
-    }
-    if (!added) break;
-  }
-  return output;
-}
-
-function groupChoices(profiles, count, maxChoices, { preserveApMp = false } = {}) {
-  if (count <= 0) return [{ items: [], score: 0 }];
-  if (profiles.length < count) return [];
-  if (count === 1) return profiles.slice(0, maxChoices).map((profile) => ({ items: [profile.item], score: profile.score }));
-
-  let states = [{ items: [], score: 0, next: 0, prysma: 0, ap: 0, mp: 0 }];
-  const beamWidth = preserveApMp ? 620 : (count >= 5 ? 260 : 160);
-  for (let pick = 0; pick < count; pick++) {
-    const nextStates = [];
-    const leftAfter = count - pick - 1;
-    for (const state of states) {
-      const last = profiles.length - leftAfter;
-      for (let index = state.next; index < last; index++) {
-        const profile = profiles[index];
-        const nextPrysma = state.prysma + (isPrysmaradite(profile.item) ? 1 : 0);
-        if (nextPrysma > 1) continue;
-        nextStates.push({
-          items: [...state.items, profile.item],
-          score: state.score + profile.score,
-          next: index + 1,
-          prysma: nextPrysma,
-          ap: state.ap + num(profile.item.stats, 'ap'),
-          mp: state.mp + num(profile.item.stats, 'mp')
-        });
-      }
-    }
-    nextStates.sort((a, b) => b.score - a.score);
-    const deduped = [];
-    const seen = new Set();
-    const perBucket = new Map();
-    for (const state of nextStates) {
-      const key = choiceKey(state.items);
-      if (seen.has(key)) continue;
-      if (preserveApMp) {
-        const bucket = apMpBucket(state.ap, state.mp, state.prysma);
-        const used = perBucket.get(bucket) || 0;
-        if (used >= 36) continue;
-        perBucket.set(bucket, used + 1);
-      }
-      seen.add(key);
-      deduped.push(state);
-      if (deduped.length >= beamWidth) break;
-    }
-    states = deduped;
-    if (!states.length) break;
-  }
-
-  const finalStates = preserveApMp ? roundRobinBuckets(states, maxChoices) : states.sort((a, b) => b.score - a.score).slice(0, maxChoices);
-  return finalStates.map(({ items, score }) => ({ items, score }));
-}
-
 function slotCounts(items) {
   const counts = new Map();
-  for (const item of items) counts.set(item.slot, (counts.get(item.slot) || 0) + 1);
+  for (const item of items || []) counts.set(item.slot, (counts.get(item.slot) || 0) + 1);
   return counts;
 }
 
@@ -315,13 +57,12 @@ function requiredConstraint(items, requiredItemIds = []) {
   const overfilledSlots = [...counts.entries()]
     .filter(([slot, count]) => count > slotCapacity(slot))
     .map(([slot]) => slot);
-  const validSpecialSlots = specialSlotRulesAreValid(requiredItems);
   return {
     ids,
     requiredItems,
     missingIds,
     overfilledSlots,
-    valid: !missingIds.length && !overfilledSlots.length && validSpecialSlots
+    valid: !missingIds.length && !overfilledSlots.length && specialSlotRulesAreValid(requiredItems)
   };
 }
 
@@ -345,91 +86,11 @@ function mergeRequiredAnchors(requiredItems, optionalItems = []) {
 
 function fullShape(items) {
   const counts = slotCounts(items);
-  return SLOT_RULES.every((rule) => (counts.get(rule.id) || 0) === Number(rule.count || 0)) && specialSlotRulesAreValid(items);
+  return SLOT_RULES.every((rule) => (counts.get(rule.id) || 0) === Number(rule.count || 0))
+    && specialSlotRulesAreValid(items);
 }
 
-function staticBuildStats(items, setsById) {
-  const stats = emptyStats();
-  addStats(stats, BASE_CHARACTER.baseStats || {});
-  for (const item of items) addStats(stats, item.stats || {});
-  applySetBonuses(stats, items, setsById);
-  return stats;
-}
-
-function searchableConstraintActual(stats, key) {
-  const actual = num(stats, key);
-  if (key === 'vit') return actual + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
-  return actual;
-}
-
-function constraintProgress(stats, constraints = {}) {
-  const keys = positiveConstraintKeys(constraints);
-  if (!keys.length) return { ready: true, coverage: 0, missing: 0, signature: '' };
-  let coverage = 0;
-  let missing = 0;
-  const signature = [];
-  for (const key of keys) {
-    const target = Math.max(1, Number(constraints[key] || 0));
-    const actual = Math.max(0, searchableConstraintActual(stats, key));
-    const ratio = Math.min(1, actual / target);
-    const weight = constraintWeight(key);
-    coverage += ratio * weight;
-    missing += (1 - ratio) * weight;
-    signature.push(`${key}:${Math.min(4, Math.floor(ratio * 4))}`);
-  }
-  return { ready: missing < 1e-9, coverage, missing, signature: signature.join(',') };
-}
-
-function legalityPriority(items, heuristic, context) {
-  const stats = staticBuildStats(items, context.setsById);
-  const progress = constraintProgress(stats, context.constraints);
-  const ap = num(stats, 'ap');
-  const mp = num(stats, 'mp');
-  const score = heuristic
-    + progress.coverage * 260000
-    - progress.missing * 900000
-    + (progress.ready ? 1800000 : 0);
-  return {
-    score,
-    ap,
-    mp,
-    ready: progress.ready,
-    constraintCoverage: progress.coverage,
-    constraintMissing: progress.missing,
-    constraintSignature: progress.signature
-  };
-}
-
-function stateBucket(priority, items) {
-  const setCounts = new Map();
-  for (const item of items) if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
-  const setSignature = [...setCounts.entries()]
-    .filter(([, count]) => count >= 2)
-    .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-    .map(([id, count]) => `${id}:${Math.min(count, 4)}`)
-    .join(',');
-  return `${Math.min(priority.ap, 12)}:${Math.min(priority.mp, 6)}:${priority.constraintSignature}:${setSignature}`;
-}
-
-function keepDiverseStates(states, context, limit = 160) {
-  for (const state of states) state.priority = legalityPriority(state.items, state.heuristic, context);
-  states.sort((a, b) => Number(b.priority.ready) - Number(a.priority.ready)
-    || b.priority.score - a.priority.score
-    || b.priority.constraintCoverage - a.priority.constraintCoverage);
-  const perBucket = new Map();
-  const output = [];
-  for (const state of states) {
-    const bucket = stateBucket(state.priority, state.items);
-    const used = perBucket.get(bucket) || 0;
-    if (used >= 10) continue;
-    perBucket.set(bucket, used + 1);
-    output.push(state);
-    if (output.length >= limit) break;
-  }
-  return output;
-}
-
-function mutationVariants(architecture) {
+function mutationVariants(architecture, limit) {
   if (!architecture) return [{ label: 'standalones', anchorIds: [] }];
   const baseIds = [...new Set(architecture.plans.flatMap((plan) => plan.memberIds || []).map(String))];
   const scoreById = new Map();
@@ -439,7 +100,9 @@ function mutationVariants(architecture) {
   const variants = [{ label: architecture.key, anchorIds: baseIds }];
   for (const plan of architecture.plans) {
     if (Number(plan.targetCount || 0) < 3) continue;
-    const weakest = [...(plan.memberIds || [])].map(String).sort((a, b) => (scoreById.get(a) || 0) - (scoreById.get(b) || 0))[0];
+    const weakest = [...(plan.memberIds || [])]
+      .map(String)
+      .sort((a, b) => (scoreById.get(a) || 0) - (scoreById.get(b) || 0))[0];
     if (weakest) variants.push({ label: `${architecture.key} · -1 ${plan.name}`, anchorIds: baseIds.filter((id) => id !== weakest) });
   }
   const weakest = [...baseIds].sort((a, b) => (scoreById.get(a) || 0) - (scoreById.get(b) || 0));
@@ -453,26 +116,115 @@ function mutationVariants(architecture) {
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  }).slice(0, 6);
+  }).slice(0, limit);
 }
 
 function impossibleRequiredResult(required) {
   return {
     results: [],
+    candidateItems: [],
+    candidatePools: {},
     diagnostics: {
       mode: 'architecture-search-v2',
       impossible: true,
-      reason: required.missingIds.length ? 'required-item-missing' : required.overfilledSlots.length ? 'required-slot-overflow' : 'required-special-slot-rule',
+      reason: required.missingIds.length
+        ? 'required-item-missing'
+        : required.overfilledSlots.length ? 'required-slot-overflow' : 'required-special-slot-rule',
       requiredItemIds: required.ids,
       missingRequiredItemIds: required.missingIds,
       overfilledRequiredSlots: required.overfilledSlots,
       evaluated: 0,
       valid: 0,
+      expandedStates: 0,
+      safePruned: 0,
+      heuristicTrimmed: 0,
       nodes: 0,
       visited: 0,
       pruned: 0
     }
   };
+}
+
+function progressStats(items, setsById, constraints) {
+  const stats = staticBuildStats(items, setsById);
+  if (Number(constraints?.vit || 0) > 0) stats.vit = num(stats, 'vit') + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    if (Number(constraints?.[element] || 0) <= 0) continue;
+    stats[element] = num(stats, element)
+      + Math.max(0, Number(BASE_CHARACTER.scrolled?.[element] || 0))
+      + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+  }
+  return stats;
+}
+
+function stateBucket(state, context) {
+  const stats = progressStats(state.items, context.setsById, context.constraints);
+  const progress = constraintProgressForStats(stats, context.constraints);
+  const setCounts = new Map();
+  for (const item of state.items) if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
+  const setSignature = [...setCounts.entries()]
+    .filter(([, count]) => count >= 2)
+    .sort(([a], [b]) => String(a).localeCompare(String(b)))
+    .map(([id, count]) => `${id}:${Math.min(count, 4)}`)
+    .join(',');
+  return `${Math.min(num(stats, 'ap'), 14)}:${Math.min(num(stats, 'mp'), 8)}:${progress.signature}:${setSignature}`;
+}
+
+function keepDiverseStates(states, context, limit) {
+  for (const state of states) {
+    const stats = progressStats(state.items, context.setsById, context.constraints);
+    const progress = constraintProgressForStats(stats, context.constraints);
+    state.searchStats = stats;
+    state.searchRank = state.heuristic
+      + fastPartialRank(state.items, context.policy, context.setsById)
+      + progress.coverage * context.profile.ranking.constraintProgressWeight;
+    state.constraintReady = progress.ready;
+  }
+  states.sort((a, b) => Number(b.constraintReady) - Number(a.constraintReady) || b.searchRank - a.searchRank);
+  const output = [];
+  const perBucket = new Map();
+  const seen = new Set();
+
+  function tryKeep(state, { enforceBucket = true } = {}) {
+    if (output.length >= limit) return false;
+    const key = [...state.ids].sort().join('|');
+    if (seen.has(key)) return false;
+    const bucket = stateBucket(state, context);
+    const used = perBucket.get(bucket) || 0;
+    if (enforceBucket && used >= context.profile.search.stateBucketLimit) return false;
+    seen.add(key);
+    perBucket.set(bucket, used + 1);
+    output.push(state);
+    return true;
+  }
+
+  // Multiplicative specialists can look weak while a build is still partial.
+  // Preserve a narrow lane for each context-relevant Pareto dimension so that
+  // complete-build evaluation, not a partial scalar rank, gets the final say.
+  const specialistReserve = Math.max(0, Number(context.profile.search.groupSpecialistReservePerStat || 0));
+  for (const statKey of context.policy.paretoKeys || []) {
+    if (output.length >= limit || specialistReserve <= 0) break;
+    const bySpecialist = [...states]
+      .filter((state) => num(state.searchStats, statKey) > 0)
+      .sort((a, b) => num(b.searchStats, statKey) - num(a.searchStats, statKey)
+        || Number(b.constraintReady) - Number(a.constraintReady)
+        || b.searchRank - a.searchRank);
+    let kept = 0;
+    for (const state of bySpecialist) {
+      if (tryKeep(state, { enforceBucket: false })) kept++;
+      if (kept >= specialistReserve || output.length >= limit) break;
+    }
+  }
+
+  for (const state of states) {
+    if (output.length >= limit) break;
+    tryKeep(state, { enforceBucket: true });
+  }
+  return output;
+}
+
+function addCount(map, reason) {
+  map.set(reason, (map.get(reason) || 0) + 1);
 }
 
 export function searchArchitecturesV2({
@@ -485,25 +237,14 @@ export function searchArchitecturesV2({
   scenario = {},
   requiredItemIds = [],
   topN = 10,
+  searchProfile = 'BALANCED',
   onProgress = null
 } = {}) {
   const required = requiredConstraint(items, requiredItemIds);
   if (!required.valid) return impossibleRequiredResult(required);
 
-  const elements = activeSpellElements(selections);
-  const targetElement = elements.length === 1 ? elements[0] : null;
-  const extraConstraints = hasExtraConstraints(constraints);
-  const context = {
-    selections,
-    constraints,
-    turnMode,
-    scenario,
-    targetElement,
-    extraConstraints,
-    baselineObjective: evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0,
-    setsById: Object.fromEntries((sets || []).map((set) => [set.id, set]))
-  };
-
+  const profile = getSearchProfile(searchProfile);
+  const extraConstraints = positiveConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key));
   const prefilter = prefilterItems({
     items,
     sets,
@@ -511,86 +252,87 @@ export function searchArchitecturesV2({
     constraints,
     turnMode,
     scenario,
-    maxRelevantSets: extraConstraints ? 18 : 14,
-    constraintReservePerStat: extraConstraints ? 10 : 4
+    requiredItemIds: required.ids,
+    searchProfile: profile
   });
+  const policy = prefilter.policy;
+  const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
+  const context = { policy, profile, selections, constraints, turnMode, scenario, sets, setsById };
+
   const synergy = buildSetSynergyIndex({
-    items,
+    items: prefilter.items,
     sets,
     selections,
     constraints,
     turnMode,
     scenario,
-    maxPlans: extraConstraints ? 30 : 24,
-    maxArchitectures: 90
+    maxPlans: extraConstraints ? profile.search.constrainedArchitectureMaxPlans : profile.search.architectureMaxPlans,
+    maxArchitectures: profile.search.architectureMaxCount,
+    policy,
+    searchProfile: profile
   });
 
-  const rawEligible = items || [];
-  const preferredById = new Map(prefilter.items.map((item) => [String(item.id), item]));
   const originalById = new Map(items.map((item) => [String(item.id), item]));
-  for (const item of required.requiredItems) preferredById.set(String(item.id), item);
-  for (const plan of synergy.plans) {
-    for (const id of plan.memberIds || []) {
-      const item = originalById.get(String(id));
-      if (item) preferredById.set(String(item.id), item);
-    }
+  const slotProfiles = new Map();
+  for (const rule of SLOT_RULES) {
+    const profiles = (prefilter.pools?.[rule.id] || [])
+      .map((item) => policy.profileItem(item))
+      .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+    slotProfiles.set(rule.id, profiles);
   }
-  const preferred = [...preferredById.values()];
-
-  const slotPools = new Map();
-  for (const rule of SLOT_RULES) slotPools.set(rule.id, buildSlotPool(rawEligible, preferred, rule, context));
+  const profilesFor = (slot) => slotProfiles.get(slot) || [];
 
   const choiceCache = new Map();
   function choicesFor(slot, count) {
     const key = `${slot}:${count}`;
     if (choiceCache.has(key)) return choiceCache.get(key);
-    const profiles = slotPools.get(slot) || [];
-    const baseLimit = GROUP_CHOICE_LIMIT[slot] || 12;
-    const choiceLimit = extraConstraints ? Math.ceil(baseLimit * 1.5) : baseLimit;
-    const choices = groupChoices(profiles, count, choiceLimit, { preserveApMp: slot === 'dofus' });
+    const choices = buildGroupChoices(profilesFor(slot), count, { ...context, slot });
     choiceCache.set(key, choices);
     return choices;
   }
 
   const queue = [];
-  const standaloneEntry = { architecture: null, variant: { label: 'standalones', anchorIds: [] } };
-  if (extraConstraints) queue.push(standaloneEntry);
+  const standalone = { architecture: null, variant: { label: 'standalones', anchorIds: [] } };
+  if (extraConstraints) queue.push(standalone);
   for (const architecture of synergy.architectures) {
-    for (const variant of mutationVariants(architecture)) queue.push({ architecture, variant });
+    for (const variant of mutationVariants(architecture, profile.search.mutationLimit)) queue.push({ architecture, variant });
   }
-  if (!extraConstraints) queue.push(standaloneEntry);
+  if (!extraConstraints) queue.push(standalone);
 
   const results = [];
   const rejectReasons = new Map();
+  const pruneReasons = new Map();
   let evaluated = 0;
   let valid = 0;
   let expandedStates = 0;
   let legalCandidates = 0;
+  let safePruned = 0;
+  let heuristicTrimmed = 0;
 
   function report(label = '') {
     if (!onProgress) return;
     onProgress({
       nodes: evaluated,
       visited: valid,
-      pruned: [...rejectReasons.values()].reduce((sum, value) => sum + value, 0),
+      pruned: safePruned + [...rejectReasons.values()].reduce((sum, value) => sum + value, 0),
+      heuristicTrimmed,
       best: results[0]?.score || 0,
       threshold: results.length >= topN ? results[results.length - 1].score : null,
       partialResults: results.length ? [...results] : null,
       seeded: true,
       phase: 'architectures-v2',
       label: required.ids.length ? `${label} · ${required.ids.length} imposé${required.ids.length > 1 ? 's' : ''}` : label,
-      rejected: Object.fromEntries(rejectReasons)
+      rejected: Object.fromEntries(rejectReasons),
+      pruneReasons: Object.fromEntries(pruneReasons)
     });
   }
 
   for (const entry of queue) {
     const optionalAnchors = entry.variant.anchorIds.map((id) => originalById.get(String(id))).filter(Boolean);
     const anchors = mergeRequiredAnchors(required.requiredItems, optionalAnchors);
-    const anchorIds = new Set(anchors.map((item) => String(item.id)));
     const counts = slotCounts(anchors);
     if (SLOT_RULES.some((rule) => (counts.get(rule.id) || 0) > Number(rule.count || 0))) continue;
 
-    let states = [{ items: anchors, ids: anchorIds, heuristic: Number(entry.architecture?.score || 0) }];
     const missing = SLOT_RULES
       .map((rule) => ({ ...rule, missing: Number(rule.count || 0) - (counts.get(rule.id) || 0) }))
       .filter((group) => group.missing > 0)
@@ -600,14 +342,76 @@ export function searchArchitecturesV2({
         return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
       });
 
-    for (const group of missing) {
+    const initialFeasibility = branchFeasibility({
+      items: anchors,
+      remainingGroups: missing,
+      profilesFor,
+      constraints,
+      sets,
+      setsById
+    });
+    if (!initialFeasibility.feasible) {
+      const reason = initialFeasibility.key === 'shape'
+        ? 'impossible build shape'
+        : `impossible ${initialFeasibility.key} constraint`;
+      addCount(pruneReasons, reason);
+      safePruned++;
+      continue;
+    }
+
+    let states = [{
+      items: anchors,
+      ids: new Set(anchors.map((item) => String(item.id))),
+      heuristic: Number(entry.architecture?.score || 0)
+    }];
+
+    for (let groupIndex = 0; groupIndex < missing.length; groupIndex++) {
+      const group = missing[groupIndex];
       const choices = choicesFor(group.id, group.missing);
+      const remainingGroups = missing.slice(groupIndex + 1);
       const next = [];
       for (const state of states) {
         for (const choice of choices) {
           if (choice.items.some((item) => state.ids.has(String(item.id)))) continue;
           const nextItems = [...state.items, ...choice.items];
           if (!specialSlotRulesAreValid(nextItems)) continue;
+
+          const feasibility = branchFeasibility({
+            items: nextItems,
+            remainingGroups,
+            profilesFor,
+            constraints,
+            sets,
+            setsById
+          });
+          if (!feasibility.feasible) {
+            const reason = feasibility.key === 'shape'
+              ? 'impossible build shape'
+              : `impossible ${feasibility.key} constraint`;
+            addCount(pruneReasons, reason);
+            safePruned++;
+            continue;
+          }
+
+          const threshold = results.length >= Math.max(1, Number(topN || 10))
+            ? Number(results[results.length - 1].score || 0)
+            : null;
+          if (threshold !== null) {
+            const bound = offensiveUpperBound({
+              items: nextItems,
+              remainingGroups,
+              profilesFor,
+              policy,
+              sets,
+              fmPolicy
+            });
+            if (Number.isFinite(bound) && bound + 1e-9 < threshold) {
+              addCount(pruneReasons, 'offensive upper bound below current threshold');
+              safePruned++;
+              continue;
+            }
+          }
+
           next.push({
             items: nextItems,
             ids: new Set([...state.ids, ...choice.items.map((item) => String(item.id))]),
@@ -616,24 +420,30 @@ export function searchArchitecturesV2({
           expandedStates++;
         }
       }
+
       const stateLimit = group.id === 'dofus'
-        ? (extraConstraints ? 320 : 260)
-        : (extraConstraints ? 280 : 220);
-      states = keepDiverseStates(next, context, stateLimit);
+        ? profile.search.dofusStateBeamWidth
+        : profile.search.stateBeamWidth;
+      const kept = keepDiverseStates(next, context, stateLimit);
+      heuristicTrimmed += Math.max(0, next.length - kept.length);
+      states = kept;
       if (!states.length) break;
     }
 
     const complete = states.filter((state) => fullShape(state.items));
     complete.sort((a, b) => {
-      const pa = legalityPriority(a.items, a.heuristic, context);
-      const pb = legalityPriority(b.items, b.heuristic, context);
-      return Number(pb.ready) - Number(pa.ready) || pb.score - pa.score;
+      const pa = constraintProgressForStats(progressStats(a.items, setsById, constraints), constraints);
+      const pb = constraintProgressForStats(progressStats(b.items, setsById, constraints), constraints);
+      return Number(pb.ready) - Number(pa.ready)
+        || (b.searchRank || b.heuristic) - (a.searchRank || a.heuristic);
     });
 
-    const readyStates = complete.filter((state) => legalityPriority(state.items, state.heuristic, context).ready);
-    legalCandidates += readyStates.length;
-    const evaluationLimit = extraConstraints ? 96 : 64;
-    const evaluationPool = (readyStates.length ? readyStates : complete).slice(0, evaluationLimit);
+    legalCandidates += complete.length;
+    const evaluationLimit = extraConstraints
+      ? profile.search.constrainedEvaluationLimit
+      : profile.search.evaluationLimit;
+    const evaluationPool = complete.slice(0, evaluationLimit);
+    heuristicTrimmed += Math.max(0, complete.length - evaluationPool.length);
 
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({
@@ -650,18 +460,21 @@ export function searchArchitecturesV2({
         valid++;
         insertTop(results, evaluation.result, Math.max(1, Number(topN || 10)));
       } else {
-        const reason = evaluation.reason || 'unknown';
-        rejectReasons.set(reason, (rejectReasons.get(reason) || 0) + 1);
+        addCount(rejectReasons, evaluation.reason || 'unknown');
       }
       if (evaluated % 12 === 0 || evaluation.result) report(entry.variant.label);
     }
     report(entry.variant.label);
   }
 
+  const searchProfileName = typeof searchProfile === 'string' ? String(searchProfile).toUpperCase() : 'CUSTOM';
   return {
     results,
+    candidateItems: prefilter.items,
+    candidatePools: prefilter.pools,
     diagnostics: {
       mode: 'architecture-search-v2',
+      searchProfile: searchProfileName,
       profile: synergy.profile,
       targetElement: synergy.targetElement,
       architectures: synergy.architectures.length,
@@ -673,11 +486,14 @@ export function searchArchitecturesV2({
       valid,
       legalCandidates,
       expandedStates,
+      safePruned,
+      heuristicTrimmed,
+      pruneReasons: Object.fromEntries(pruneReasons),
       rejected: Object.fromEntries(rejectReasons),
       prefilter: prefilter.diagnostics,
       nodes: evaluated,
       visited: valid,
-      pruned: [...rejectReasons.values()].reduce((sum, value) => sum + value, 0)
+      pruned: safePruned + [...rejectReasons.values()].reduce((sum, value) => sum + value, 0)
     }
   };
 }

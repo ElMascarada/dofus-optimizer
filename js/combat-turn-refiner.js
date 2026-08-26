@@ -1,5 +1,6 @@
 import { optimizeCombatSequence } from './turn-optimizer.js';
 import { combatPlanIsComplete } from './final-result-validator.js';
+import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 function buildKey(build) {
   return (build?.items || []).map((item) => String(item.id)).sort().join('|');
@@ -42,22 +43,21 @@ function rememberPrysma(map, candidate) {
   if (!previous || Number(candidate.score || 0) > Number(previous.score || 0)) map.set(key, candidate);
 }
 
-function shortlistMultiTurnInputs(results, limit, preservePrysmaradites) {
-  const ranked = [...(results || [])]
-    .sort((a, b) => equipmentScore(b) - equipmentScore(a));
+function shortlistMultiTurnInputs(results, limit, preservePrysmaradites, combatBudget) {
+  const ranked = [...(results || [])].sort((a, b) => equipmentScore(b) - equipmentScore(a));
   const output = [];
   const seen = new Set();
 
-  // Keep a small Prysmaradite reserve because their temporary turn effects can
-  // invert the gear-only ranking. The rest of the shortlist stays performance
-  // based, so preserving diversity does not make us solve dozens of rotations.
   if (preservePrysmaradites) {
     const bestByPrysma = new Map();
     for (const build of ranked) {
       const key = prysmaKey(build);
       if (!bestByPrysma.has(key)) bestByPrysma.set(key, build);
     }
-    const reserveLimit = Math.min(Math.max(4, Math.ceil(limit / 3)), bestByPrysma.size);
+    const reserveLimit = Math.min(
+      Math.max(combatBudget.prysmaReserveFloor, Math.ceil(limit / combatBudget.prysmaReserveDivisor)),
+      bestByPrysma.size
+    );
     for (const build of [...bestByPrysma.values()].sort((a, b) => equipmentScore(b) - equipmentScore(a)).slice(0, reserveLimit)) {
       const key = buildKey(build);
       if (!key || seen.has(key)) continue;
@@ -90,7 +90,7 @@ function candidateWithPlan(build, plan) {
   };
 }
 
-function planForBuild(build, spells, combatObjective, { beamWidth, interTurnWidth }) {
+function planForBuild(build, spells, combatObjective, { beamWidth, interTurnWidth, maxActionsPerTurn }) {
   return optimizeCombatSequence({
     baseStats: build.stats || {},
     baseStatsByTurn: turnStats(build),
@@ -98,7 +98,7 @@ function planForBuild(build, spells, combatObjective, { beamWidth, interTurnWidt
     objective: combatObjective,
     beamWidth,
     interTurnWidth,
-    maxActionsPerTurn: 12
+    maxActionsPerTurn
   });
 }
 
@@ -128,11 +128,13 @@ export function refineCombatTurns({
   combatObjective = {},
   topN = 10,
   preservePrysmaradites = false,
+  searchProfile = 'BALANCED',
   onProgress = null
 } = {}) {
   const requestedTopN = Math.max(1, Number(topN || 10));
   const turnMode = combatObjective?.turnMode || 't1';
   const multiTurn = ['sum', 'average', 'min'].includes(turnMode);
+  const combatBudget = getSearchProfile(searchProfile).combat;
   let explored = 0;
   let evaluated = 0;
   let incompletePlansRejected = 0;
@@ -146,20 +148,25 @@ export function refineCombatTurns({
     return candidate;
   }
 
-  // T1/T2/T3 alone deliberately keep the previous wide search. The user-facing
-  // slowdown was the combinatorial bridge across all three turns, not T1.
   if (!multiTurn) {
     const refined = [];
     const bestByPrysma = new Map();
     for (const build of results || []) {
-      const plan = planForBuild(build, spells, combatObjective, { beamWidth: 1400, interTurnWidth: 24 });
+      const plan = planForBuild(build, spells, combatObjective, {
+        beamWidth: combatBudget.singleTurnBeamWidth,
+        interTurnWidth: combatBudget.singleTurnInterTurnWidth,
+        maxActionsPerTurn: combatBudget.maxActionsPerTurn
+      });
       explored += Number(plan.explored || 0);
       evaluated++;
       const candidate = makeCandidate(build, plan);
       if (!candidate) continue;
       refined.push(candidate);
       if (preservePrysmaradites) rememberPrysma(bestByPrysma, candidate);
-      sortedTrimmed(refined, Math.max(requestedTopN * 3, 30));
+      sortedTrimmed(refined, Math.max(
+        requestedTopN * combatBudget.singleTurnWorkingSetMultiplier,
+        combatBudget.singleTurnWorkingSetFloor
+      ));
       if (onProgress) {
         const partialResults = preservePrysmaradites
           ? retainPrysmaVariants(refined, bestByPrysma, requestedTopN)
@@ -193,18 +200,28 @@ export function refineCombatTurns({
     };
   }
 
-  // Three-turn solving is orders of magnitude more expensive than gear scoring.
-  // Rank gear cheaply first, keep a bounded strategic/Prysmaradite shortlist,
-  // then spend the combat beam only where it can affect the final Top 10.
-  const inputLimit = Math.min((results || []).length, Math.max(24, Math.min(36, requestedTopN * 2)));
-  const preselected = shortlistMultiTurnInputs(results, inputLimit, preservePrysmaradites);
+  const inputLimit = Math.min(
+    (results || []).length,
+    Math.max(
+      combatBudget.multiInputFloor,
+      Math.min(combatBudget.multiInputCeiling, requestedTopN * combatBudget.multiInputMultiplier)
+    )
+  );
+  const preselected = shortlistMultiTurnInputs(results, inputLimit, preservePrysmaradites, combatBudget);
   const coarse = [];
   const coarsePrysmas = new Map();
-  const coarseKeep = Math.min(preselected.length, Math.max(requestedTopN * 2, 20));
+  const coarseKeep = Math.min(
+    preselected.length,
+    Math.max(requestedTopN * combatBudget.coarseKeepMultiplier, combatBudget.coarseKeepFloor)
+  );
   let coarseEvaluated = 0;
 
   for (const build of preselected) {
-    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 90, interTurnWidth: 6 });
+    const plan = planForBuild(build, spells, combatObjective, {
+      beamWidth: combatBudget.coarseBeamWidth,
+      interTurnWidth: combatBudget.coarseInterTurnWidth,
+      maxActionsPerTurn: combatBudget.maxActionsPerTurn
+    });
     explored += Number(plan.explored || 0);
     evaluated++;
     coarseEvaluated++;
@@ -231,7 +248,7 @@ export function refineCombatTurns({
 
   const refineLimit = Math.min(
     coarse.length,
-    Math.max(10, Math.min(14, requestedTopN))
+    Math.max(combatBudget.preciseCandidateFloor, Math.min(combatBudget.preciseCandidateCeiling, requestedTopN))
   );
   const refinePool = preservePrysmaradites
     ? retainPrysmaVariants(coarse, coarsePrysmas, refineLimit)
@@ -241,7 +258,11 @@ export function refineCombatTurns({
   let preciseEvaluated = 0;
 
   for (const build of refinePool) {
-    const plan = planForBuild(build, spells, combatObjective, { beamWidth: 420, interTurnWidth: 12 });
+    const plan = planForBuild(build, spells, combatObjective, {
+      beamWidth: combatBudget.preciseBeamWidth,
+      interTurnWidth: combatBudget.preciseInterTurnWidth,
+      maxActionsPerTurn: combatBudget.maxActionsPerTurn
+    });
     explored += Number(plan.explored || 0);
     evaluated++;
     preciseEvaluated++;
@@ -249,7 +270,10 @@ export function refineCombatTurns({
     if (!candidate) continue;
     refined.push(candidate);
     if (preservePrysmaradites) rememberPrysma(refinedPrysmas, candidate);
-    sortedTrimmed(refined, Math.max(requestedTopN * 2, 20));
+    sortedTrimmed(refined, Math.max(
+      requestedTopN * combatBudget.preciseWorkingSetMultiplier,
+      combatBudget.preciseWorkingSetFloor
+    ));
 
     if (onProgress) {
       const partialResults = preservePrysmaradites
