@@ -54,9 +54,6 @@ function keepChoiceDiversity(states, limit, context) {
     return true;
   }
 
-  // Keep an independent pure-offense lane before the constraint-weighted lane.
-  // This prevents a global AP/MP requirement from deleting the best damage
-  // combination when the surrounding architecture already satisfies 12/6.
   const offenseReserve = Math.min(
     limit,
     Math.max(0, Number(context.profile.search.groupOffenseReserve || 0))
@@ -107,10 +104,11 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         if (prysma > 1) continue;
         const stats = { ...state.optimisticStats };
         addPositive(stats, candidate.optimisticStats);
+        const combinedRank = context.policy.rankStats(stats);
         next.push({
           items: [...state.items, candidate.item],
-          score: state.score + candidate.rankScore,
-          objectiveScore: state.objectiveScore + candidate.objectiveGain,
+          score: combinedRank.rankScore,
+          objectiveScore: combinedRank.objectiveGain,
           next: index + 1,
           prysma,
           optimisticStats: stats,
@@ -249,16 +247,12 @@ export function offensiveUpperBound({
   }
   addPositive(current.stats, positiveSetBonusCaps(sets, keys));
 
-  // Safe over-estimate: grant the full characteristic budget to every active
-  // element at once. A real build can never receive more than this.
   const activeElements = policy.elements.length ? policy.elements : ['earth', 'fire', 'water', 'air'];
   for (const element of activeElements) {
     current.stats[element] = Number(current.stats[element] || 0)
       + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
   }
 
-  // Safe over-estimate again: every forgeable slot receives both possible
-  // offensive FM outcomes, even though optimizeFm() must choose one.
   const forgeable = forgeableSlotCount();
   current.stats.spellDamagePct = Number(current.stats.spellDamagePct || 0)
     + forgeable * Math.max(0, Number(fmPolicy?.spellDamagePct || 0));
