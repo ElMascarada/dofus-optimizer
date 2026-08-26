@@ -4,6 +4,8 @@ import { createCandidatePolicy } from '../optimizer/candidate-policy.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
 import { areSetCoresCompatible, rankSetCoresForPolicy } from '../optimizer/set-core-catalog.js';
 
+const MAX_ARCHITECTURE_CORES_PER_SET_TIER = 2;
+
 function slotCapacities(slotRules = SLOT_RULES) {
   return new Map((slotRules || SLOT_RULES).map((rule) => [rule.id, Number(rule.count || 0)]));
 }
@@ -94,6 +96,20 @@ function buildArchitectures(plans, slotRules, maxArchitectures, profile) {
     .slice(0, Math.max(1, Number(maxArchitectures || 1)));
 }
 
+function selectArchitectureCores(rankedCores, limit) {
+  const selected = [];
+  const perSetTier = new Map();
+  for (const core of rankedCores || []) {
+    const key = `${core.setId}:${core.pieceCount}`;
+    const used = perSetTier.get(key) || 0;
+    if (used >= MAX_ARCHITECTURE_CORES_PER_SET_TIER) continue;
+    selected.push(core);
+    perSetTier.set(key, used + 1);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
 function planFromCore(core, candidatePolicy) {
   return {
     coreId: core.id,
@@ -141,8 +157,9 @@ export function buildSetSynergyIndex({
 
   const planLimit = Math.max(1, Number(maxPlans || profile.search.architectureMaxPlans));
   const architectureLimit = Math.max(1, Number(maxArchitectures || profile.search.architectureMaxCount));
-  const selection = rankSetCoresForPolicy(candidatePolicy.setCoreCatalog, candidatePolicy, { limit: planLimit });
-  const plans = selection.selected.map((core) => planFromCore(core, candidatePolicy));
+  const ranking = rankSetCoresForPolicy(candidatePolicy.setCoreCatalog, candidatePolicy, { limit: Infinity });
+  const selectedCores = selectArchitectureCores(ranking.selected, planLimit);
+  const plans = selectedCores.map((core) => planFromCore(core, candidatePolicy));
   const architectures = buildArchitectures(plans, slotRules, architectureLimit, profile);
 
   return {
@@ -151,7 +168,12 @@ export function buildSetSynergyIndex({
     plans,
     architectures,
     diagnostics: {
-      ...selection.diagnostics,
+      ...ranking.diagnostics,
+      injected: plans.length,
+      architecturePlanLimit: planLimit,
+      architecturePlans: plans.length,
+      architecturePlanVariantsSkipped: Math.max(0, ranking.selected.length - plans.length),
+      architecturePerSetTierLimit: MAX_ARCHITECTURE_CORES_PER_SET_TIER,
       architectureCandidates: architectures.length
     }
   };
