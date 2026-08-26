@@ -77,6 +77,7 @@ function profile({
       dofusGroupBeamWidth: Math.max(220, Math.round(620 * searchScale)),
       groupBucketLimit: Math.max(12, Math.round(36 * searchScale)),
       groupDiversityMultiplier: 8,
+      groupSpecialistReservePerStat: Math.max(1, Math.round(2 * searchScale)),
       groupOffenseReserve: Math.max(24, Math.round(64 * searchScale)),
       stateBeamWidth: Math.max(100, Math.round(220 * searchScale)),
       dofusStateBeamWidth: Math.max(120, Math.round(260 * searchScale)),
