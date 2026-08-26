@@ -9,6 +9,7 @@ Dernière mise à jour : 2026-08-26
 - ce commit est le merge de la PR #38 Candidate Policy / recherche de builds
 - le head de la PR #38 (`b244303f4c434350a4c78d49848a7dfc82484c3b`) a passé `Optimizer CI`
 - branche active : `feat/v2-set-core-catalog`
+- PR : #40 — `feat: add canonical V2 set core catalog`
 
 ## Architecture V2 déjà mergée
 
@@ -18,13 +19,13 @@ Dernière mise à jour : 2026-08-26
 - `CandidatePrefilter` comme frontière catalogue → pools ;
 - `CompleteBuildEvaluator` reste l'unique vérité finale pour structure, conditions, bonus de panoplie, caractéristiques, FM et contraintes.
 
-## Tranche active — Set Cores
+## Tranche Set Cores
 
 Objectif : exploiter les synergies de panoplies comme accélérateur/priorisation sans rendre les panoplies obligatoires.
 
-Implémenté sur la branche :
+Implémenté :
 
-- `optimizer/set-core-catalog.js` : catalogue canonique généré automatiquement à partir des données `items` + `sets` ;
+- `optimizer/set-core-catalog.js` : `SetCoreCatalog` canonique généré automatiquement à partir des données `items` + `sets` ;
 - génération des cores 2/3/4 pièces quand le bonus exact existe ;
 - agrégation `stats items + bonus exact du palier` ;
 - profils : terre, feu, eau, air, multi, crit, do-crit, initiative, vita, res, melee, distance, PA, PM, PO ;
@@ -34,8 +35,44 @@ Implémenté sur la branche :
 - Candidate Policy alimentée par le catalogue et conservation des membres avec `reason: "set-core"` ;
 - `set-synergy-index` construit ses plans depuis les cores canoniques au lieu de recalculer ses propres combinaisons ;
 - `architecture-search-v2` conserve la voie standalone et expose des diagnostics par origine ;
-- tests ciblés des 10 invariants demandés ajoutés ;
+- recherche volontairement limitée à des architectures mono-core dans cette tranche ; la compatibilité multi-core est exposée mais l'expansion combinatoire est différée ;
+- tests ciblés des 10 invariants demandés ;
 - benchmark candidat étendu en comparaison standalone vs hybride et génération sur le snapshot Dofus réel.
+
+## Snapshot / benchmark observé sur la CI de la PR
+
+Le benchmark `benchmark:search` exécuté avec Node 22 sur la CI de la PR rapporte pour le snapshot Dofus chargé :
+
+- 160 panoplies ;
+- 1 093 items chargés ;
+- 159 panoplies avec au moins un item éligible niveau 190–200 ;
+- 500 items de panoplie éligibles ;
+- 941 cores 2/3/4 générés ;
+- 0 élimination par légalité sur ce snapshot ;
+- 0 élimination par dominance sur ce snapshot ;
+- 941 cores retenus ;
+- génération du catalogue : ~59 ms sur ce run CI.
+
+Les scénarios synthétiques du benchmark injectent 10 plans de core / 4 candidats supplémentaires pour 11 cores pertinents. Le meilleur score reste identique sur les scénarios comparables, et la voie standalone reste gagnante quand elle est meilleure.
+
+Sur les 8 scénarios benchmarkés, le cumul du temps passe d'environ 3 255,7 ms à 3 144,9 ms sur ce run (-3,4 %). Cette mesure n'est pas un engagement de performance : les écarts individuels vont d'environ -95,5 ms à +40,6 ms et doivent être considérés comme bruit/ordre de recherche tant qu'ils ne sont pas reproduits sur plusieurs runs.
+
+Exemples de profils réels observés :
+
+- Frimanoplie 2 pièces : PA +++, feu ++/+++, air ++/+++, PO ++, vita ++, initiative +/++, résistances +/++ selon la combinaison ;
+- Grithriloplie 3 pièces : terre +++, eau +++, multi +++, résistances +++, vita +++, PA +++.
+
+## Validation finale
+
+Sur le head `3bd00051eaef7f7e1b8a1074694bfcec064db9bb` :
+
+- `npm run check` : vert ;
+- `npm test` : vert, 230/230 ;
+- `npm run benchmark:v2` : vert ;
+- `npm run benchmark:search` : vert ;
+- GitHub Actions `Optimizer CI` run #437 (`33013307155`) : vert.
+
+La PR peut passer READY. Elle ne doit pas être mergée automatiquement par l'agent.
 
 ## Invariants à préserver
 
@@ -46,18 +83,7 @@ Implémenté sur la branche :
 5. Aucun core ne contourne `CompleteBuildEvaluator`.
 6. Les conditions non décidables sur un core partiel sont différées jusqu'au build complet au lieu d'être déclarées valides.
 7. La dominance ne supprime pas un core avec mécanique/condition non comparable.
-
-## Validation en cours
-
-La tranche n'est pas terminée tant que les contrôles suivants ne sont pas verts :
-
-- `npm run check` ;
-- `npm test` ;
-- `npm run benchmark:v2` ;
-- `npm run benchmark:search` ;
-- GitHub Actions `Optimizer CI`.
-
-La PR doit rester non mergée tant qu'un de ces gates échoue.
+8. La compatibilité core/core est une donnée disponible ; la recherche massive de combinaisons de cores n'appartient pas à cette tranche.
 
 ## Hors scope confirmé
 
@@ -66,7 +92,12 @@ La PR doit rester non mergée tant qu'un de ces gates échoue.
 - seeds et mémoire locale ;
 - Lock / Reject ;
 - nouvelles mécaniques de classe ;
-- hardcode des meilleures panoplies.
+- hardcode des meilleures panoplies ;
+- expansion exhaustive de combinaisons multi-core.
+
+## Préparation recommandée pour la prochaine PR Atelier
+
+L'Atelier peut consommer `SetCoreCatalog` en lecture seule pour afficher/proposer des noyaux et leurs profils, sans dupliquer leur calcul. La prochaine tranche UI doit conserver les frontières actuelles : `CandidatePolicy` pour la pertinence, `SetCoreCatalog` pour les métadonnées de pano, `CompleteBuildEvaluator` pour toute validation/scoring final. Ne pas introduire de logique de panoplie propre à l'UI.
 
 ## Reprise rapide
 
