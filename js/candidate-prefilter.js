@@ -25,13 +25,14 @@ export function prefilterItems({
   constraintReservePerStat = null,
   requiredItemIds = [],
   searchProfile = 'BALANCED',
-  enableSetCores = true
+  enableSetCores = null
 } = {}) {
   const candidateOverrides = {};
   if (slotLimits) candidateOverrides.slotPoolTargets = slotLimits;
   if (Number(maxRelevantSets) > 0) candidateOverrides.maxSetCorePlans = Number(maxRelevantSets);
   if (Number(constraintReservePerStat) > 0) candidateOverrides.constraintReservePerStat = Number(constraintReservePerStat);
   const profile = withCandidateOverrides(searchProfile, candidateOverrides);
+  const setCoresEnabled = enableSetCores == null ? scenario?.enableSetCores !== false : enableSetCores !== false;
   const result = buildSetCoreAwareCandidatePools({
     items,
     sets,
@@ -42,7 +43,7 @@ export function prefilterItems({
     searchProfile: profile,
     slotRules,
     requiredItemIds,
-    enableSetCores
+    enableSetCores: setCoresEnabled
   });
   return {
     items: result.items,
@@ -50,6 +51,7 @@ export function prefilterItems({
     policy: result.policy,
     diagnostics: {
       ...result.diagnostics,
+      setCoresEnabled,
       apTarget: Number(constraints?.ap || 0),
       comboApTarget: comboApTarget(scenario)
     }
