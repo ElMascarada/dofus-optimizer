@@ -174,6 +174,7 @@ function keepDiverseStates(states, context, limit) {
   for (const state of states) {
     const stats = progressStats(state.items, context.setsById, context.constraints);
     const progress = constraintProgressForStats(stats, context.constraints);
+    state.searchStats = stats;
     state.searchRank = state.heuristic
       + fastPartialRank(state.items, context.policy, context.setsById)
       + progress.coverage * context.profile.ranking.constraintProgressWeight;
@@ -183,16 +184,41 @@ function keepDiverseStates(states, context, limit) {
   const output = [];
   const perBucket = new Map();
   const seen = new Set();
-  for (const state of states) {
+
+  function tryKeep(state, { enforceBucket = true } = {}) {
+    if (output.length >= limit) return false;
     const key = [...state.ids].sort().join('|');
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     const bucket = stateBucket(state, context);
     const used = perBucket.get(bucket) || 0;
-    if (used >= context.profile.search.stateBucketLimit) continue;
+    if (enforceBucket && used >= context.profile.search.stateBucketLimit) return false;
     seen.add(key);
     perBucket.set(bucket, used + 1);
     output.push(state);
+    return true;
+  }
+
+  // Multiplicative specialists can look weak while a build is still partial.
+  // Preserve a narrow lane for each context-relevant Pareto dimension so that
+  // complete-build evaluation, not a partial scalar rank, gets the final say.
+  const specialistReserve = Math.max(0, Number(context.profile.search.groupSpecialistReservePerStat || 0));
+  for (const statKey of context.policy.paretoKeys || []) {
+    if (output.length >= limit || specialistReserve <= 0) break;
+    const bySpecialist = [...states]
+      .filter((state) => num(state.searchStats, statKey) > 0)
+      .sort((a, b) => num(b.searchStats, statKey) - num(a.searchStats, statKey)
+        || Number(b.constraintReady) - Number(a.constraintReady)
+        || b.searchRank - a.searchRank);
+    let kept = 0;
+    for (const state of bySpecialist) {
+      if (tryKeep(state, { enforceBucket: false })) kept++;
+      if (kept >= specialistReserve || output.length >= limit) break;
+    }
+  }
+
+  for (const state of states) {
     if (output.length >= limit) break;
+    tryKeep(state, { enforceBucket: true });
   }
   return output;
 }
