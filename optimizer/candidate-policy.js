@@ -1,6 +1,7 @@
 import { SLOT_RULES } from '../js/config.js';
 import { evaluateObjectiveUpperBound } from '../js/spells.js';
 import {
+  collectConditionStatInfo,
   optimisticItemStats,
   pruneDominatedCandidates,
   relevantStatKeys
@@ -24,9 +25,7 @@ export const GENERIC_OFFENSE_KEYS = Object.freeze([
 export const STRUCTURAL_SPECIALIST_KEYS = Object.freeze([
   'ap', 'mp', 'range', 'initiative', 'vit',
   'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir',
-  'crit', 'critDamage', 'power',
-  'earth', 'fire', 'water', 'air',
-  'damageEarth', 'damageFire', 'damageWater', 'damageAir'
+  'crit', 'critDamage', 'power'
 ]);
 
 function num(stats, key) {
@@ -171,8 +170,9 @@ function specialistDefinitions(policy) {
   for (const key of GENERIC_OFFENSE_KEYS) {
     if (!definitions.some((definition) => definition.id === key)) definitions.push({ id: key, keys: [key] });
   }
-  if (policy.targetElement) {
-    definitions.push({ id: `damage-${policy.targetElement}`, keys: [ELEMENT_DAMAGE[policy.targetElement]] });
+  for (const element of policy.elements) {
+    definitions.push({ id: element, keys: [element] });
+    definitions.push({ id: `damage-${element}`, keys: [ELEMENT_DAMAGE[element]] });
   }
   return definitions;
 }
@@ -199,6 +199,17 @@ function reserveTop(profiles, getter, limit, selectedIds, reasons, reason) {
   return candidates.length;
 }
 
+function profileIsContextRelevant(entry, policy) {
+  if (!policy.targetElement) return true;
+  const stats = entry.optimisticStats;
+  if (targetElementSignal(stats, policy.targetElement) > 0) return true;
+  if (genericOffenseSignal(stats) > 0) return true;
+  if (constraintOrderingSignal(stats, policy.constraints) > 0) return true;
+  if (entry.item?.setId || hasUniqueMechanic(entry.item)) return true;
+  if (STRUCTURAL_SPECIALIST_KEYS.some((key) => num(stats, key) > 0)) return true;
+  return policy.conditionKeys.some((key) => num(stats, key) > 0);
+}
+
 export function createCandidatePolicy({
   items = [],
   sets = [],
@@ -213,12 +224,17 @@ export function createCandidatePolicy({
   const elements = activeSpellElements(selections);
   const targetElement = elements.length === 1 ? elements[0] : null;
   const relevance = relevantStatKeys({ items, selections, constraints });
+  const conditionInfo = collectConditionStatInfo(items);
   const paretoKeys = new Set([
     ...relevance.keys,
     ...STRUCTURAL_SPECIALIST_KEYS,
     ...GENERIC_OFFENSE_KEYS,
     'ap', 'mp', 'range'
   ]);
+  for (const element of elements) {
+    paretoKeys.add(element);
+    paretoKeys.add(ELEMENT_DAMAGE[element]);
+  }
   for (const key of positiveConstraintKeys(constraints)) paretoKeys.add(key);
 
   const baselineObjective = Number(evaluateObjectiveUpperBound({ stats: {}, selections, turnMode }).score || 0);
@@ -232,6 +248,7 @@ export function createCandidatePolicy({
     scenario,
     targetElement,
     elements,
+    conditionKeys: [...conditionInfo.all].sort(),
     paretoKeys: [...paretoKeys].sort(),
     nonMonotoneKeys: relevance.nonMonotoneKeys,
     slotRules,
@@ -282,14 +299,16 @@ export function selectCandidatePoolForSlot({
   const selectedIds = new Set();
   const specialistCounts = {};
 
-  const pareto = pruneDominatedCandidates(slotItems, {
+  const eligibleProfiles = allProfiles.filter((entry) => profileIsContextRelevant(entry, policy));
+  const eligibleItems = eligibleProfiles.map((entry) => entry.item);
+  const eligibleProfileById = new Map(eligibleProfiles.map((entry) => [String(entry.item.id), entry]));
+  const pareto = pruneDominatedCandidates(eligibleItems, {
     keys: policy.paretoKeys,
     nonMonotoneKeys: policy.nonMonotoneKeys,
     groupCount: Number(rule.count || 1)
   });
   const paretoIds = new Set(pareto.candidates.map((item) => String(item.id)));
-  const profiles = allProfiles.filter((entry) => paretoIds.has(String(entry.item.id)));
-  const profileById = new Map(profiles.map((entry) => [String(entry.item.id), entry]));
+  const paretoProfiles = eligibleProfiles.filter((entry) => paretoIds.has(String(entry.item.id)));
   for (const item of pareto.candidates) {
     selectedIds.add(String(item.id));
     addReason(reasons, item.id, 'pareto');
@@ -297,7 +316,7 @@ export function selectCandidatePoolForSlot({
 
   for (const key of positiveConstraintKeys(policy.constraints)) {
     const count = reserveTop(
-      profiles,
+      paretoProfiles,
       (entry) => Math.max(0, num(entry.optimisticStats, key)),
       policy.profile.candidate.constraintReservePerStat,
       selectedIds,
@@ -309,7 +328,7 @@ export function selectCandidatePoolForSlot({
 
   for (const definition of specialistDefinitions(policy)) {
     const count = reserveTop(
-      profiles,
+      paretoProfiles,
       (entry) => specialistValue(entry, definition),
       policy.profile.candidate.specialistReservePerCategory,
       selectedIds,
@@ -319,7 +338,7 @@ export function selectCandidatePoolForSlot({
     if (count) specialistCounts[definition.id] = count;
   }
 
-  for (const entry of profiles) {
+  for (const entry of eligibleProfiles) {
     if (!hasUniqueMechanic(entry.item)) continue;
     selectedIds.add(String(entry.item.id));
     addReason(reasons, entry.item.id, 'specialist:unique-mechanic');
@@ -328,7 +347,7 @@ export function selectCandidatePoolForSlot({
   for (const plan of policy.setCoreHints) {
     let used = 0;
     for (const id of plan.memberIds) {
-      const entry = profileById.get(String(id));
+      const entry = eligibleProfileById.get(String(id));
       if (!entry || used >= policy.profile.candidate.setCoreReservePerPlan) continue;
       selectedIds.add(String(id));
       addReason(reasons, id, 'set-core');
@@ -336,8 +355,9 @@ export function selectCandidatePoolForSlot({
     }
   }
 
-  const ranked = [...profiles].sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
-  for (const entry of ranked.slice(0, policy.profile.candidate.offensiveRankReserve)) {
+  const paretoRanked = [...paretoProfiles]
+    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+  for (const entry of paretoRanked.slice(0, policy.profile.candidate.offensiveRankReserve)) {
     selectedIds.add(String(entry.item.id));
     addReason(reasons, entry.item.id, 'offense-rank');
   }
@@ -350,7 +370,9 @@ export function selectCandidatePoolForSlot({
   }
 
   const target = Math.max(Number(rule.count || 1), Number(policy.profile.candidate.slotPoolTargets?.[rule.id] || rule.count || 1));
-  for (const entry of ranked) {
+  const rankedEligible = [...eligibleProfiles]
+    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+  for (const entry of rankedEligible) {
     if (selectedIds.size >= target) break;
     selectedIds.add(String(entry.item.id));
     addReason(reasons, entry.item.id, 'rank-fill');
@@ -369,7 +391,7 @@ export function selectCandidatePoolForSlot({
       id: rule.id,
       count: Number(rule.count || 1),
       before: slotItems.length,
-      afterLegality: slotItems.length,
+      afterLegality: eligibleProfiles.length,
       paretoKept: pareto.candidates.length,
       dominatedPareto: pareto.dominatedRemoved,
       equivalentPareto: pareto.equivalentRemoved,
