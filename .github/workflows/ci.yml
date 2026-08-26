@@ -71,6 +71,10 @@ jobs:
         if: always()
         shell: bash
         run: npm run benchmark:search 2>&1 | tee benchmark-candidate-search-output.txt
+      - name: Set Core benchmark
+        if: always()
+        shell: bash
+        run: npm run benchmark:set-cores 2>&1 | tee benchmark-set-cores-output.txt
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
@@ -80,6 +84,7 @@ jobs:
             test-output.txt
             benchmark-v2-output.txt
             benchmark-candidate-search-output.txt
+            benchmark-set-cores-output.txt
           if-no-files-found: error
       - name: Fail when tests failed
         if: steps.tests.outputs.status != '0'
