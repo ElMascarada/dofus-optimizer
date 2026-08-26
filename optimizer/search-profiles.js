@@ -87,7 +87,10 @@ function profile({
       architectureMaxPlans: Math.max(12, Math.round(24 * searchScale)),
       constrainedArchitectureMaxPlans: Math.max(16, Math.round(30 * searchScale)),
       architectureMaxCount: Math.max(36, Math.round(90 * searchScale)),
-      mutationLimit: Math.max(3, Math.round(6 * searchScale))
+      // Canonical cores already enumerate the useful 2/3/4-piece alternatives.
+      // Mutating each one into near-standalone lanes only repeats work that the
+      // explicit standalone search performs, so keep the exact core lane only.
+      mutationLimit: 1
     },
     refine: {
       maxSkeletons: Math.max(4, Math.round(10 * refineScale)),
