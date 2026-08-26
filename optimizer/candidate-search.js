@@ -54,13 +54,33 @@ function keepChoiceDiversity(states, limit, context) {
     return true;
   }
 
+  // Preserve a tiny lane for each context-relevant Pareto dimension. This is
+  // especially important for multiplicative specialists (for example % spell
+  // damage): they can look weak in isolation but become optimal once combined
+  // with the stats supplied by the rest of the build.
+  const specialistReserve = Math.max(0, Number(context.profile.search.groupSpecialistReservePerStat || 0));
+  for (const key of context.policy.paretoKeys || []) {
+    if (output.length >= limit || specialistReserve <= 0) break;
+    const bySpecialist = [...states]
+      .filter((state) => num(state.optimisticStats, key) > 0)
+      .sort((a, b) => num(b.optimisticStats, key) - num(a.optimisticStats, key)
+        || b.objectiveScore - a.objectiveScore
+        || b.score - a.score);
+    let kept = 0;
+    for (const state of bySpecialist) {
+      if (tryKeep(state, { enforceBucket: false })) kept++;
+      if (kept >= specialistReserve || output.length >= limit) break;
+    }
+  }
+
   const offenseReserve = Math.min(
-    limit,
+    Math.max(0, limit - output.length),
     Math.max(0, Number(context.profile.search.groupOffenseReserve || 0))
   );
+  const offenseTarget = output.length + offenseReserve;
   const byOffense = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore || b.score - a.score);
   for (const state of byOffense) {
-    if (output.length >= offenseReserve) break;
+    if (output.length >= offenseTarget) break;
     tryKeep(state, { enforceBucket: false });
   }
 
