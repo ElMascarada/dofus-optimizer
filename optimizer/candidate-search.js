@@ -37,26 +37,46 @@ function resourceBucket(stats, constraints = {}, prysma = 0) {
 }
 
 function keepChoiceDiversity(states, limit, context) {
-  const ordered = [...states].sort((a, b) => b.score - a.score);
-  const perBucket = new Map();
   const seen = new Set();
   const output = [];
-  for (const state of ordered) {
+  const perBucket = new Map();
+
+  function tryKeep(state, { enforceBucket = true } = {}) {
+    if (output.length >= limit) return false;
     const key = choiceKey(state.items);
-    if (!key || seen.has(key)) continue;
+    if (!key || seen.has(key)) return false;
     const bucket = resourceBucket(state.optimisticStats, context.constraints, state.prysma);
     const used = perBucket.get(bucket) || 0;
-    if (used >= context.profile.search.groupBucketLimit) continue;
+    if (enforceBucket && used >= context.profile.search.groupBucketLimit) return false;
     seen.add(key);
     perBucket.set(bucket, used + 1);
     output.push(state);
+    return true;
+  }
+
+  // Keep an independent pure-offense lane before the constraint-weighted lane.
+  // This prevents a global AP/MP requirement from deleting the best damage
+  // combination when the surrounding architecture already satisfies 12/6.
+  const offenseReserve = Math.min(
+    limit,
+    Math.max(0, Number(context.profile.search.groupOffenseReserve || 0))
+  );
+  const byOffense = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore || b.score - a.score);
+  for (const state of byOffense) {
+    if (output.length >= offenseReserve) break;
+    tryKeep(state, { enforceBucket: false });
+  }
+
+  const ordered = [...states].sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore);
+  for (const state of ordered) {
     if (output.length >= limit) break;
+    tryKeep(state, { enforceBucket: true });
   }
   return output;
 }
 
 export function buildGroupChoices(profiles = [], count = 1, context = {}) {
-  if (count <= 0) return [{ items: [], score: 0, optimisticStats: {}, bounded: true, prysma: 0 }];
+  if (count <= 0) return [{ items: [], score: 0, objectiveScore: 0, optimisticStats: {}, bounded: true, prysma: 0 }];
   if (profiles.length < count) return [];
   if (count === 1) {
     return [...profiles]
@@ -64,6 +84,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
       .map((entry) => ({
         items: [entry.item],
         score: entry.rankScore,
+        objectiveScore: entry.objectiveGain,
         optimisticStats: { ...entry.optimisticStats },
         bounded: entry.bounded,
         prysma: isPrysmaradite(entry.item) ? 1 : 0
@@ -74,7 +95,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
   const beamWidth = context.slot === 'dofus'
     ? profile.search.dofusGroupBeamWidth
     : count >= 5 ? profile.search.multiPickBeamWidth : profile.search.groupBeamWidth;
-  let states = [{ items: [], score: 0, next: 0, prysma: 0, optimisticStats: {}, bounded: true }];
+  let states = [{ items: [], score: 0, objectiveScore: 0, next: 0, prysma: 0, optimisticStats: {}, bounded: true }];
   for (let pick = 0; pick < count; pick++) {
     const next = [];
     const leftAfter = count - pick - 1;
@@ -89,6 +110,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         next.push({
           items: [...state.items, candidate.item],
           score: state.score + candidate.rankScore,
+          objectiveScore: state.objectiveScore + candidate.objectiveGain,
           next: index + 1,
           prysma,
           optimisticStats: stats,
@@ -106,7 +128,9 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     Math.min(states.length, profile.search.groupBucketLimit * profile.search.groupDiversityMultiplier)
   );
   return keepChoiceDiversity(states, diversityLimit, context)
-    .map(({ items, score, optimisticStats, bounded, prysma }) => ({ items, score, optimisticStats, bounded, prysma }));
+    .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
+      items, score, objectiveScore, optimisticStats, bounded, prysma
+    }));
 }
 
 export function staticBuildStats(items = [], setsById = {}) {
