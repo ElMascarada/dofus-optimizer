@@ -1,8 +1,6 @@
 import { SLOT_RULES } from './config.js';
-import {
-  activeSpellElements,
-  buildCandidatePools
-} from '../optimizer/candidate-policy.js';
+import { activeSpellElements } from '../optimizer/candidate-policy.js';
+import { buildSetCoreAwareCandidatePools } from '../optimizer/set-core-candidate-policy.js';
 import { withCandidateOverrides } from '../optimizer/search-profiles.js';
 
 export { activeSpellElements };
@@ -26,14 +24,15 @@ export function prefilterItems({
   maxRelevantSets = null,
   constraintReservePerStat = null,
   requiredItemIds = [],
-  searchProfile = 'BALANCED'
+  searchProfile = 'BALANCED',
+  enableSetCores = true
 } = {}) {
   const candidateOverrides = {};
   if (slotLimits) candidateOverrides.slotPoolTargets = slotLimits;
   if (Number(maxRelevantSets) > 0) candidateOverrides.maxSetCorePlans = Number(maxRelevantSets);
   if (Number(constraintReservePerStat) > 0) candidateOverrides.constraintReservePerStat = Number(constraintReservePerStat);
   const profile = withCandidateOverrides(searchProfile, candidateOverrides);
-  const result = buildCandidatePools({
+  const result = buildSetCoreAwareCandidatePools({
     items,
     sets,
     selections,
@@ -42,7 +41,8 @@ export function prefilterItems({
     scenario,
     searchProfile: profile,
     slotRules,
-    requiredItemIds
+    requiredItemIds,
+    enableSetCores
   });
   return {
     items: result.items,
