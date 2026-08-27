@@ -8,10 +8,13 @@ import { createItemBrowser } from './item-browser.js';
 import { renderStatsPanel } from './stats-panel.js';
 import { renderSpellPanel } from './spell-panel.js';
 import { createWorkshopAutosave } from './workshop-autosave.js';
+import { OPEN_WORKSHOP_BUILD_EVENT } from './workshop-events.js';
 
 const workshopView = document.querySelector('#workshop-view');
 const optimizerView = document.querySelector('#optimizer-view');
 const tabs = [...document.querySelectorAll('[data-product-tab]')];
+let pendingOptimizerBuild = null;
+let openOptimizerBuild = null;
 
 function activateTab(tabId) {
   const workshopActive = tabId === 'workshop';
@@ -26,6 +29,13 @@ function activateTab(tabId) {
 
 for (const tab of tabs) tab.addEventListener('click', () => activateTab(tab.dataset.productTab));
 activateTab('workshop');
+
+document.addEventListener(OPEN_WORKSHOP_BUILD_EVENT, (event) => {
+  const build = event?.detail?.build;
+  if (!build) return;
+  if (openOptimizerBuild) openOptimizerBuild(build);
+  else pendingOptimizerBuild = build;
+});
 
 function renderSkeleton() {
   workshopView.innerHTML = `
@@ -229,6 +239,17 @@ async function initWorkshop() {
         library.setStatus(`Autosave indisponible · ${error instanceof Error ? error.message : String(error)}`, 'error');
       }
     });
+
+    openOptimizerBuild = (build) => {
+      applyHydrated({ build });
+      activateTab('workshop');
+      feedback('Résultat de l’Optimiseur ouvert dans l’Atelier.', 'ok');
+    };
+    if (pendingOptimizerBuild) {
+      const build = pendingOptimizerBuild;
+      pendingOptimizerBuild = null;
+      openOptimizerBuild(build);
+    }
 
     classSelect.addEventListener('change', () => {
       controller.setClass(classSelect.value || null);
