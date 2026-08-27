@@ -98,6 +98,87 @@
   color: #fff;
 }
 
+/* Tranche 4 — Atelier refinement controls. */
+.workshop-hero-controls {
+  display: grid;
+  gap: 10px;
+  min-width: 240px;
+}
+
+.workshop-find-better-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.workshop-find-better-actions button {
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid var(--workshop-line, #292b2a);
+  background: #0b0c0c;
+  color: var(--workshop-paper, #cccfca);
+  font: inherit;
+  font-size: .78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workshop-find-better-actions .primary {
+  border-color: var(--workshop-red, #dc2636);
+  background: var(--workshop-red, #dc2636);
+  color: #fff;
+}
+
+.workshop-find-better-actions button:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+
+.workshop-slot.is-locked {
+  border-color: var(--workshop-red, #dc2636);
+  box-shadow: inset 0 0 0 1px rgba(220, 38, 54, .25);
+}
+
+.workshop-slot-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.workshop-slot-actions button,
+.workshop-slot-actions .workshop-slot-remove {
+  position: static;
+  width: auto;
+  height: 25px;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 1px solid var(--workshop-line, #292b2a);
+  border-radius: 0;
+  background: #0b0b0b;
+  color: var(--workshop-muted, #858a86);
+  font: inherit;
+  font-size: .62rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.workshop-slot-actions .workshop-slot-lock[aria-pressed="true"] {
+  border-color: var(--workshop-red, #dc2636);
+  color: #fff;
+  background: #5b1119;
+}
+
+.workshop-slot-actions .workshop-slot-reject:hover,
+.workshop-slot-actions .workshop-slot-reject:focus-visible,
+.workshop-slot-actions .workshop-slot-remove:hover,
+.workshop-slot-actions .workshop-slot-remove:focus-visible {
+  border-color: var(--workshop-red, #dc2636);
+  color: var(--workshop-red, #dc2636);
+}
+
 @media (max-width: 900px) {
   .optimizer-v2-hero,
   .optimizer-v2-layout {

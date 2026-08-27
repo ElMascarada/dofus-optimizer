@@ -1,4 +1,4 @@
-const QUERY_SCHEMA_VERSION = 1;
+const QUERY_SCHEMA_VERSION = 2;
 export const SEARCH_QUERY_SCHEMA_VERSION = QUERY_SCHEMA_VERSION;
 export const SEARCH_ALGORITHM_VERSION = 'optimizer-search-v2-memory-1';
 
@@ -66,6 +66,17 @@ function normalizedScenario(value = {}) {
   return { requiredApByTurn };
 }
 
+function normalizedItemIds(value = []) {
+  return [...new Set((value || []).map(String).filter(Boolean))].sort();
+}
+
+function normalizedLockedItemsBySlot(value = {}) {
+  return Object.fromEntries(Object.entries(value || {})
+    .map(([slotKey, itemId]) => [String(slotKey), String(itemId || '')])
+    .filter(([, itemId]) => Boolean(itemId))
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export function normalizeSearchQuery({ payload = {}, versions = {} } = {}) {
   const combatObjective = payload?.combatObjective || {};
   return Object.freeze({
@@ -91,7 +102,9 @@ export function normalizeSearchQuery({ payload = {}, versions = {} } = {}) {
     diversityMode: String(payload?.diversityMode || 'gear'),
     searchProfile: String(payload?.searchProfile || 'BALANCED').toUpperCase(),
     topN: Math.max(1, Math.floor(finiteNumber(payload?.topN, 10))),
-    requiredItemIds: [...new Set((payload?.requiredItemIds || []).map(String).filter(Boolean))].sort()
+    requiredItemIds: normalizedItemIds(payload?.requiredItemIds),
+    lockedItemsBySlot: normalizedLockedItemsBySlot(payload?.lockedItemsBySlot),
+    rejectedItemIds: normalizedItemIds(payload?.rejectedItemIds)
   });
 }
 
@@ -126,7 +139,9 @@ function exactCompatibilityFieldsMatch(a, b) {
     && stableStringify(a.scenario) === stableStringify(b.scenario)
     && a.diversityMode === b.diversityMode
     && a.searchProfile === b.searchProfile
-    && stableStringify(a.requiredItemIds) === stableStringify(b.requiredItemIds);
+    && stableStringify(a.requiredItemIds) === stableStringify(b.requiredItemIds)
+    && stableStringify(a.lockedItemsBySlot) === stableStringify(b.lockedItemsBySlot)
+    && stableStringify(a.rejectedItemIds) === stableStringify(b.rejectedItemIds);
 }
 
 export function searchQueryDistance(a = {}, b = {}) {

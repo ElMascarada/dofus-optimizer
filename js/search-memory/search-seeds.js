@@ -35,6 +35,22 @@ export function seedDescriptorsFromNearby(nearby = [], { maxBuilds = 8 } = {}) {
   return output;
 }
 
+export function mergeSeedDescriptors(groups = [], { maxBuilds = 8 } = {}) {
+  const seen = new Set();
+  const output = [];
+  for (const group of groups || []) {
+    for (const seed of group || []) {
+      const itemIds = [...new Set((seed?.itemIds || []).map(String).filter(Boolean))];
+      const key = buildKey(itemIds);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      output.push({ ...seed, itemIds });
+      if (output.length >= Math.max(0, Number(maxBuilds || 0))) return output;
+    }
+  }
+  return output;
+}
+
 function fullBuildShape(items = []) {
   const counts = new Map();
   for (const item of items || []) counts.set(item?.slot, (counts.get(item?.slot) || 0) + 1);
@@ -55,15 +71,28 @@ export function evaluateSearchSeedBuilds({
   fmPolicy = {},
   turnMode = 'sum',
   scenario = {},
+  requiredItemIds = [],
+  rejectedItemIds = [],
   evaluate = evaluateCompleteBuild
 } = {}) {
   const itemById = new Map((items || []).map((item) => [String(item.id), item]));
+  const required = new Set((requiredItemIds || []).map(String).filter(Boolean));
+  const rejectedIds = new Set((rejectedItemIds || []).map(String).filter(Boolean));
   const results = [];
   const rejected = {};
   let rehydrated = 0;
 
   for (const seed of seedBuilds || []) {
     const ids = [...new Set((seed?.itemIds || []).map(String).filter(Boolean))];
+    const idSet = new Set(ids);
+    if ([...required].some((id) => !idSet.has(id))) {
+      addReason(rejected, 'missing-required-item');
+      continue;
+    }
+    if (ids.some((id) => rejectedIds.has(id))) {
+      addReason(rejected, 'rejected-item');
+      continue;
+    }
     const resolved = ids.map((id) => itemById.get(id));
     if (!ids.length || resolved.some((item) => !item)) {
       addReason(rejected, 'missing-item');

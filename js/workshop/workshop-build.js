@@ -36,17 +36,33 @@ function cloneEquipment(equipmentBySlot = {}) {
   return Object.fromEntries(Object.entries(equipmentBySlot).filter(([, item]) => Boolean(item)));
 }
 
+function normalizeRejectedItemIds(ids = []) {
+  return [...new Set((ids || []).map(String).filter(Boolean))].sort();
+}
+
+function normalizeLockedSlots(lockedSlots = [], equipmentBySlot = {}) {
+  const equipped = new Set(Object.keys(equipmentBySlot || {}));
+  return [...new Set((lockedSlots || []).map(String))]
+    .filter((key) => SLOT_BY_KEY.has(key) && equipped.has(key))
+    .sort();
+}
+
 export function createWorkshopBuild({
   classId = null,
   equipmentBySlot = {},
   fmPolicy = WORKSHOP_FM_POLICY,
-  selectedSpells = []
+  selectedSpells = [],
+  lockedSlots = [],
+  rejectedItemIds = []
 } = {}) {
+  const equipment = cloneEquipment(equipmentBySlot);
   return {
     classId: classId ? String(classId) : null,
-    equipmentBySlot: cloneEquipment(equipmentBySlot),
+    equipmentBySlot: equipment,
     fmPolicy: { ...WORKSHOP_FM_POLICY, ...(fmPolicy || {}) },
-    selectedSpells: [...new Set((selectedSpells || []).map(String))]
+    selectedSpells: [...new Set((selectedSpells || []).map(String))],
+    lockedSlots: normalizeLockedSlots(lockedSlots, equipment),
+    rejectedItemIds: normalizeRejectedItemIds(rejectedItemIds)
   };
 }
 
@@ -60,19 +76,48 @@ export function workshopSlot(slotKey) {
   return SLOT_BY_KEY.get(String(slotKey)) || null;
 }
 
+export function workshopLockedItemsBySlot(build = {}) {
+  const locked = new Set(build?.lockedSlots || []);
+  return Object.fromEntries(WORKSHOP_SLOTS
+    .filter(({ key }) => locked.has(key) && build?.equipmentBySlot?.[key]?.id != null)
+    .map(({ key }) => [key, String(build.equipmentBySlot[key].id)]));
+}
+
+export function workshopBuildIsComplete(build = {}) {
+  return WORKSHOP_SLOTS.every(({ key }) => Boolean(build?.equipmentBySlot?.[key]));
+}
+
 export function createWorkshopBuildFromOptimizerResult({
   result,
   classId = null,
-  fmPolicy = WORKSHOP_FM_POLICY
+  fmPolicy = WORKSHOP_FM_POLICY,
+  lockedItemsBySlot = {},
+  rejectedItemIds = []
 } = {}) {
   const equipmentBySlot = {};
-  const usedBySlot = new Map();
-  for (const item of result?.items || []) {
-    const keys = SLOT_KEYS_BY_SLOT.get(item?.slot) || [];
-    const index = usedBySlot.get(item?.slot) || 0;
-    if (!keys[index]) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
-    equipmentBySlot[keys[index]] = item;
-    usedBySlot.set(item.slot, index + 1);
+  const resultItems = [...(result?.items || [])];
+  const usedIndexes = new Set();
+  const lockedSlots = [];
+
+  for (const [slotKey, rawItemId] of Object.entries(lockedItemsBySlot || {})) {
+    const descriptor = workshopSlot(slotKey);
+    const itemId = String(rawItemId || '');
+    if (!descriptor || !itemId) throw new Error(`Lock Atelier invalide : ${slotKey}.`);
+    const index = resultItems.findIndex((item, candidateIndex) => !usedIndexes.has(candidateIndex) && String(item?.id) === itemId);
+    if (index < 0) throw new Error(`Résultat incompatible avec le lock ${slotKey}.`);
+    const item = resultItems[index];
+    if (item?.slot !== descriptor.slot) throw new Error(`Résultat incompatible avec le slot locké ${slotKey}.`);
+    equipmentBySlot[slotKey] = item;
+    lockedSlots.push(slotKey);
+    usedIndexes.add(index);
+  }
+
+  for (let index = 0; index < resultItems.length; index++) {
+    if (usedIndexes.has(index)) continue;
+    const item = resultItems[index];
+    const slotKey = (SLOT_KEYS_BY_SLOT.get(item?.slot) || []).find((key) => !equipmentBySlot[key]);
+    if (!slotKey) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
+    equipmentBySlot[slotKey] = item;
   }
 
   const selectedSpells = [...new Set(
@@ -81,7 +126,14 @@ export function createWorkshopBuildFromOptimizerResult({
       .filter(Boolean)
       .map(String)
   )];
-  const build = createWorkshopBuild({ classId, equipmentBySlot, fmPolicy, selectedSpells });
+  const build = createWorkshopBuild({
+    classId,
+    equipmentBySlot,
+    fmPolicy,
+    selectedSpells,
+    lockedSlots,
+    rejectedItemIds
+  });
   if (!specialSlotRulesAreValid(workshopItems(build))) {
     throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');
   }
@@ -94,6 +146,34 @@ export function setWorkshopClass(build, classId) {
 
 export function setWorkshopSelectedSpells(build, spellIds = []) {
   return createWorkshopBuild({ ...build, selectedSpells: spellIds });
+}
+
+export function setWorkshopSlotLocked(build, slotKey, locked = true) {
+  const key = String(slotKey);
+  if (!workshopSlot(key) || !build?.equipmentBySlot?.[key]) return build;
+  const next = new Set(build?.lockedSlots || []);
+  if (locked) next.add(key);
+  else next.delete(key);
+  return createWorkshopBuild({ ...build, lockedSlots: [...next] });
+}
+
+export function rejectWorkshopItem(build, slotKey) {
+  const key = String(slotKey);
+  const item = build?.equipmentBySlot?.[key];
+  if (!workshopSlot(key) || !item?.id) return build;
+  const equipmentBySlot = cloneEquipment(build?.equipmentBySlot);
+  delete equipmentBySlot[key];
+  const lockedSlots = (build?.lockedSlots || []).filter((entry) => entry !== key);
+  return createWorkshopBuild({
+    ...build,
+    equipmentBySlot,
+    lockedSlots,
+    rejectedItemIds: [...(build?.rejectedItemIds || []), String(item.id)]
+  });
+}
+
+export function clearWorkshopRejectedItems(build) {
+  return createWorkshopBuild({ ...build, rejectedItemIds: [] });
 }
 
 export function equipWorkshopItem(build, slotKey, item) {
@@ -113,7 +193,9 @@ export function equipWorkshopItem(build, slotKey, item) {
 
 export function removeWorkshopItem(build, slotKey) {
   if (!workshopSlot(slotKey)) return build;
+  const key = String(slotKey);
   const equipmentBySlot = cloneEquipment(build?.equipmentBySlot);
-  delete equipmentBySlot[String(slotKey)];
-  return createWorkshopBuild({ ...build, equipmentBySlot });
+  delete equipmentBySlot[key];
+  const lockedSlots = (build?.lockedSlots || []).filter((entry) => entry !== key);
+  return createWorkshopBuild({ ...build, equipmentBySlot, lockedSlots });
 }

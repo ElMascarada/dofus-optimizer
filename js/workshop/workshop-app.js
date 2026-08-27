@@ -1,14 +1,14 @@
 import { loadDofusData, loadSpellData } from '../data-loader.js';
 import { BuildRepository } from './build-repository.js';
 import { createBuildLibrary } from './build-library.js';
-import { createWorkshopBuild } from './workshop-build.js';
+import { createWorkshopBuild, workshopBuildIsComplete } from './workshop-build.js';
 import { WorkshopController } from './workshop-controller.js';
 import { createEquipmentGrid } from './equipment-grid.js';
 import { createItemBrowser } from './item-browser.js';
 import { renderStatsPanel } from './stats-panel.js';
 import { renderSpellPanel } from './spell-panel.js';
 import { createWorkshopAutosave } from './workshop-autosave.js';
-import { OPEN_WORKSHOP_BUILD_EVENT } from './workshop-events.js';
+import { FIND_BETTER_BUILD_EVENT, OPEN_WORKSHOP_BUILD_EVENT } from './workshop-events.js';
 
 const workshopView = document.querySelector('#workshop-view');
 const optimizerView = document.querySelector('#optimizer-view');
@@ -41,7 +41,13 @@ function renderSkeleton() {
   workshopView.innerHTML = `
     <section class="workshop-hero">
       <div><span class="eyebrow">ATELIER V2</span><h2>Construire. Mesurer. Ajuster.</h2><p>Équipe un stuff manuellement : les stats et dégâts sont recalculés par les moteurs canoniques.</p></div>
-      <label class="field workshop-class-field">Classe<select id="workshop-class-select" disabled><option>Chargement…</option></select></label>
+      <div class="workshop-hero-controls">
+        <label class="field workshop-class-field">Classe<select id="workshop-class-select" disabled><option>Chargement…</option></select></label>
+        <div class="workshop-find-better-actions">
+          <button type="button" id="workshop-find-better" class="primary" disabled>Trouver mieux</button>
+          <button type="button" id="workshop-clear-rejects" class="secondary" hidden>Effacer les rejets</button>
+        </div>
+      </div>
     </section>
     <p id="workshop-feedback" class="workshop-feedback" aria-live="polite"></p>
     <div class="workshop-layout">
@@ -88,6 +94,8 @@ async function initWorkshop() {
     const statsRoot = document.querySelector('#workshop-stats-panel');
     const spellsRoot = document.querySelector('#workshop-spell-panel');
     const libraryRoot = document.querySelector('#workshop-build-library');
+    const findBetterButton = document.querySelector('#workshop-find-better');
+    const clearRejectsButton = document.querySelector('#workshop-clear-rejects');
     const repository = new BuildRepository();
     let controller = null;
     let autosave = null;
@@ -212,6 +220,16 @@ async function initWorkshop() {
 
     const equipment = createEquipmentGrid(equipmentRoot, {
       onOpen: (slotKey) => browser.open(slotKey),
+      onToggleLock(slotKey, locked) {
+        controller.setSlotLocked(slotKey, locked);
+        feedback(locked ? 'Item locké pour la prochaine optimisation.' : 'Lock retiré.', 'ok');
+      },
+      onReject(slotKey) {
+        const item = controller.build.equipmentBySlot?.[slotKey];
+        if (!item) return;
+        controller.reject(slotKey);
+        feedback(`${item.name} rejeté : il sera exclu des prochaines recherches.`, 'ok');
+      },
       onRemove(slotKey) {
         controller.remove(slotKey);
         feedback('Item retiré.', 'ok');
@@ -226,6 +244,10 @@ async function initWorkshop() {
         renderStatsPanel(statsRoot, evaluation);
         renderSpellPanel(spellsRoot, evaluation, build.classId);
         classSelect.value = build.classId || '';
+        const rejectedCount = build.rejectedItemIds?.length || 0;
+        clearRejectsButton.hidden = rejectedCount === 0;
+        clearRejectsButton.textContent = rejectedCount ? `Effacer les rejets (${rejectedCount})` : 'Effacer les rejets';
+        findBetterButton.disabled = !(build.classId && workshopBuildIsComplete(build));
         if (autosave && !suppressAutosave) autosave.queue(build);
       }
     });
@@ -250,6 +272,21 @@ async function initWorkshop() {
       pendingOptimizerBuild = null;
       openOptimizerBuild(build);
     }
+
+    findBetterButton.addEventListener('click', () => {
+      if (!controller.build.classId || !workshopBuildIsComplete(controller.build)) {
+        feedback('Complète les 16 slots et choisis une classe avant de chercher mieux.', 'error');
+        return;
+      }
+      const build = controller.build;
+      activateTab('optimizer');
+      document.dispatchEvent(new CustomEvent(FIND_BETTER_BUILD_EVENT, { detail: { build } }));
+    });
+
+    clearRejectsButton.addEventListener('click', () => {
+      controller.clearRejected();
+      feedback('Liste des rejets effacée.', 'ok');
+    });
 
     classSelect.addEventListener('change', () => {
       controller.setClass(classSelect.value || null);

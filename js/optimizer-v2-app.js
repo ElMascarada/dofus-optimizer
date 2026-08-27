@@ -6,10 +6,11 @@ import {
 } from './optimizer-v2-orchestrator.js';
 import { SearchMemoryRepository } from './search-memory/search-repository.js';
 import { createSearchVersions, normalizeSearchQuery } from './search-memory/search-query.js';
-import { seedDescriptorsFromNearby } from './search-memory/search-seeds.js';
+import { mergeSeedDescriptors, seedDescriptorsFromNearby } from './search-memory/search-seeds.js';
 import { mergeSearchOutputs, withExactCacheDiagnostics } from './search-memory/search-result-merge.js';
 import { createWorkshopBuildFromOptimizerResult } from './workshop/workshop-build.js';
-import { OPEN_WORKSHOP_BUILD_EVENT } from './workshop/workshop-events.js';
+import { workshopOptimizationContext } from './workshop/workshop-optimization.js';
+import { FIND_BETTER_BUILD_EVENT, OPEN_WORKSHOP_BUILD_EVENT } from './workshop/workshop-events.js';
 
 const $ = (selector) => document.querySelector(selector);
 const classSelect = $('#optimizer-class');
@@ -47,6 +48,8 @@ let pendingSeedOutput = null;
 let currentPayload = null;
 let currentQuery = null;
 let currentMemoryContext = { fingerprint: '', nearbyRecords: 0, seedCount: 0 };
+let activeRefinement = null;
+let queuedFindBetterBuild = null;
 const searchMemory = new SearchMemoryRepository();
 
 function escapeHtml(value = '') {
@@ -153,7 +156,9 @@ function finalDiagnostics(output = {}) {
   const memoryLabel = memory.cacheHit
     ? 'cache exact'
     : `${Number(memory.seedsValid || 0)}/${Number(memory.seedsAttempted || 0)} seeds valides`;
-  return `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryLabel}`;
+  const locks = currentPayload?.requiredItemIds?.length || 0;
+  const rejects = currentPayload?.rejectedItemIds?.length || 0;
+  return `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryLabel}${locks || rejects ? ` · ${locks} lock · ${rejects} reject` : ''}`;
 }
 
 function finalizeIfReady(requestId) {
@@ -218,7 +223,18 @@ function handleSeedWorkerMessage(event, requestId) {
   finalizeIfReady(requestId);
 }
 
-async function runSearch() {
+function startSeedWorker(requestId, payload, seedBuilds) {
+  if (!seedBuilds.length) return;
+  seedWorker = new Worker(new URL('./search-memory/seed-worker.js', import.meta.url), { type: 'module' });
+  seedWorker.addEventListener('message', (event) => handleSeedWorkerMessage(event, requestId));
+  seedWorker.addEventListener('error', () => {
+    if (requestId !== activeRequestId) return;
+    handleSeedWorkerMessage({ data: { type: 'seed-error', requestId } }, requestId);
+  });
+  seedWorker.postMessage({ type: 'evaluate-seeds', requestId, payload, seedBuilds });
+}
+
+async function runSearch(refinement = null) {
   if (isSearching()) return stopSearch();
   if (!dataset || !spellData) return;
   const requestId = ++activeRequestId;
@@ -234,7 +250,9 @@ async function runSearch() {
       element: elementSelect.value,
       constraints: readConstraints(),
       turnMode: turnSelect.value,
-      topN: 10
+      topN: 10,
+      lockedItemsBySlot: refinement?.lockedItemsBySlot || {},
+      rejectedItemIds: refinement?.rejectedItemIds || []
     });
     if (!payload.classSpells.some((spell) => (spell.hits || []).length > 0)) {
       renderResults([], `Aucun sort offensif ${ELEMENT_LABELS[elementSelect.value] || elementSelect.value} certifié pour cette classe.`);
@@ -255,24 +273,27 @@ async function runSearch() {
     let exact = null;
     let nearby = [];
     let memoryError = null;
+    const workshopSeeds = refinement?.seedBuild ? [refinement.seedBuild] : [];
     try {
       exact = await searchMemory.recallExact(query, { items: dataset.items });
       if (requestId !== activeRequestId) return;
-      if (exact.hit) {
+      if (exact.hit && !workshopSeeds.length) {
         const output = withExactCacheDiagnostics(exact.output, { fingerprint: exact.fingerprint });
         renderResults(output.results || []);
         diagnosticsRoot.textContent = `Résultat instantané · cache exact · ${output.results?.length || 0} build${output.results?.length > 1 ? 's' : ''}.`;
         setIdle();
         return;
       }
-      nearby = await searchMemory.findNearby(query, { limit: 5, maxDistance: 0.35 });
+      if (!exact.hit) nearby = await searchMemory.findNearby(query, { limit: 5, maxDistance: 0.35 });
     } catch (error) {
       memoryError = error;
+      exact = null;
       nearby = [];
     }
     if (requestId !== activeRequestId) return;
 
-    const seedBuilds = seedDescriptorsFromNearby(nearby, { maxBuilds: 8 });
+    const nearbySeeds = seedDescriptorsFromNearby(nearby, { maxBuilds: 8 });
+    const seedBuilds = mergeSeedDescriptors([workshopSeeds, nearbySeeds], { maxBuilds: 8 });
     currentMemoryContext = {
       fingerprint: exact?.fingerprint || '',
       nearbyRecords: nearby.length,
@@ -283,6 +304,16 @@ async function runSearch() {
       : { results: [], diagnostics: { seedEvaluation: { attempted: 0, valid: 0, rejected: {} } } };
     preparing = false;
 
+    if (exact?.hit) {
+      pendingMainOutput = withExactCacheDiagnostics(exact.output, { fingerprint: exact.fingerprint });
+      startSeedWorker(requestId, payload, seedBuilds);
+      optimizeButton.disabled = false;
+      optimizeButton.textContent = 'Arrêter';
+      diagnosticsRoot.textContent = `Cache exact compatible · réévaluation du stuff Atelier comme lower bound · ${payload.requiredItemIds.length} lock · ${payload.rejectedItemIds.length} reject.`;
+      finalizeIfReady(requestId);
+      return;
+    }
+
     worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
     worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
     worker.addEventListener('error', (event) => {
@@ -292,20 +323,12 @@ async function runSearch() {
       setIdle();
     });
 
-    if (seedBuilds.length) {
-      seedWorker = new Worker(new URL('./search-memory/seed-worker.js', import.meta.url), { type: 'module' });
-      seedWorker.addEventListener('message', (event) => handleSeedWorkerMessage(event, requestId));
-      seedWorker.addEventListener('error', () => {
-        if (requestId !== activeRequestId) return;
-        handleSeedWorkerMessage({ data: { type: 'seed-error', requestId } }, requestId);
-      });
-      seedWorker.postMessage({ type: 'evaluate-seeds', requestId, payload, seedBuilds });
-    }
+    startSeedWorker(requestId, payload, seedBuilds);
 
     optimizeButton.disabled = false;
     optimizeButton.textContent = 'Arrêter';
     resultsRoot.innerHTML = '<div class="empty">Recherche en cours…</div>';
-    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · cache ${memoryError ? 'indisponible' : 'miss'} · ${seedBuilds.length} seed${seedBuilds.length > 1 ? 's' : ''}.`;
+    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · cache ${memoryError ? 'indisponible' : 'miss'} · ${seedBuilds.length} seed${seedBuilds.length > 1 ? 's' : ''} · ${payload.requiredItemIds.length} lock · ${payload.rejectedItemIds.length} reject.`;
     worker.postMessage({ type: 'optimize', requestId, payload });
   } catch (error) {
     if (requestId !== activeRequestId) return;
@@ -313,6 +336,26 @@ async function runSearch() {
     setIdle();
   }
 }
+
+async function findBetter(build) {
+  const refinement = workshopOptimizationContext(build);
+  if (!refinement.classId || !refinement.seedBuild) {
+    diagnosticsRoot.textContent = 'Trouver mieux nécessite une classe et un stuff Atelier complet.';
+    return;
+  }
+  if (isSearching()) stopSearch();
+  activeRefinement = refinement;
+  classSelect.value = refinement.classId;
+  optimizeButton.disabled = false;
+  await runSearch(refinement);
+}
+
+document.addEventListener(FIND_BETTER_BUILD_EVENT, (event) => {
+  const build = event?.detail?.build;
+  if (!build) return;
+  if (!dataset || !spellData) queuedFindBetterBuild = build;
+  else findBetter(build);
+});
 
 resultsRoot.addEventListener('click', (event) => {
   const button = event.target.closest('[data-open-build]');
@@ -323,7 +366,9 @@ resultsRoot.addEventListener('click', (event) => {
     const build = createWorkshopBuildFromOptimizerResult({
       result,
       classId: classSelect.value,
-      fmPolicy: currentPayload.fmPolicy
+      fmPolicy: currentPayload.fmPolicy,
+      lockedItemsBySlot: currentPayload.lockedItemsBySlot,
+      rejectedItemIds: currentPayload.rejectedItemIds
     });
     document.dispatchEvent(new CustomEvent(OPEN_WORKSHOP_BUILD_EVENT, { detail: { build } }));
   } catch (error) {
@@ -343,6 +388,11 @@ async function init() {
     classSelect.disabled = false;
     dataStatus.textContent = `${dataset.items.length.toLocaleString('fr-FR')} équipements · ${spellData.spells.length.toLocaleString('fr-FR')} sorts · moteur V${APP_VERSION}`;
     resultsRoot.innerHTML = '<div class="empty">Choisis une classe, un élément, tes contraintes et l’objectif temporel.</div>';
+    if (queuedFindBetterBuild) {
+      const build = queuedFindBetterBuild;
+      queuedFindBetterBuild = null;
+      await findBetter(build);
+    }
   } catch (error) {
     dataStatus.textContent = error instanceof Error ? error.message : String(error);
     resultsRoot.innerHTML = '<div class="empty">Impossible de charger les données certifiées.</div>';
@@ -351,7 +401,12 @@ async function init() {
 
 classSelect.addEventListener('change', () => {
   if (isSearching()) stopSearch();
+  activeRefinement = null;
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
 });
-optimizeButton.addEventListener('click', runSearch);
+optimizeButton.addEventListener('click', () => {
+  if (isSearching()) return stopSearch();
+  activeRefinement = null;
+  runSearch();
+});
 init();
