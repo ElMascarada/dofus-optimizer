@@ -1,70 +1,42 @@
 # Dofus Optimizer V2 — Completion Plan
 
-Ce document est la roadmap de fin de course. Il doit permettre à une nouvelle fenêtre de reprendre le rôle de lead sans dépendre d'un historique de conversation.
+Ce document est la roadmap de fin de course et, après la Tranche 7, le registre de clôture de la V2.
 
-## Déjà terminé
+## Statut global
 
 - [x] Fondation V2 / architecture / baseline
 - [x] Moteur de sorts et combat générique
 - [x] Candidate Policy / préfiltrage / Pareto / contraintes
 - [x] SetCoreCatalog / recherche hybride set-core + standalone
-- [x] Atelier V2 foundation : 16 slots, stats live, dégâts sorts, shell produit
-- [x] Persistence Atelier + bibliothèque de builds + Smart Item Search (PR #44)
-- [x] Optimiseur V2 simplifié (PR #45)
-- [ ] Mémoire des recherches + cache exact + seeds — implémentée par la PR #47, à considérer terminée après merge vert de cette PR
+- [x] Atelier V2 : 16 slots, stats live, dégâts sorts, shell produit
+- [x] Persistence Atelier + bibliothèque de builds + Smart Item Search — PR #44
+- [x] Optimiseur V2 simplifié — PR #45
+- [x] Search Memory + cache exact + seeds — PR #47
+- [x] Lock / Reject + Trouver mieux — PR #48
+- [x] Tours idéaux / objectifs temporels finaux — PR #49
+- [x] Performance finale — PR #50
+- [x] Polish / recette V2 — PR #51, à considérer définitivement clôturée après merge vert
 
 ## Tranche 1 — Persistence Atelier + bibliothèque + Smart Item Search
 
-### Dépendances
+**Statut : livrée par PR #44.**
 
-Atelier #41 mergé.
+Livré :
 
-### Statut
-
-Livrée par la PR #44.
-
-### Scope
-
-- IndexedDB versionné ;
-- `BuildRepository` séparé de l'UI ;
+- IndexedDB versionné et `BuildRepository` séparé de l’UI ;
 - sauvegarder / charger / renommer / dupliquer / supprimer ;
 - autosave du draft courant ;
-- reconstruction d'un `WorkshopBuild` depuis les IDs canoniques ;
-- gestion propre d'un item disparu après changement de données ;
-- vocabulaire déterministe de recherche d'items ;
-- requêtes telles que `multi do crit`, `terre ini`, `eau distance`, `grosse vita res`, `anneau PA multi` ;
+- reconstruction d’un `WorkshopBuild` depuis les IDs canoniques ;
+- gestion d’items disparus après changement de données ;
+- vocabulaire déterministe de recherche d’items ;
 - ranking explicable par tags/raisons ;
 - recherche pré-indexée rapide.
 
-### Hors scope
-
-- `Trouver mieux` ;
-- seeds de solveur ;
-- mémoire des recherches Optimiseur ;
-- Lock/Reject ;
-- refonte de l'onglet Optimiseur.
-
-### Done
-
-- CRUD builds + autosave fiables ;
-- migrations/versionnement couverts ;
-- recherche intelligente déterministe testée ;
-- aucune dépendance optimizer sur simple recherche d'item ;
-- `npm run check`, `npm test`, benchmarks pertinents et CI verts.
-
 ## Tranche 2 — Optimiseur V2 simplifié
 
-### Dépendances
+**Statut : livrée par PR #45.**
 
-PR #44 mergée sur `main@e31843aa74fd5207098966083b4c8f38aee431fb` au démarrage de la tranche.
-
-### Statut
-
-Livrée par la PR #45, mergée avant le démarrage de la Tranche 3.
-
-### Scope livré
-
-Le parcours historique visible est remplacé par :
+Parcours canonique :
 
 ```text
 Classe
@@ -74,186 +46,117 @@ Classe
 → Optimiser
 ```
 
-- Classe issue du catalogue canonique de sorts ;
-- Élément : Terre / Feu / Eau / Air / Multi ;
-- contraintes : PA, PM, PO, Vitalité, Initiative et quatre résistances élémentaires ;
-- objectifs existants : T1, T2, T3, T1–T3, Moyenne, Pire tour ;
-- `Constant` n'est pas créé artificiellement ;
-- la requête est construite par un adaptateur d'orchestration et envoyée au Worker existant ;
-- aucun calcul métier n'est recodé dans l'UI ;
-- les résultats exposent équipement, score, stats et dégâts par tour disponibles ;
-- un résultat peut être reconstruit en `WorkshopBuild` puis ouvert dans l'Atelier ;
-- l'Atelier et sa persistence #44 restent la frontière normale après ouverture d'un résultat.
-
-### Hors scope respecté
-
-- réécriture du solveur ;
-- modification de Candidate Policy ;
-- modification de SetCoreCatalog ;
-- modification des beams/pools ;
-- seeds ou cache de recherches ;
-- Lock / Reject ;
-- `Trouver mieux` ;
-- définition finale de `Constant` ;
-- nouvelles mécaniques de sorts.
-
-### Done
-
-- nouveau parcours principal utilisable ;
-- ancien comportement de calcul conservé via le même contrat Worker et les mêmes moteurs ;
-- aucune logique métier dupliquée dans l'UI ;
-- résultats ouvrables dans l'Atelier via `WorkshopBuild` / `WorkshopController` ;
-- tests ciblés classe / élément / contraintes / objectif / requête / légalité / Atelier / persistence présents ;
-- CI et benchmarks verts sur le HEAD final.
+La requête est construite par l’orchestration UI puis transmise au Worker existant. Aucun calcul métier n’est recodé dans l’UI. Un résultat peut être reconstruit en `WorkshopBuild` et rouvert dans l’Atelier.
 
 ## Tranche 3 — Mémoire des recherches + cache exact + seeds
 
-### Dépendance
+**Statut : livrée par PR #47.**
 
-PR #45 mergée sur le `main@f5cd11661fb0c349db6c3597d5102eca2653fd5a` utilisé comme base stricte.
+Livré :
 
-### Statut
-
-Implémentation portée par la PR #47 `feat: add search memory, exact cache and seeds`. La Tranche 4 reste bloquée jusqu'au merge vert de #47.
-
-### Scope livré dans #47
-
-- repository IndexedDB Search V2 indépendant de la persistence Atelier ;
-- forme canonique `NormalizedSearchQuery` ;
-- fingerprint stable avec vérification d'égalité canonique avant service d'un hit ;
-- versions explicites `data / rules / search` ;
-- version data liée aux snapshots items et sorts ;
-- hit exact compatible consulté **avant** création du Worker optimizer lourd ;
-- résultats persistés ID-only puis réhydratés depuis le catalogue courant ;
-- un item disparu invalide proprement le cache exact ;
-- recherche conservatrice de requêtes proches ;
-- meilleurs builds compatibles utilisés comme seeds dédupliqués ;
-- tout seed est résolu contre les items courants puis repasse par `CompleteBuildEvaluator` avant réutilisation ;
-- le scoring combat des seeds réutilise le moteur combat existant ;
+- repository IndexedDB Search V2 séparé de la persistence Atelier ;
+- `NormalizedSearchQuery` et fingerprint canonique ;
+- versions explicites data / rules / search ;
+- hit exact compatible consulté avant création du Worker lourd ;
+- résultats persistés ID-only puis réhydratés ;
+- invalidation propre si données/règles/items ne sont plus compatibles ;
+- requêtes proches utilisées comme sources de seeds ;
+- tout seed repasse par les évaluateurs courants ;
 - Worker seed séparé du Worker principal ;
-- fusion seed + résultats libres avec déduplication et diversité existante ;
-- la recherche libre set-core + standalone reste inchangée et n'est jamais réduite par les seeds ;
-- erreurs IndexedDB/seeds non bloquantes : fallback systématique vers la recherche libre ;
-- diagnostics cache hit/miss, fingerprint, proximité, seeds tentés/valides/retenus/rejetés ;
-- arrêt manuel conservant les partiels et terminant les deux Workers.
-
-### Hors scope respecté
-
-- modification de `optimizer-worker.js` ;
-- modification du solveur ;
-- modification de `CandidatePolicy` / `CandidatePrefilter` ;
-- modification de `SetCoreCatalog` ;
-- modification des beams/pools ;
-- Lock / Reject ;
-- `Trouver mieux` ;
-- définition de `Constant` ;
-- plage de tours personnalisée ;
-- nouvelles mécaniques de sorts.
-
-### Done
-
-- même requête compatible = aucun recalcul lourd ;
-- requête proche = seeds utilisés sans compromettre qualité/légalité ;
-- chaque seed est réévalué avec les règles et données courantes ;
-- cache incompatible ou incomplet jamais servi ;
-- la voie libre reste disponible indépendamment des seeds ;
-- diagnostics cache hit / miss / seed disponibles ;
-- tests ciblés de fingerprint, versioning, repository ID-only, invalidation, proximité, seeds et fusion présents ;
-- `benchmark:v2`, `benchmark:search` et `benchmark:workshop` verts ;
-- CI finale verte requise avant passage READY.
+- fusion avec déduplication/diversité ;
+- erreur mémoire non bloquante avec fallback vers recherche libre.
 
 ## Tranche 4 — Lock / Reject + Trouver mieux
 
-### Dépendance
+**Statut : livrée par PR #48.**
 
-Ne démarrer qu'après merge vert de la PR #47 depuis un nouveau `main` propre. Ne pas repartir de `feat/v2-search-memory-seeds`.
+Livré :
 
-### Scope
-
-- Lock d'un item comme contrainte stricte de requête ;
-- Reject d'un item comme exclusion stricte ;
-- réoptimisation incrémentale autour d'un résultat ;
-- bouton Atelier `Trouver mieux` ;
-- build Atelier utilisé comme seed/lower bound, pas comme prison sauf slots explicitement lockés ;
-- possibilité de rejeter facilement Dofus/trophées/Prysmaradites.
-
-### Done
-
-- Lock conserve l'item ;
-- Reject garantit son exclusion ;
-- les nouvelles contraintes invalident/réutilisent seulement ce qui est compatible ;
-- aucun patch DOM/Worker global ;
-- résultats finaux repassent par `CompleteBuildEvaluator`.
+- Lock = contrainte stricte d’item ;
+- Reject = exclusion stricte ;
+- build Atelier complet utilisé comme seed/lower bound ;
+- seuls les slots explicitement verrouillés deviennent des contraintes ;
+- round-trip Optimiseur → Atelier conservant les métadonnées utiles ;
+- compatibilité Search Memory inclut Lock/Reject.
 
 ## Tranche 5 — Tours idéaux / objectifs temporels finaux
 
-### Scope
+**Statut : livrée par PR #49.**
 
-- cartes/indicateurs T1, T2, T3 en haut de l'Atelier ;
-- affichage de la rotation exacte par tour ;
-- finalisation de la définition `Constant` ;
-- objectif sur plage de tours personnalisée si le coût reste maîtrisé ;
-- calcul combat seul sur build fixé, sans recherche d'équipement.
+Livré :
 
-### Règle
+- indicateurs T1 / T2 / T3 dans l’Atelier ;
+- rotation exacte T1–T3 sur build fixé ;
+- objectifs T1, T2, T3, cumul, moyenne, pire tour ;
+- `Constant` défini comme moyenne harmonique T1–T3 ;
+- définition partagée par scoring et moteur exact ;
+- aucune recherche d’équipement déclenchée par l’analyse d’un build Atelier fixé.
 
-Ne pas appeler un objectif `Constant` tant que sa définition mathématique n'est pas figée et testée.
-
-### Done
-
-- tours idéaux compréhensibles ;
-- rotation affichable ;
-- objectifs temporels documentés et testés ;
-- benchmark combat non régressé.
+Voir `docs/TEMPORAL_OBJECTIVES_V2.md`.
 
 ## Tranche 6 — Performance finale
 
-### Priorité d'optimisation
+**Statut : livrée par PR #50.**
 
-1. réutiliser tout calcul déjà connu ;
-2. dédupliquer les états combat ;
-3. pré-calculer les vecteurs/items/sets nécessaires ;
-4. limiter le combat exact aux meilleurs candidats ;
-5. pipeline cheap → coarse → precise ;
-6. paralléliser les finalistes entre workers si les benchmarks montrent un gain réel.
+Optimisations retenues uniquement après mesure :
 
-### Interdit
+- réutilisation des enveloppes/caps sûrs de Candidate Search ;
+- score de ranking combat calculé une fois par état unique ;
+- aucune baisse de beam/pool/budget ;
+- fingerprints, scores, états explorés et résultats protégés par tests/benchmarks.
 
-- sacrifier les contraintes ;
-- masquer une régression en réduisant arbitrairement la qualité ;
-- ajouter GPU/WASM sans mesure démontrant le besoin.
-
-### Done
-
-- benchmarks reproductibles avant/après ;
-- qualité/fingerprint protégés ;
-- gains documentés ;
-- stop/finalisation propre des meilleurs résultats déjà connus.
+Voir `docs/PERFORMANCE_V2.md`.
 
 ## Tranche 7 — Polish / recette V2
 
-### Scope
+**Statut : portée par PR #51.**
+
+Scope final :
 
 - cohérence visuelle néo-rétro ;
 - noir `#000000`, gris `#CCCFCA`, rouge `#DC2636` ;
-- hiérarchie visuelle forte sans surcharge cyberpunk ;
+- hiérarchie visuelle Atelier / Optimiseur ;
+- états chargement / vide / erreur explicites ;
 - parcours Atelier ↔ Optimiseur fluide ;
-- mobile/desktop raisonnables ;
-- messages d'erreur/états vides propres ;
-- nettoyage des restes historiques uniquement après preuve qu'ils ne sont plus exécutés ;
-- recette complète et documentation finale.
+- navigation clavier et responsive raisonnables ;
+- nettoyage des anciens entrypoints du shell/service worker uniquement après preuve qu’ils ne sont plus exécutés ;
+- recette navigateur réelle en CI ;
+- documentation finale du runtime V2.
 
-### Done V2
+### Garde-fou métier
 
-La V2 est terminée quand :
+La Tranche 7 ne modifie aucun moteur métier. Un changement métier n’est autorisé que pour un bug bloquant démontré par la recette. Aucun bug de ce type n’a été nécessaire pour le scope final.
 
-1. l'Atelier permet de construire, rechercher, sauvegarder et analyser un stuff ;
-2. l'Optimiseur utilise l'interface simple Classe → Élément → Contraintes → Objectif ;
-3. une recherche identique compatible ressort instantanément ;
-4. une recherche proche réutilise des seeds ;
-5. Lock / Reject / Trouver mieux fonctionnent nativement ;
-6. les tours idéaux et objectifs temporels sont clairs ;
-7. toutes les solutions affichées respectent les contraintes ;
-8. les dégâts proviennent du moteur canonique ;
-9. les benchmarks et la CI sont verts ;
-10. une nouvelle fenêtre peut reprendre le projet en lisant `AGENTS.md`, `PROJECT_STATE.md` et ce document.
+### Recette
+
+Voir `docs/V2_ACCEPTANCE_RECIPE.md`.
+
+La CI standard exécute désormais :
+
+```text
+syntax check
+→ tests complets
+→ recette navigateur V2
+→ benchmark:v2
+→ benchmark:search
+→ benchmark:workshop
+```
+
+## Done V2
+
+La V2 est considérée terminée lorsque le HEAD final de PR #51 valide les points suivants :
+
+1. Atelier : construction, recherche, sauvegarde, analyse et rotation exactes ;
+2. Optimiseur : Classe → Élément → Contraintes → Objectif ;
+3. cache exact compatible ;
+4. seeds de requêtes proches réévalués ;
+5. Lock / Reject / Trouver mieux natifs ;
+6. objectifs temporels finaux et Constant documentés ;
+7. solutions finales conformes aux contraintes et à la légalité ;
+8. dégâts provenant uniquement du moteur canonique ;
+9. benchmarks historiques verts ;
+10. recette navigateur cold start → Atelier → Optimiseur → Atelier verte ;
+11. UI finale cohérente, accessible au clavier et lisible desktop/mobile ;
+12. `README.md`, `PROJECT_STATE.md` et cette roadmap reflètent le runtime réellement exécuté.
+
+Après merge vert de PR #51, **il n’existe plus de Tranche V2 suivante**. Toute nouvelle évolution doit repartir du nouveau `main` comme un nouveau scope produit, de maintenance ou de données.
