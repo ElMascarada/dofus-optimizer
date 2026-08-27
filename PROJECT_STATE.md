@@ -4,110 +4,21 @@ Dernière mise à jour : 2026-08-27
 
 ## État actuel
 
-- dépôt : `ElMascarada/dofus-optimizer`
-- reprendre toujours depuis le `main` mergé et vert au moment où l'agent commence ;
-- base de la tranche actuelle : `main@2b7b11c6f4627ebcc53deb473e554a1e20f76f1e`, merge de la PR #41 — Atelier V2 foundation ;
-- `AGENTS.md` et `docs/V2_COMPLETION_PLAN.md` restent les points d'entrée de reprise ;
-- PR active : #44 — `feat: add workshop persistence and smart item search` ;
-- branche : `feat/v2-workshop-persistence-search` ;
-- la tranche 1 de `docs/V2_COMPLETION_PLAN.md` est fonctionnellement terminée et doit être mergée avant toute tranche suivante.
+- dépôt : `ElMascarada/dofus-optimizer` ;
+- base de la tranche : `main@e31843aa74fd5207098966083b4c8f38aee431fb`, merge de la PR #44 ;
+- PR active : #45 — `feat: add simplified optimizer v2 flow` ;
+- branche : `feat/v2-optimizer-simplified` ;
+- scope strict : **Tranche 2 — Optimiseur V2 simplifié** ;
+- ne pas commencer la Tranche 3 avant merge vert de #45.
 
-## V2 déjà mergée avant #44
+## V2 disponible sur la branche #45
 
-- Fondation V2 et documentation d'architecture.
-- Moteur de sorts/combat générique + registre de mécaniques.
-- Candidate Policy / CandidatePrefilter canoniques.
-- Recherche avec Pareto, réserves spécialistes, contraintes amont, bornes et profils centralisés.
-- SetCoreCatalog 2/3/4 pièces, bonus exacts, profils et voie hybride set-core + standalone.
-- Atelier V2 foundation : shell `[ATELIER] [OPTIMISEUR]`, 16 slots, navigateur d'items, stats live, bonus de panoplie et dégâts de sorts exacts.
-
-## Tranche #44 — Persistence Atelier + bibliothèque + Smart Item Search
-
-Implémenté :
-
-- `js/workshop/build-serialization.js` : snapshot Atelier versionné, sérialisation par IDs canoniques uniquement et migration des anciens objets item ;
-- reconstruction d'un `WorkshopBuild` depuis le catalogue courant avec diagnostics `missingItems`, `incompatibleItems` et état dégradé explicite ;
-- `js/workshop/build-repository.js` : `BuildRepository` séparé de l'UI, IndexedDB versionné en production et `MemoryBuildStore` injectable en tests ;
-- CRUD : sauvegarder, charger, renommer, dupliquer et supprimer ;
-- brouillon courant séparé de la bibliothèque, autosauvegardé avec debounce et flush sur masquage de la page ;
-- les écritures IndexedDB attendent le commit réel de transaction avant d'être déclarées réussies ;
-- version de données mémorisée et signalement d'un build provenant d'un ancien snapshot sans le rejeter automatiquement ;
-- `js/workshop/item-search.js` : index local pré-calculé, parseur déterministe et ranking explicable ;
-- vocabulaire couvert : éléments, multi, Do Crit, initiative, vitalité, résistances, distance/mêlée, PA, PM, PO, slots et recherche par nom/panoplie ;
-- requêtes de référence testées : `multi do crit`, `terre ini`, `eau distance`, `grosse vita res`, `anneau PA multi` ;
-- raisons/tags de ranking visibles dans le navigateur d'items ;
-- aucune recherche d'item et aucun changement manuel d'item ne crée de Worker optimizer ;
-- bibliothèque Atelier intégrée sans faire dépendre `WorkshopBuild` ou `WorkshopController` d'IndexedDB.
-
-## Frontières canoniques
-
-- Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
-- Sorts / dégâts : moteur combat générique + `evaluateSpell`.
-- Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
-- Panoplies : `SetCoreCatalog`.
-- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator`.
-- Persistence Atelier : `BuildRepository` → store IndexedDB injecté.
-- Sérialisation Atelier : IDs canoniques → reconstruction depuis `loadDofusData()`.
-- Smart Item Search : index déterministe local, sans solveur.
-
-## Invariants à préserver
-
-1. L'UI ne recalcule pas le métier.
-2. Un changement manuel d'item Atelier ne lance pas l'optimiseur.
-3. Une recherche d'item Atelier ne lance pas l'optimiseur.
-4. Un build persistant stocke des IDs canoniques, jamais une copie durable du catalogue d'items.
-5. Un item disparu ou devenu incompatible après mise à jour est signalé et ignoré proprement à la reconstruction.
-6. Une contrainte active influence la conservation des candidats avant le solveur final.
-7. Un item utile ne disparaît pas sur score offensif seul.
-8. La voie standalone reste disponible avec les Set Cores.
-9. Toute solution finale repasse par `CompleteBuildEvaluator`.
-10. Le moteur combat générique ne connaît pas directement les classes/sorts spéciaux.
-11. Lock/Reject et seeds devront être des données explicites de requête, pas des hacks DOM/Worker.
-
-## Validation de la tranche #44
-
-Head de code validé avant mise à jour documentaire : `ffcb84066d8760d2f303af36fe03ab53c766ba89`.
-
-Sur Optimizer CI #472 :
-
-- `npm run check` : vert ;
-- `npm test` : **251/251** ;
-- `npm run benchmark:v2` : vert ;
-- `npm run benchmark:search` : vert ;
-- `npm run benchmark:workshop` : vert ;
-- Sync spell icons #95 : vert.
-
-Benchmark Atelier sur snapshot réel, stuff complet, 26 sorts, 30 recalculs :
-
-- médiane : **1,054 ms** ;
-- p95 : **5,237 ms** ;
-- max : **7,874 ms** ;
-- garde CI : p95 < 100 ms.
-
-Smart Item Search sur les **1 093 items** du snapshot réel :
-
-- construction initiale de l'index : **23,381 ms** ;
-- 100 recherches sur les requêtes de référence : médiane **0,204 ms**, p95 **1,320 ms**, max **2,055 ms** ;
-- gardes CI : index < 150 ms et p95 recherche < 25 ms.
-
-La CI du head documentaire final doit encore être verte avant passage READY. Ne pas merger automatiquement.
-
-## Ce qui reste pour finir la V2
-
-Ordre canonique dans `docs/V2_COMPLETION_PLAN.md` :
-
-1. **Optimiseur V2 simplifié** : Classe → Élément → Contraintes → Objectif.
-2. Mémoire des recherches + cache exact + seeds proches.
-3. Lock / Reject + `Trouver mieux` depuis l'Atelier.
-4. Tours idéaux / objectifs temporels finaux, notamment Constant et plage personnalisée.
-5. Performance finale : coarse → precise, cache combat, parallélisation si utile.
-6. Polish néo-rétro + recette V2 complète.
-
-## Prochaine tranche canonique après merge de #44
-
-**Tranche 2 — Optimiseur V2 simplifié**.
-
-Scope attendu :
+- Fondation V2 / moteur combat générique.
+- `CandidatePolicy` / `CandidatePrefilter` canoniques.
+- `SetCoreCatalog` + recherche hybride set-core / standalone.
+- Atelier V2 #41 : 16 slots, stats live et dégâts sorts.
+- Persistence / bibliothèque / Smart Item Search #44.
+- Nouveau parcours Optimiseur visible :
 
 ```text
 Classe
@@ -117,20 +28,72 @@ Classe
 → Optimiser
 ```
 
-- consommer les contrats et moteurs existants ;
-- ne pas réécrire le solveur ;
-- conserver les résultats/fingerprints de calcul ;
-- exposer proprement T1, T2, T3 et les modes temporels déjà supportés ;
-- préparer explicitement Constant/plage personnalisée sans les inventer avant leur tranche dédiée ;
-- ne pas mélanger cette PR avec persistence des recherches, seeds, Lock/Reject ou `Trouver mieux`.
+L'ancien contrôleur `app-experimental.js` reste dans le dépôt mais n'est plus chargé par le parcours produit principal.
+
+## Tranche #45 — Optimiseur V2 simplifié
+
+Implémenté :
+
+- classes issues du catalogue de sorts ;
+- éléments `Terre / Feu / Eau / Air / Multi` ;
+- contraintes `PA / PM / PO / Vitalité / Initiative / Résistances Terre-Feu-Eau-Air` ;
+- objectifs existants `T1 / T2 / T3 / T1–T3 / Moyenne / Pire tour` ;
+- aucune définition artificielle de `Constant` ;
+- `js/optimizer-v2-orchestrator.js` construit le contrat Worker sans calcul métier ;
+- le Worker existant reste la porte d'entrée de `CandidatePolicy`, `SetCoreCatalog`, recherche, moteur combat et `CompleteBuildEvaluator` ;
+- résultats : équipement, score, stats principales et dégâts par tour disponibles ;
+- `Ouvrir dans l’Atelier` reconstruit un `WorkshopBuild` via la frontière Atelier puis le remet à `WorkshopController` ;
+- le build ouvert devient un brouillon Atelier normal et continue d'utiliser l'autosave #44 ;
+- arrêt manuel simple conservant les résultats partiels déjà renvoyés par le Worker.
+
+## Frontières canoniques préservées
+
+- Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
+- Sorts / dégâts : moteur combat générique + `evaluateSpell`.
+- Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
+- Panoplies : `SetCoreCatalog`.
+- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator`.
+- Persistence Atelier : `BuildRepository` → store IndexedDB injecté.
+- Optimiseur V2 UI : formulaire → `createOptimizerV2Request()` → Worker existant.
+
+Aucun changement de solveur, Candidate Policy, SetCoreCatalog, beams/pools, seed/cache, Lock/Reject, `Trouver mieux`, Constant ou mécanique de sort n'est inclus dans #45.
+
+## Validation
+
+Checkpoint code nettoyé `fa805c7bed534d11ee030cff5d2b987f2d4059cf` :
+
+- Optimizer CI #493 : **SUCCESS** ;
+- Sync spell icons #90 : **SUCCESS** ;
+- syntax check : vert ;
+- tests : verts après migration des gardes UI historiques vers le nouveau parcours ;
+- `benchmark:v2` : vert ;
+- `benchmark:search` : vert ;
+- `benchmark:workshop` : vert.
+
+Le passage READY reste conditionné à une CI verte sur le HEAD final de la PR après documentation.
+
+## Invariants à préserver
+
+1. L'UI ne recalcule pas le métier.
+2. Une contrainte active influence la conservation des candidats avant le solveur final.
+3. Toute solution finale repasse par `CompleteBuildEvaluator`.
+4. Un changement/recherche manuel d'item Atelier ne lance pas l'optimiseur.
+5. La persistence Atelier reste ID-only et reconstructible depuis le catalogue courant.
+6. La voie standalone reste disponible avec les Set Cores.
+7. Le moteur combat générique ne connaît pas directement les classes/sorts spéciaux.
+8. Cache/seeds, Lock/Reject et `Trouver mieux` restent hors #45.
+
+## Prochaine tranche canonique après merge vert de #45
+
+**Tranche 3 — Mémoire des recherches + cache exact + seeds proches**.
+
+Ne pas la démarrer depuis la branche #45. Repartir du `main` mergé et vert.
 
 ## Reprise rapide
 
-Un nouvel agent doit lire dans cet ordre :
+Lire dans cet ordre :
 
 1. `AGENTS.md`
 2. `PROJECT_STATE.md`
 3. `docs/V2_COMPLETION_PLAN.md`
-4. puis uniquement les documents/modules nécessaires à sa tranche.
-
-La règle par défaut est : nouvelle branche depuis le `main` mergé et vert, petite PR, checkpoints fréquents, CI verte, READY sans merge automatique sauf instruction explicite.
+4. puis uniquement les modules nécessaires à la tranche.

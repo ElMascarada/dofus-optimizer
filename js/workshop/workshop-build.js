@@ -26,6 +26,11 @@ export const WORKSHOP_SLOTS = Object.freeze([
 ]);
 
 const SLOT_BY_KEY = new Map(WORKSHOP_SLOTS.map((entry) => [entry.key, entry]));
+const SLOT_KEYS_BY_SLOT = new Map();
+for (const descriptor of WORKSHOP_SLOTS) {
+  if (!SLOT_KEYS_BY_SLOT.has(descriptor.slot)) SLOT_KEYS_BY_SLOT.set(descriptor.slot, []);
+  SLOT_KEYS_BY_SLOT.get(descriptor.slot).push(descriptor.key);
+}
 
 function cloneEquipment(equipmentBySlot = {}) {
   return Object.fromEntries(Object.entries(equipmentBySlot).filter(([, item]) => Boolean(item)));
@@ -53,6 +58,34 @@ export function workshopItems(build = {}) {
 
 export function workshopSlot(slotKey) {
   return SLOT_BY_KEY.get(String(slotKey)) || null;
+}
+
+export function createWorkshopBuildFromOptimizerResult({
+  result,
+  classId = null,
+  fmPolicy = WORKSHOP_FM_POLICY
+} = {}) {
+  const equipmentBySlot = {};
+  const usedBySlot = new Map();
+  for (const item of result?.items || []) {
+    const keys = SLOT_KEYS_BY_SLOT.get(item?.slot) || [];
+    const index = usedBySlot.get(item?.slot) || 0;
+    if (!keys[index]) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
+    equipmentBySlot[keys[index]] = item;
+    usedBySlot.set(item.slot, index + 1);
+  }
+
+  const selectedSpells = [...new Set(
+    (result?.combatPlan?.sequence || [])
+      .map((entry) => entry?.spellId ?? entry?.id)
+      .filter(Boolean)
+      .map(String)
+  )];
+  const build = createWorkshopBuild({ classId, equipmentBySlot, fmPolicy, selectedSpells });
+  if (!specialSlotRulesAreValid(workshopItems(build))) {
+    throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');
+  }
+  return build;
 }
 
 export function setWorkshopClass(build, classId) {
