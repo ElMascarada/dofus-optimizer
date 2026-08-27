@@ -2,152 +2,92 @@
 
 Dernière mise à jour : 2026-08-27
 
-## Base de cette tranche
+## Main actuel
 
 - dépôt : `ElMascarada/dofus-optimizer`
-- `main` de départ : `c896c5e2ef426b255e32b4348443602e1fc9f4e9`
-- ce commit est le merge de la PR #40 Set Core Catalog
-- le commit Set Core `e5a1256e16374e3a615b26bbb5ecb39a6b860139` est présent dans l'historique
-- branche active : `feat/v2-workshop-foundation`
-- PR : #41 — `feat: add V2 workshop foundation`
-- statut attendu : Draft pendant implémentation/validation, puis READY si le head final reste vert
+- `main` : `106ffb567c351799a9e0b5d8f55f2acbe1ac1c02`
+- ce commit merge la PR #41 — Atelier V2 foundation
+- branche de handoff en cours : `docs/v2-project-handoff`
 
-## Architecture V2 déjà mergée
+## V2 déjà mergée
 
-- spécification V2 et architecture cible documentées ;
-- moteur de sorts/combat générique et registre de mécaniques ;
-- Candidate Policy / CandidatePrefilter canoniques ;
-- `CompleteBuildEvaluator` comme vérité finale build ;
-- `SetCoreCatalog` canonique 2/3/4 pièces et voie hybride set-core / standalone.
+- Fondation V2 et documentation d'architecture.
+- Moteur de sorts/combat générique + registre de mécaniques.
+- Candidate Policy / CandidatePrefilter canoniques.
+- Recherche avec Pareto, réserves spécialistes, contraintes amont, bornes et profils centralisés.
+- SetCoreCatalog 2/3/4 pièces, bonus exacts, profils et voie hybride set-core + standalone.
+- Atelier V2 foundation : shell `[ATELIER] [OPTIMISEUR]`, 16 slots, navigateur d'items, stats live, bonus de panoplie et dégâts de sorts exacts.
 
-## Tranche Atelier V2 foundation
+## Frontières canoniques
 
-Objectif : disposer d'un Atelier manuel réellement utilisable, sans lancer l'optimiseur automatique.
-
-### Shell produit
-
-`index.html` contient désormais deux vues de premier niveau :
-
-```text
-[ ATELIER ] [ OPTIMISEUR ]
-```
-
-L'Atelier est la vue initiale. L'Optimiseur historique reste dans son propre `#optimizer-view` et conserve `js/app-experimental.js`, ses contrôles, son Worker et son rendu existants.
-
-### État canonique
-
-`js/workshop/workshop-build.js` porte :
-
-- `classId` ;
-- `equipmentBySlot` ;
-- `fmPolicy` ;
-- `selectedSpells` ;
-- 16 emplacements canoniques : coiffe, cape, amulette, 2 anneaux, ceinture, bottes, arme, bouclier, familier/monture et 6 Dofus/trophées/Prysmaradite.
-
-La limite Prysmaradite reste déléguée à `specialSlotRulesAreValid`. L'UI ne redéfinit pas la règle.
-
-### Calculs
-
-Chemin d'un changement d'item :
-
-```text
-WorkshopController
-  -> WorkshopBuild
-  -> WorkshopEvaluator
-    -> CompleteBuildEvaluator
-       structure / conditions / sets / caractéristiques / FM / stats
-    -> evaluateSpell
-       dégâts normaux / critiques / chance critique / mécaniques génériques
-  -> rendu stats + sorts
-```
-
-Aucun module Atelier n'importe ni `optimizer-worker.js`, ni Candidate Search, ni Architecture Search.
-
-La politique FM Atelier est volontairement neutre dans cette fondation (`0% Do sorts`, pas de +Do Crit automatique, pas d'exo supplémentaire). Le modèle conserve `fmPolicy` pour une évolution explicite ultérieure.
-
-### UI ajoutée
-
-- `workshop-controller.js` : orchestration sans DOM métier ;
-- `equipment-grid.js` : rendu des 16 slots ;
-- `item-browser.js` : filtre par slot + recherche par nom + icône + type/niveau + stats + panoplie ;
-- `stats-panel.js` : PA, PM, PO, Vitalité, Initiative, éléments, Puissance, Critique, Do Crit, dommages, résistances et panoplies actives ;
-- `spell-panel.js` : normal min-max, critique min-max, probabilité critique ;
-- `workshop-app.js` : bootstrap de la vue et wiring des composants ;
-- `styles-workshop.css` : fondation néo-rétro noir `#000000`, gris `#CCCFCA`, rouge `#DC2636`.
-
-## Tests Atelier
-
-`tests/workshop.test.mjs` couvre les 10 invariants demandés :
-
-1. équiper/remplacer/retirer ;
-2. deux anneaux distincts ;
-3. six slots Dofus ;
-4. restriction Prysmaradite ;
-5. bonus de panoplie exact ;
-6. stats après changement ;
-7. dégâts modifiés par les stats ;
-8. critique ;
-9. changement d'item sans Worker optimizer ;
-10. shell Optimiseur historique conservé.
-
-Checkpoint CI fonctionnel `934659c85afb65bfcefdec7fe94a23bd0d77fb50` :
-
-- `npm run check` : vert ;
-- `npm test` : **240/240** ;
-- `npm run benchmark:v2` : vert ;
-- `npm run benchmark:search` : vert ;
-- `npm run benchmark:workshop` : vert ;
-- GitHub Actions `Optimizer CI` run #453 (`33044268861`) : vert.
-
-## Performance Atelier observée
-
-Benchmark Node 22 sur runner GitHub, snapshot réel, stuff complet, alternance de deux coiffes, 30 recalculs, 26 sorts offensifs évalués :
-
-- médiane : **0,637 ms** ;
-- p95 : **1,124 ms** ;
-- maximum : **1,317 ms**.
-
-Le benchmark échoue si le p95 dépasse 100 ms. Le temps mesuré exclut le chargement initial des JSON et cible uniquement le chemin interactif attendu : item connu → stats + dégâts unitaires.
+- Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
+- Sorts / dégâts : moteur combat générique + `evaluateSpell`.
+- Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
+- Panoplies : `SetCoreCatalog`.
+- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator`.
+- Catalogue UI : `loadDofusData()`.
 
 ## Invariants à préserver
 
-1. L'Atelier ne lance jamais une recherche d'équipements sur un simple changement d'item.
-2. `CompleteBuildEvaluator` reste la vérité des stats, conditions, panoplies et FM.
-3. `evaluateSpell` / moteur combat reste la vérité des dégâts affichés.
-4. Les règles de slots spéciales ne sont pas recodées dans les composants UI.
-5. L'Optimiseur historique reste fonctionnel jusqu'à sa migration explicite.
-6. `SetCoreCatalog` reste lecture seule depuis l'UI si une tranche future l'expose.
-7. Le catalogue d'items UI provient uniquement de `loadDofusData()`.
+1. L'UI ne recalcule pas le métier.
+2. Un changement manuel d'item Atelier ne lance pas l'optimiseur.
+3. Une contrainte active influence la conservation des candidats avant le solveur final.
+4. Un item utile ne disparaît pas sur score offensif seul.
+5. La voie standalone reste disponible avec les Set Cores.
+6. Toute solution finale repasse par `CompleteBuildEvaluator`.
+7. Le moteur combat générique ne connaît pas directement les classes/sorts spéciaux.
+8. Lock/Reject et seeds devront être des données explicites de requête, pas des hacks DOM/Worker.
 
-## Hors scope confirmé
+## Validation actuelle
 
-- IndexedDB / sauvegarde / bibliothèque de builds ;
-- recherche sémantique `multi do crit`, `terre ini`, etc. ;
-- Trouver mieux ;
-- Lock / Reject ;
-- mémoire des recherches / seeds ;
-- nouvelle Candidate Policy ;
-- nouveau Set Core engine ;
-- refonte de l'Optimiseur ;
-- nouvelle mécanique de classe.
+Après #41 :
 
-## Préparation recommandée pour la PR suivante
+- `npm run check` : vert ;
+- `npm test` : 240/240 ;
+- `npm run benchmark:v2` : vert ;
+- `npm run benchmark:search` : vert ;
+- `npm run benchmark:workshop` : vert ;
+- Optimizer CI #455 : verte ;
+- Sync spell icons #78 : verte.
 
-Priorité logique : **persistence Atelier / bibliothèque de builds** derrière un repository IndexedDB versionné. `WorkshopBuild` est déjà sérialisable conceptuellement et `WorkshopController` fournit une frontière naturelle pour charger/sauvegarder sans contaminer `CompleteBuildEvaluator`.
+Benchmark Atelier observé sur la CI #41, stuff complet + 26 sorts + 30 changements d'item :
 
-Une tranche ultérieure pourra ensuite ajouter la recherche intelligente d'items, puis `Trouver mieux` / seeds, sans changer les responsabilités des panneaux UI actuels.
+- médiane : 0,637 ms ;
+- p95 : 1,124 ms ;
+- max : 1,317 ms ;
+- garde CI : p95 < 100 ms.
+
+## Ce qui reste pour finir la V2
+
+Ordre canonique dans `docs/V2_COMPLETION_PLAN.md` :
+
+1. Persistence Atelier + bibliothèque de builds + recherche intelligente d'items.
+2. Optimiseur V2 simplifié : Classe → Élément → Contraintes → Objectif.
+3. Mémoire des recherches + cache exact + seeds proches.
+4. Résultats interactifs Lock / Reject + `Trouver mieux` depuis l'Atelier.
+5. Tours idéaux / objectifs temporels finaux, notamment Constant et plage personnalisée.
+6. Performance finale : coarse → precise, cache combat, parallélisation si utile.
+7. Polish néo-rétro + recette V2 complète.
+
+## Prochaine tranche après cette PR de handoff
+
+**Persistence Atelier / bibliothèque + Smart Item Search**.
+
+Scope attendu :
+
+- IndexedDB versionné ;
+- sauvegarder / charger / renommer / dupliquer / supprimer ;
+- autosave du draft courant ;
+- recherche déterministe `multi do crit`, `terre ini`, `eau distance`, etc. ;
+- aucun `Trouver mieux`, seed de solveur, Lock/Reject ou refonte Optimiseur dans cette tranche.
 
 ## Reprise rapide
 
-Lire dans cet ordre :
+Un nouvel agent doit lire dans cet ordre :
 
-1. `PROJECT_STATE.md` ;
-2. `docs/OPTIMIZER_V2_SPEC.md` ;
-3. `docs/ARCHITECTURE_TARGET.md` ;
-4. `docs/MIGRATION_PLAN.md` ;
-5. `js/workshop/workshop-build.js` ;
-6. `js/workshop/workshop-controller.js` ;
-7. `js/workshop/workshop-evaluator.js` ;
-8. `js/workshop/workshop-app.js` ;
-9. `tests/workshop.test.mjs` ;
-10. `scripts/benchmark-workshop.mjs`.
+1. `AGENTS.md`
+2. `PROJECT_STATE.md`
+3. `docs/V2_COMPLETION_PLAN.md`
+4. puis uniquement les documents/modules nécessaires à sa tranche.
+
+La règle par défaut est : nouvelle branche depuis le `main` mergé et vert, petite PR, checkpoints fréquents, CI verte, READY sans merge automatique sauf instruction explicite.
