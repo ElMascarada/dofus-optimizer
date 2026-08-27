@@ -7,6 +7,9 @@ import { applySetBonuses } from '../js/sets.js';
 import { isPrysmaradite } from '../js/build-legality.js';
 import { GENERIC_OFFENSE_KEYS, positiveConstraintKeys } from './candidate-policy.js';
 
+const branchEnvelopeCache = new WeakMap();
+const offensiveEnvelopeCache = new WeakMap();
+
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
   return Number.isFinite(value) ? value : 0;
@@ -218,6 +221,24 @@ export function createBranchFeasibilityEnvelope({
   };
 }
 
+function cachedBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets }) {
+  if (!remainingGroups || typeof remainingGroups !== 'object') {
+    return createBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets });
+  }
+  let entries = branchEnvelopeCache.get(remainingGroups);
+  if (!entries) {
+    entries = [];
+    branchEnvelopeCache.set(remainingGroups, entries);
+  }
+  const match = entries.find((entry) => entry.profilesFor === profilesFor
+    && entry.constraints === constraints
+    && entry.sets === sets);
+  if (match) return match.value;
+  const value = createBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets });
+  entries.push({ profilesFor, constraints, sets, value });
+  return value;
+}
+
 export function branchFeasibility({
   items = [],
   remainingGroups = [],
@@ -228,7 +249,7 @@ export function branchFeasibility({
   currentStats = null,
   envelope = null
 } = {}) {
-  const prepared = envelope || createBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets });
+  const prepared = envelope || cachedBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets });
   const keys = prepared.keys || [];
   if (!keys.length) return { feasible: true, key: null, actual: 0, maximum: Infinity, target: 0 };
   const current = currentStats || staticBuildStats(items, setsById);
@@ -268,6 +289,33 @@ function forgeableSlotCount() {
   return SLOT_RULES.reduce((sum, rule) => sum + (FM_ELIGIBLE_SLOTS.has(rule.id) ? Number(rule.count || 0) : 0), 0);
 }
 
+function offensiveEnvelope({ remainingGroups, profilesFor, policy, sets }) {
+  let entries = offensiveEnvelopeCache.get(remainingGroups);
+  if (!entries) {
+    entries = [];
+    offensiveEnvelopeCache.set(remainingGroups, entries);
+  }
+  const match = entries.find((entry) => entry.profilesFor === profilesFor
+    && entry.policy === policy
+    && entry.sets === sets);
+  if (match) return match.value;
+
+  const relevant = new Set([
+    ...policy.paretoKeys,
+    ...GENERIC_OFFENSE_KEYS,
+    ...policy.elements,
+    ...policy.elements.map((element) => `damage${element[0].toUpperCase()}${element.slice(1)}`)
+  ]);
+  const keys = [...relevant];
+  const value = {
+    remaining: remainingProfileCaps(remainingGroups, profilesFor, keys),
+    setCaps: positiveSetBonusCaps(sets, keys),
+    forgeable: forgeableSlotCount()
+  };
+  entries.push({ profilesFor, policy, sets, value });
+  return value;
+}
+
 export function offensiveUpperBound({
   items = [],
   remainingGroups = [],
@@ -276,20 +324,14 @@ export function offensiveUpperBound({
   sets = [],
   fmPolicy = {}
 } = {}) {
-  const relevant = new Set([
-    ...policy.paretoKeys,
-    ...GENERIC_OFFENSE_KEYS,
-    ...policy.elements,
-    ...policy.elements.map((element) => `damage${element[0].toUpperCase()}${element.slice(1)}`)
-  ]);
-  const keys = [...relevant];
   const current = optimisticCurrentStats(items, policy);
-  const remaining = remainingProfileCaps(remainingGroups, profilesFor, keys);
+  const envelope = offensiveEnvelope({ remainingGroups, profilesFor, policy, sets });
+  const remaining = envelope.remaining;
   if (!current.bounded || !remaining.bounded || remaining.impossibleShape) return Infinity;
   for (const [key, value] of Object.entries(remaining.caps)) {
     current.stats[key] = Number(current.stats[key] || 0) + Number(value || 0);
   }
-  addPositive(current.stats, positiveSetBonusCaps(sets, keys));
+  addPositive(current.stats, envelope.setCaps);
 
   const activeElements = policy.elements.length ? policy.elements : ['earth', 'fire', 'water', 'air'];
   for (const element of activeElements) {
@@ -297,11 +339,10 @@ export function offensiveUpperBound({
       + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
   }
 
-  const forgeable = forgeableSlotCount();
   current.stats.spellDamagePct = Number(current.stats.spellDamagePct || 0)
-    + forgeable * Math.max(0, Number(fmPolicy?.spellDamagePct || 0));
+    + envelope.forgeable * Math.max(0, Number(fmPolicy?.spellDamagePct || 0));
   current.stats.critDamage = Number(current.stats.critDamage || 0)
-    + forgeable * Math.max(0, Number(fmPolicy?.critDamageAmount ?? 8));
+    + envelope.forgeable * Math.max(0, Number(fmPolicy?.critDamageAmount ?? 8));
   current.stats.crit = Number(current.stats.crit || 0) + 100;
 
   const value = evaluateObjectiveUpperBound({
