@@ -5,89 +5,84 @@ Dernière mise à jour : 2026-08-27
 ## État actuel
 
 - dépôt : `ElMascarada/dofus-optimizer` ;
-- base de la tranche : `main@e31843aa74fd5207098966083b4c8f38aee431fb`, merge de la PR #44 ;
-- PR active : #45 — `feat: add simplified optimizer v2 flow` ;
-- branche : `feat/v2-optimizer-simplified` ;
-- scope strict : **Tranche 2 — Optimiseur V2 simplifié** ;
-- ne pas commencer la Tranche 3 avant merge vert de #45.
+- base de la tranche : `main@f5cd11661fb0c349db6c3597d5102eca2653fd5a`, merge vert de la PR #45 ;
+- PR active : #47 — `feat: add search memory, exact cache and seeds` ;
+- branche : `feat/v2-search-memory-seeds` ;
+- scope strict : **Tranche 3 — Mémoire des recherches + cache exact + seeds** ;
+- ne pas commencer la Tranche 4 avant merge vert de #47.
 
-## V2 disponible sur la branche #45
+## V2 déjà mergée avant #47
 
 - Fondation V2 / moteur combat générique.
 - `CandidatePolicy` / `CandidatePrefilter` canoniques.
 - `SetCoreCatalog` + recherche hybride set-core / standalone.
-- Atelier V2 #41 : 16 slots, stats live et dégâts sorts.
-- Persistence / bibliothèque / Smart Item Search #44.
-- Nouveau parcours Optimiseur visible :
+- Atelier V2 : 16 slots, stats live, dégâts sorts, persistence, bibliothèque et Smart Item Search.
+- Optimiseur V2 simplifié #45 : `Classe → Élément → Contraintes → Objectif → Optimiser`.
+- Ouverture d'un résultat Optimiseur en `WorkshopBuild` via la frontière Atelier.
 
-```text
-Classe
-→ Élément
-→ Contraintes
-→ Objectif
-→ Optimiser
-```
+## Tranche #47 — Search Memory V2
 
-L'ancien contrôleur `app-experimental.js` reste dans le dépôt mais n'est plus chargé par le parcours produit principal.
+Implémenté sur la branche :
 
-## Tranche #45 — Optimiseur V2 simplifié
+- `js/search-memory/search-query.js` : `NormalizedSearchQuery` canonique, sérialisation stable et fingerprint versionné ;
+- versions explicites `data / rules / search` ; la version data dépend des snapshots items + sorts, la version rules du runtime produit et la version search de l'algorithme de mémoire ;
+- `js/search-memory/search-repository.js` : repository IndexedDB séparé de l'UI et du solveur, avec `MemorySearchStore` injectable en tests ;
+- résultats persistés en **IDs d'items uniquement**, puis réhydratés depuis le catalogue courant ;
+- un item disparu invalide proprement le hit exact au lieu de servir un résultat obsolète ;
+- un hit exact compatible est servi avant création de `optimizer-worker.js`, donc sans recalcul lourd ;
+- recherche conservatrice de requêtes proches : versions, classe, élément, mode temporel, objectif, FM, scénario, profil et contraintes structurelles restent compatibles ;
+- extraction dédupliquée de builds connus comme seeds ;
+- `js/search-memory/seed-worker.js` : réhydratation et **réévaluation obligatoire de chaque seed avec `CompleteBuildEvaluator` et les règles courantes**, puis scoring combat avec le moteur existant ;
+- `js/search-memory/search-result-merge.js` : fusion dédupliquée seed + recherche libre, sans réduire ni remplacer la voie set-core/standalone existante ;
+- `optimizer-worker.js`, `CandidatePolicy`, `SetCoreCatalog`, solver, beams et pools restent inchangés ;
+- diagnostics `cacheHit`, fingerprint, requêtes proches, seeds tentés/valides/retenus/rejetés ;
+- une erreur IndexedDB ou seed n'empêche jamais la recherche libre de continuer ;
+- l'arrêt manuel termine le Worker principal et le Worker seed tout en conservant les résultats partiels disponibles.
 
-Implémenté :
-
-- classes issues du catalogue de sorts ;
-- éléments `Terre / Feu / Eau / Air / Multi` ;
-- contraintes `PA / PM / PO / Vitalité / Initiative / Résistances Terre-Feu-Eau-Air` ;
-- objectifs existants `T1 / T2 / T3 / T1–T3 / Moyenne / Pire tour` ;
-- aucune définition artificielle de `Constant` ;
-- `js/optimizer-v2-orchestrator.js` construit le contrat Worker sans calcul métier ;
-- le Worker existant reste la porte d'entrée de `CandidatePolicy`, `SetCoreCatalog`, recherche, moteur combat et `CompleteBuildEvaluator` ;
-- résultats : équipement, score, stats principales et dégâts par tour disponibles ;
-- `Ouvrir dans l’Atelier` reconstruit un `WorkshopBuild` via la frontière Atelier puis le remet à `WorkshopController` ;
-- le build ouvert devient un brouillon Atelier normal et continue d'utiliser l'autosave #44 ;
-- arrêt manuel simple conservant les résultats partiels déjà renvoyés par le Worker.
-
-## Frontières canoniques préservées
+## Frontières canoniques
 
 - Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
-- Sorts / dégâts : moteur combat générique + `evaluateSpell`.
+- Sorts / dégâts : moteur combat générique + `evaluateSpell` / combat turn optimizer.
 - Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
 - Panoplies : `SetCoreCatalog`.
+- Recherche libre : `optimizer-worker.js` inchangé.
 - Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator`.
-- Persistence Atelier : `BuildRepository` → store IndexedDB injecté.
-- Optimiseur V2 UI : formulaire → `createOptimizerV2Request()` → Worker existant.
-
-Aucun changement de solveur, Candidate Policy, SetCoreCatalog, beams/pools, seed/cache, Lock/Reject, `Trouver mieux`, Constant ou mécanique de sort n'est inclus dans #45.
-
-## Validation
-
-Checkpoint code nettoyé `fa805c7bed534d11ee030cff5d2b987f2d4059cf` :
-
-- Optimizer CI #493 : **SUCCESS** ;
-- Sync spell icons #90 : **SUCCESS** ;
-- syntax check : vert ;
-- tests : verts après migration des gardes UI historiques vers le nouveau parcours ;
-- `benchmark:v2` : vert ;
-- `benchmark:search` : vert ;
-- `benchmark:workshop` : vert.
-
-Le passage READY reste conditionné à une CI verte sur le HEAD final de la PR après documentation.
+- Persistence Atelier : `BuildRepository` → IndexedDB dédié.
+- Mémoire Optimiseur : `NormalizedSearchQuery` → `SearchMemoryRepository` → IndexedDB Search V2.
+- Seeds : résultat ID-only proche → catalogue courant → `CompleteBuildEvaluator` → moteur combat → fusion avec recherche libre.
 
 ## Invariants à préserver
 
 1. L'UI ne recalcule pas le métier.
-2. Une contrainte active influence la conservation des candidats avant le solveur final.
-3. Toute solution finale repasse par `CompleteBuildEvaluator`.
-4. Un changement/recherche manuel d'item Atelier ne lance pas l'optimiseur.
-5. La persistence Atelier reste ID-only et reconstructible depuis le catalogue courant.
-6. La voie standalone reste disponible avec les Set Cores.
-7. Le moteur combat générique ne connaît pas directement les classes/sorts spéciaux.
-8. Cache/seeds, Lock/Reject et `Trouver mieux` restent hors #45.
+2. Un hit exact n'est servi que si la requête canonique et les versions data/rules/search sont compatibles.
+3. Les résultats persistants de recherche stockent des IDs canoniques, pas des copies durables des items.
+4. Tout seed est réhydraté depuis le catalogue courant puis réévalué avant réutilisation.
+5. Les seeds complètent la recherche libre ; ils ne réduisent aucun pool/beam et ne remplacent ni Set Cores ni standalone.
+6. Toute solution recalculée repasse par `CompleteBuildEvaluator`.
+7. Une contrainte active influence la conservation des candidats avant le solveur final.
+8. Un changement/recherche manuel d'item Atelier ne lance pas l'optimiseur.
+9. Lock/Reject et `Trouver mieux` restent hors #47.
+10. `Constant` et les plages de tours personnalisées restent hors #47.
 
-## Prochaine tranche canonique après merge vert de #45
+## Validation de #47
 
-**Tranche 3 — Mémoire des recherches + cache exact + seeds proches**.
+HEAD code intégré avant documentation : `6ea16824dcf251a44071b8319d1291c5a81aee22`.
 
-Ne pas la démarrer depuis la branche #45. Repartir du `main` mergé et vert.
+Optimizer CI #517 : **SUCCESS** :
+
+- syntax check / `npm run check` : vert ;
+- tests : verts, y compris fingerprint/versioning, hit exact ID-only, invalidation, proximité, réévaluation des seeds, fusion et arrêt dual-worker ;
+- `benchmark:v2` : vert ;
+- `benchmark:search` : vert ;
+- `benchmark:workshop` : vert.
+
+La CI du HEAD documentaire final doit encore être verte avant passage READY. Ne pas merger automatiquement.
+
+## Prochaine tranche canonique après merge vert de #47
+
+**Tranche 4 — Lock / Reject + `Trouver mieux`**.
+
+Ne pas la démarrer depuis la branche #47. Repartir du `main` mergé et vert.
 
 ## Reprise rapide
 

@@ -10,7 +10,8 @@ Ce document est la roadmap de fin de course. Il doit permettre à une nouvelle f
 - [x] SetCoreCatalog / recherche hybride set-core + standalone
 - [x] Atelier V2 foundation : 16 slots, stats live, dégâts sorts, shell produit
 - [x] Persistence Atelier + bibliothèque de builds + Smart Item Search (PR #44)
-- [ ] Optimiseur V2 simplifié — implémenté par la PR #45, à considérer terminé après merge vert de cette PR
+- [x] Optimiseur V2 simplifié (PR #45)
+- [ ] Mémoire des recherches + cache exact + seeds — implémentée par la PR #47, à considérer terminée après merge vert de cette PR
 
 ## Tranche 1 — Persistence Atelier + bibliothèque + Smart Item Search
 
@@ -59,9 +60,9 @@ PR #44 mergée sur `main@e31843aa74fd5207098966083b4c8f38aee431fb` au démarrage
 
 ### Statut
 
-Implémentation portée par la PR #45 `feat: add simplified optimizer v2 flow`. La Tranche 3 reste bloquée jusqu'au merge vert de #45.
+Livrée par la PR #45, mergée avant le démarrage de la Tranche 3.
 
-### Scope livré dans #45
+### Scope livré
 
 Le parcours historique visible est remplacé par :
 
@@ -103,35 +104,69 @@ Classe
 - aucune logique métier dupliquée dans l'UI ;
 - résultats ouvrables dans l'Atelier via `WorkshopBuild` / `WorkshopController` ;
 - tests ciblés classe / élément / contraintes / objectif / requête / légalité / Atelier / persistence présents ;
-- CI et benchmarks doivent être verts sur le HEAD final avant passage READY.
+- CI et benchmarks verts sur le HEAD final.
 
 ## Tranche 3 — Mémoire des recherches + cache exact + seeds
 
 ### Dépendance
 
-Ne démarrer qu'après merge vert de la PR #45 depuis un nouveau `main` propre.
+PR #45 mergée sur le `main@f5cd11661fb0c349db6c3597d5102eca2653fd5a` utilisé comme base stricte.
 
-### Scope
+### Statut
 
-- repository IndexedDB des requêtes et résultats ;
+Implémentation portée par la PR #47 `feat: add search memory, exact cache and seeds`. La Tranche 4 reste bloquée jusqu'au merge vert de #47.
+
+### Scope livré dans #47
+
+- repository IndexedDB Search V2 indépendant de la persistence Atelier ;
 - forme canonique `NormalizedSearchQuery` ;
-- fingerprint stable ;
-- invalidation par versions data/rules/search ;
-- hit exact = résultat immédiat ;
-- recherche de requêtes proches ;
-- meilleurs builds connus utilisés comme seeds ;
-- tout seed réévalué avec les règles courantes ;
-- fusion seed + set-core + standalone sans réduire la voie libre.
+- fingerprint stable avec vérification d'égalité canonique avant service d'un hit ;
+- versions explicites `data / rules / search` ;
+- version data liée aux snapshots items et sorts ;
+- hit exact compatible consulté **avant** création du Worker optimizer lourd ;
+- résultats persistés ID-only puis réhydratés depuis le catalogue courant ;
+- un item disparu invalide proprement le cache exact ;
+- recherche conservatrice de requêtes proches ;
+- meilleurs builds compatibles utilisés comme seeds dédupliqués ;
+- tout seed est résolu contre les items courants puis repasse par `CompleteBuildEvaluator` avant réutilisation ;
+- le scoring combat des seeds réutilise le moteur combat existant ;
+- Worker seed séparé du Worker principal ;
+- fusion seed + résultats libres avec déduplication et diversité existante ;
+- la recherche libre set-core + standalone reste inchangée et n'est jamais réduite par les seeds ;
+- erreurs IndexedDB/seeds non bloquantes : fallback systématique vers la recherche libre ;
+- diagnostics cache hit/miss, fingerprint, proximité, seeds tentés/valides/retenus/rejetés ;
+- arrêt manuel conservant les partiels et terminant les deux Workers.
+
+### Hors scope respecté
+
+- modification de `optimizer-worker.js` ;
+- modification du solveur ;
+- modification de `CandidatePolicy` / `CandidatePrefilter` ;
+- modification de `SetCoreCatalog` ;
+- modification des beams/pools ;
+- Lock / Reject ;
+- `Trouver mieux` ;
+- définition de `Constant` ;
+- plage de tours personnalisée ;
+- nouvelles mécaniques de sorts.
 
 ### Done
 
 - même requête compatible = aucun recalcul lourd ;
 - requête proche = seeds utilisés sans compromettre qualité/légalité ;
-- cache incompatible jamais servi ;
+- chaque seed est réévalué avec les règles et données courantes ;
+- cache incompatible ou incomplet jamais servi ;
+- la voie libre reste disponible indépendamment des seeds ;
 - diagnostics cache hit / miss / seed disponibles ;
-- benchmarks recherche verts.
+- tests ciblés de fingerprint, versioning, repository ID-only, invalidation, proximité, seeds et fusion présents ;
+- `benchmark:v2`, `benchmark:search` et `benchmark:workshop` verts ;
+- CI finale verte requise avant passage READY.
 
 ## Tranche 4 — Lock / Reject + Trouver mieux
+
+### Dépendance
+
+Ne démarrer qu'après merge vert de la PR #47 depuis un nouveau `main` propre. Ne pas repartir de `feat/v2-search-memory-seeds`.
 
 ### Scope
 

@@ -170,7 +170,8 @@ test('baseline: manual stop keeps partial results in the simplified production p
 
   assert.match(index, /optimizer-v2-app\.js/);
   assert.match(app, /function stopSearch\(\)/);
-  assert.match(app, /worker\.terminate\(\)/);
+  assert.match(app, /main\.terminate\(\)/);
+  assert.match(app, /seeds\.terminate\(\)/);
   assert.match(app, /latestPartialResults/);
   assert.match(app, /Recherche arrêtée/);
 });

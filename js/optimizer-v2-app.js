@@ -4,6 +4,10 @@ import {
   createOptimizerV2Request,
   OPTIMIZER_V2_ELEMENTS
 } from './optimizer-v2-orchestrator.js';
+import { SearchMemoryRepository } from './search-memory/search-repository.js';
+import { createSearchVersions, normalizeSearchQuery } from './search-memory/search-query.js';
+import { seedDescriptorsFromNearby } from './search-memory/search-seeds.js';
+import { mergeSearchOutputs, withExactCacheDiagnostics } from './search-memory/search-result-merge.js';
 import { createWorkshopBuildFromOptimizerResult } from './workshop/workshop-build.js';
 import { OPEN_WORKSHOP_BUILD_EVENT } from './workshop/workshop-events.js';
 
@@ -32,10 +36,18 @@ const CONSTRAINT_INPUTS = Object.freeze({
 let dataset = null;
 let spellData = null;
 let worker = null;
+let seedWorker = null;
+let preparing = false;
 let activeRequestId = 0;
 let displayedBuilds = [];
 let latestPartialResults = [];
+let latestSeedOutput = { results: [], diagnostics: {} };
+let pendingMainOutput = null;
+let pendingSeedOutput = null;
 let currentPayload = null;
+let currentQuery = null;
+let currentMemoryContext = { fingerprint: '', nearbyRecords: 0, seedCount: 0 };
+const searchMemory = new SearchMemoryRepository();
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -100,23 +112,65 @@ function renderResults(builds = [], emptyText = 'Aucun build certifié ne satisf
     : `<div class="empty">${escapeHtml(emptyText)}</div>`;
 }
 
+function isSearching() {
+  return preparing || Boolean(worker) || Boolean(seedWorker);
+}
+
 function setIdle() {
-  const finished = worker;
+  const main = worker;
+  const seeds = seedWorker;
   worker = null;
-  if (finished) finished.terminate();
+  seedWorker = null;
+  preparing = false;
+  if (main) main.terminate();
+  if (seeds) seeds.terminate();
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
   optimizeButton.textContent = 'Optimiser';
 }
 
 function stopSearch() {
-  if (!worker) return;
-  worker.terminate();
-  worker = null;
+  if (!isSearching()) return;
   activeRequestId++;
-  renderResults(latestPartialResults, 'Aucun build valide trouvé avant l’arrêt.');
-  diagnosticsRoot.textContent = latestPartialResults.length
-    ? `Recherche arrêtée · ${latestPartialResults.length} résultat${latestPartialResults.length > 1 ? 's' : ''} conservé${latestPartialResults.length > 1 ? 's' : ''}.`
+  const partial = mergeSearchOutputs(
+    { results: latestPartialResults, diagnostics: { stoppedEarly: true } },
+    latestSeedOutput,
+    {
+      topN: currentPayload?.topN || 10,
+      diversityMode: currentPayload?.diversityMode || 'gear',
+      ...currentMemoryContext
+    }
+  );
+  renderResults(partial.results, 'Aucun build valide trouvé avant l’arrêt.');
+  diagnosticsRoot.textContent = partial.results.length
+    ? `Recherche arrêtée · ${partial.results.length} résultat${partial.results.length > 1 ? 's' : ''} conservé${partial.results.length > 1 ? 's' : ''}.`
     : 'Recherche arrêtée.';
+  setIdle();
+}
+
+function finalDiagnostics(output = {}) {
+  const combat = output.diagnostics?.combatRefine;
+  const memory = output.diagnostics?.searchMemory || {};
+  const memoryLabel = memory.cacheHit
+    ? 'cache exact'
+    : `${Number(memory.seedsValid || 0)}/${Number(memory.seedsAttempted || 0)} seeds valides`;
+  return `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryLabel}`;
+}
+
+function finalizeIfReady(requestId) {
+  if (requestId !== activeRequestId || !pendingMainOutput || pendingSeedOutput === null) return;
+  const output = mergeSearchOutputs(pendingMainOutput, pendingSeedOutput, {
+    topN: currentPayload?.topN || 10,
+    diversityMode: currentPayload?.diversityMode || 'gear',
+    ...currentMemoryContext
+  });
+  latestPartialResults = output.results || [];
+  renderResults(output.results || []);
+  diagnosticsRoot.textContent = finalDiagnostics(output);
+  if (currentQuery) {
+    searchMemory.remember(currentQuery, output).catch(() => {
+      // La mémoire est une optimisation : une erreur IndexedDB ne bloque jamais un résultat valide.
+    });
+  }
   setIdle();
 }
 
@@ -126,7 +180,7 @@ function handleWorkerMessage(event, requestId) {
   if (message.type === 'progress') {
     const progress = message.progress || {};
     if (Array.isArray(progress.partialResults) && progress.partialResults.length) latestPartialResults = progress.partialResults;
-    diagnosticsRoot.textContent = `${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · meilleur ${fmt(progress.best)}`;
+    diagnosticsRoot.textContent = `${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · meilleur ${fmt(progress.best)} · cache miss`;
     return;
   }
   if (message.type === 'error') {
@@ -136,17 +190,42 @@ function handleWorkerMessage(event, requestId) {
     return;
   }
   if (message.type !== 'result') return;
-  const output = message.output || {};
-  latestPartialResults = output.results || [];
-  renderResults(output.results || []);
-  const combat = output.diagnostics?.combatRefine;
-  diagnosticsRoot.textContent = `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''}`;
-  setIdle();
+  pendingMainOutput = message.output || { results: [], diagnostics: {} };
+  finalizeIfReady(requestId);
 }
 
-function runSearch() {
-  if (worker) return stopSearch();
+function handleSeedWorkerMessage(event, requestId) {
+  const message = event.data || {};
+  if (requestId !== activeRequestId || message.requestId !== requestId) return;
+  if (message.type === 'seed-error') {
+    pendingSeedOutput = {
+      results: [],
+      diagnostics: {
+        seedEvaluation: {
+          attempted: currentMemoryContext.seedCount,
+          valid: 0,
+          rejected: { 'seed-worker-error': currentMemoryContext.seedCount }
+        }
+      }
+    };
+    latestSeedOutput = pendingSeedOutput;
+    finalizeIfReady(requestId);
+    return;
+  }
+  if (message.type !== 'seed-result') return;
+  pendingSeedOutput = message.output || { results: [], diagnostics: {} };
+  latestSeedOutput = pendingSeedOutput;
+  finalizeIfReady(requestId);
+}
+
+async function runSearch() {
+  if (isSearching()) return stopSearch();
   if (!dataset || !spellData) return;
+  const requestId = ++activeRequestId;
+  preparing = true;
+  optimizeButton.disabled = true;
+  optimizeButton.textContent = 'Vérification…';
+
   try {
     const payload = createOptimizerV2Request({
       dataset,
@@ -159,13 +238,51 @@ function runSearch() {
     });
     if (!payload.classSpells.some((spell) => (spell.hits || []).length > 0)) {
       renderResults([], `Aucun sort offensif ${ELEMENT_LABELS[elementSelect.value] || elementSelect.value} certifié pour cette classe.`);
+      setIdle();
       return;
     }
 
     currentPayload = payload;
     latestPartialResults = [];
+    latestSeedOutput = { results: [], diagnostics: {} };
     displayedBuilds = [];
-    const requestId = ++activeRequestId;
+    pendingMainOutput = null;
+    pendingSeedOutput = null;
+    const versions = createSearchVersions({ dataset, spellData, rulesVersion: APP_VERSION });
+    const query = normalizeSearchQuery({ payload, versions });
+    currentQuery = query;
+
+    let exact = null;
+    let nearby = [];
+    let memoryError = null;
+    try {
+      exact = await searchMemory.recallExact(query, { items: dataset.items });
+      if (requestId !== activeRequestId) return;
+      if (exact.hit) {
+        const output = withExactCacheDiagnostics(exact.output, { fingerprint: exact.fingerprint });
+        renderResults(output.results || []);
+        diagnosticsRoot.textContent = `Résultat instantané · cache exact · ${output.results?.length || 0} build${output.results?.length > 1 ? 's' : ''}.`;
+        setIdle();
+        return;
+      }
+      nearby = await searchMemory.findNearby(query, { limit: 5, maxDistance: 0.35 });
+    } catch (error) {
+      memoryError = error;
+      nearby = [];
+    }
+    if (requestId !== activeRequestId) return;
+
+    const seedBuilds = seedDescriptorsFromNearby(nearby, { maxBuilds: 8 });
+    currentMemoryContext = {
+      fingerprint: exact?.fingerprint || '',
+      nearbyRecords: nearby.length,
+      seedCount: seedBuilds.length
+    };
+    pendingSeedOutput = seedBuilds.length
+      ? null
+      : { results: [], diagnostics: { seedEvaluation: { attempted: 0, valid: 0, rejected: {} } } };
+    preparing = false;
+
     worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
     worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
     worker.addEventListener('error', (event) => {
@@ -175,12 +292,25 @@ function runSearch() {
       setIdle();
     });
 
+    if (seedBuilds.length) {
+      seedWorker = new Worker(new URL('./search-memory/seed-worker.js', import.meta.url), { type: 'module' });
+      seedWorker.addEventListener('message', (event) => handleSeedWorkerMessage(event, requestId));
+      seedWorker.addEventListener('error', () => {
+        if (requestId !== activeRequestId) return;
+        handleSeedWorkerMessage({ data: { type: 'seed-error', requestId } }, requestId);
+      });
+      seedWorker.postMessage({ type: 'evaluate-seeds', requestId, payload, seedBuilds });
+    }
+
+    optimizeButton.disabled = false;
     optimizeButton.textContent = 'Arrêter';
     resultsRoot.innerHTML = '<div class="empty">Recherche en cours…</div>';
-    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts disponibles.`;
+    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · cache ${memoryError ? 'indisponible' : 'miss'} · ${seedBuilds.length} seed${seedBuilds.length > 1 ? 's' : ''}.`;
     worker.postMessage({ type: 'optimize', requestId, payload });
   } catch (error) {
+    if (requestId !== activeRequestId) return;
     renderResults([], error instanceof Error ? error.message : String(error));
+    setIdle();
   }
 }
 
@@ -220,7 +350,7 @@ async function init() {
 }
 
 classSelect.addEventListener('change', () => {
-  if (worker) stopSearch();
+  if (isSearching()) stopSearch();
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
 });
 optimizeButton.addEventListener('click', runSearch);
