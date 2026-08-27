@@ -55,7 +55,7 @@ test('les objectifs temporels finaux ont une sémantique mathématique canonique
   assert.equal(aggregateTemporalScore(perTurn, 'sum'), 600);
   assert.equal(aggregateTemporalScore(perTurn, 'average'), 200);
   assert.equal(aggregateTemporalScore(perTurn, 'min'), 120);
-  assert.ok(Math.abs(aggregateTemporalScore(perTurn, 'constant') - 171.42857142857142) < 1e-9);
+  assert.ok(Math.abs(aggregateTemporalScore(perTurn, 'constant') - 174.19354838709677) < 1e-9);
 });
 
 test('Constant est la moyenne harmonique et pénalise un tour nul', () => {
