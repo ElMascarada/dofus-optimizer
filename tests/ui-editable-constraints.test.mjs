@@ -4,10 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
 
-test('PA and PM constraints are editable minimums', () => {
-  assert.match(index, /id="min-ap"[^>]*min="6"[^>]*value="12"/);
-  assert.match(index, /id="min-mp"[^>]*min="0"[^>]*value="6"/);
-  assert.doesNotMatch(index, /id="min-ap"[^>]*readonly/);
-  assert.doesNotMatch(index, /id="min-mp"[^>]*readonly/);
-  assert.match(index, /tu peux demander 11\/5/);
+test('PA, PM et initiative sont des minimums éditables dans le parcours V2', () => {
+  assert.match(index, /id="optimizer-min-ap"[^>]*min="0"[^>]*value="12"/);
+  assert.match(index, /id="optimizer-min-mp"[^>]*min="0"[^>]*value="6"/);
+  assert.match(index, /id="optimizer-min-initiative"[^>]*min="0"[^>]*value="0"/);
+  assert.doesNotMatch(index, /id="optimizer-min-ap"[^>]*readonly/);
+  assert.doesNotMatch(index, /id="optimizer-min-mp"[^>]*readonly/);
+  assert.doesNotMatch(index, /id="optimizer-min-initiative"[^>]*readonly/);
 });
