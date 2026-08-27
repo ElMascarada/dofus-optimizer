@@ -1,9 +1,12 @@
 import {
+  clearWorkshopRejectedItems,
   createWorkshopBuild,
   equipWorkshopItem,
+  rejectWorkshopItem,
   removeWorkshopItem,
   setWorkshopClass,
-  setWorkshopSelectedSpells
+  setWorkshopSelectedSpells,
+  setWorkshopSlotLocked
 } from './workshop-build.js';
 import { evaluateWorkshopBuild } from './workshop-evaluator.js';
 
@@ -45,6 +48,21 @@ export class WorkshopController {
 
   setSelectedSpells(spellIds) {
     this.build = setWorkshopSelectedSpells(this.build, spellIds);
+    return this.refresh();
+  }
+
+  setSlotLocked(slotKey, locked = true) {
+    this.build = setWorkshopSlotLocked(this.build, slotKey, locked);
+    return this.refresh();
+  }
+
+  reject(slotKey) {
+    this.build = rejectWorkshopItem(this.build, slotKey);
+    return this.refresh();
+  }
+
+  clearRejected() {
+    this.build = clearWorkshopRejectedItems(this.build);
     return this.refresh();
   }
 
