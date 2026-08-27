@@ -1,5 +1,10 @@
 import { spellDamageVariants } from './spells.js';
 import {
+  aggregateTemporalScore,
+  isTemporalMode,
+  turnsForTemporalMode
+} from './temporal-objectives.js';
+import {
   combatModifierSignature,
   expireCombatModifiers,
   statsWithCombatModifiers
@@ -27,16 +32,10 @@ function positiveInt(value, fallback = 1) {
   return Math.max(1, Math.floor(num(value, fallback)));
 }
 
-function activeTurns(turnMode = 't1') {
-  if (turnMode === 't2') return [2];
-  if (turnMode === 't3') return [3];
-  if (turnMode === 'sum' || turnMode === 'average' || turnMode === 'min') return [1, 2, 3];
-  return [1];
-}
-
 function objectiveTurns(objective = {}) {
-  const validMode = ['t1', 't2', 't3', 'sum', 'average', 'min'].includes(objective.turnMode);
-  if (validMode) return { turnMode: objective.turnMode, turns: activeTurns(objective.turnMode) };
+  if (isTemporalMode(objective.turnMode)) {
+    return { turnMode: objective.turnMode, turns: turnsForTemporalMode(objective.turnMode) };
+  }
   const legacyCount = Math.max(1, Math.min(3, positiveInt(objective.turns, 1)));
   return {
     turnMode: legacyCount === 1 ? 't1' : `legacy-${legacyCount}`,
@@ -342,13 +341,12 @@ function finalScore(state, objective) {
     const spent = state.sequence.reduce((sum, entry) => sum + num(entry.apCost), 0);
     return state.damage / Math.max(1, spent);
   }
-  if (objective.turnMode === 'average') return state.damage / Math.max(1, objective.activeTurns.length);
-  if (objective.turnMode === 'min') {
-    const perTurn = {};
-    for (const entry of state.sequence) perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
-    return Math.min(...objective.activeTurns.map((turn) => perTurn[turn] || 0));
+  if (!isTemporalMode(objective.turnMode)) return state.damage;
+  const perTurn = Object.fromEntries(objective.activeTurns.map((turn) => [turn, 0]));
+  for (const entry of state.sequence) {
+    perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
   }
-  return state.damage;
+  return aggregateTemporalScore(perTurn, objective.turnMode, objective.activeTurns);
 }
 
 export function optimizeCombatSequence({
