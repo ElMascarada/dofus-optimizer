@@ -33,6 +33,21 @@ async function waitFor(fn, { timeout = timeoutMs, interval = 100, label = 'condi
   throw new Error(`Timeout: ${label}${lastError ? ` · ${lastError.message}` : ''}`);
 }
 
+async function stopProcess(child) {
+  if (!child || child.exitCode !== null || child.signalCode) return;
+  await new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
+      resolve();
+    }, 1_500);
+    child.once('exit', () => {
+      clearTimeout(timer);
+      resolve();
+    });
+    child.kill('SIGTERM');
+  });
+}
+
 class CdpClient {
   constructor(url) {
     this.url = url;
@@ -208,7 +223,10 @@ try {
   console.log(JSON.stringify({ shell, equipped, optimizerReady, searchState, roundTrip }, null, 2));
 } finally {
   client?.close();
-  browser.kill('SIGTERM');
-  server.kill('SIGTERM');
-  rmSync(profile, { recursive: true, force: true });
+  await Promise.all([stopProcess(browser), stopProcess(server)]);
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 80 });
+  } catch {
+    // Le profil est éphémère ; une suppression tardive ne doit pas masquer le résultat de recette.
+  }
 }
