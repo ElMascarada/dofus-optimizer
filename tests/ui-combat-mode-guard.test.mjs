@@ -3,14 +3,18 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+const orchestrator = await readFile(new URL('../js/optimizer-v2-orchestrator.js', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../service-worker.js', import.meta.url), 'utf8');
 
 test('primary UI exposes only the automatic combat solver', () => {
-  assert.match(index, /<option value="combat" selected>Optimisation automatique · meilleur tour<\/option>/);
-  assert.doesNotMatch(index, /<option value="manual">/);
-  assert.match(index, /addEventListener\('click', forceAutomaticMode, true\)/);
-  assert.match(index, /addEventListener\('pageshow', forceAutomaticMode\)/);
-  assert.match(index, /AUTO ROTATION · build \d{8}-\d+/);
+  assert.match(index, /id="optimizer-class"/);
+  assert.match(index, /id="optimizer-element"/);
+  assert.match(index, /id="optimizer-turn-mode"/);
+  assert.match(index, /id="optimizer-run"/);
+  assert.doesNotMatch(index, /value="manual"/);
+  assert.doesNotMatch(index, /id="spell-list"/);
+  assert.match(orchestrator, /objectiveMode: 'combat'/);
+  assert.match(orchestrator, /searchProfile: 'BALANCED'/);
 });
 
 test('fresh service worker activates immediately', () => {
