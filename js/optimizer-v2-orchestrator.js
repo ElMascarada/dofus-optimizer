@@ -71,10 +71,11 @@ export function createOptimizerV2Request({
   const rejected = new Set(normalizedRejected);
   const conflict = requiredItemIds.find((itemId) => rejected.has(itemId));
   if (conflict) throw new Error(`Un item ne peut pas être à la fois locké et rejeté (${conflict}).`);
+  const catalogItems = dataset?.items || [];
 
   return {
     classId: normalizedClassId,
-    items: (dataset?.items || []).filter((item) => !rejected.has(String(item?.id))),
+    items: normalizedRejected.length ? catalogItems.filter((item) => !rejected.has(String(item?.id))) : catalogItems,
     sets: dataset?.sets || [],
     selections: [],
     classSpells,
