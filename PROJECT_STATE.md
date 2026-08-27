@@ -5,91 +5,84 @@ Dernière mise à jour : 2026-08-27
 ## État actuel
 
 - dépôt : `ElMascarada/dofus-optimizer` ;
-- base de la tranche : `main@be1d8a956fd24cb6059b89815472d0528be9e9ba`, merge vert de la PR #47 ;
-- PR active : #48 — `feat: add V2 lock reject and find better flow` ;
-- branche : `feat/v2-lock-reject-find-better` ;
-- scope strict : **Tranche 4 — Lock / Reject + Trouver mieux** ;
-- `Constant` et les objectifs temporels finaux restent explicitement hors scope.
+- base stricte de la tranche : `main@6d94dbb32f416b0ac3caccbc212f5eb2e48e2cd0`, merge vert de la PR #48 ;
+- PR active : #49 — `feat: finalize V2 temporal objectives and ideal turns` ;
+- branche : `feat/v2-final-turn-objectives` ;
+- scope strict : **Tranche 5 — Tours idéaux / objectifs temporels finaux** ;
+- Tranche 6 Performance finale et Tranche 7 polish/recette restent explicitement hors scope.
 
-## V2 déjà mergée avant #48
+## V2 déjà mergée avant #49
 
 - Fondation V2 / moteur combat générique.
 - `CandidatePolicy` / `CandidatePrefilter` canoniques.
 - `SetCoreCatalog` + recherche hybride set-core / standalone.
 - Atelier V2 : 16 slots, stats live, dégâts sorts, persistence, bibliothèque et Smart Item Search.
 - Optimiseur V2 simplifié : `Classe → Élément → Contraintes → Objectif → Optimiser`.
-- Ouverture d'un résultat Optimiseur en `WorkshopBuild` via la frontière Atelier.
-- Search Memory V2 #47 : `NormalizedSearchQuery`, cache exact IndexedDB, requêtes proches, seeds ID-only réévalués par les moteurs courants.
+- Search Memory V2 : cache exact IndexedDB, requêtes proches, seeds ID-only réévalués par les moteurs courants.
+- Lock / Reject / Trouver mieux : contraintes explicites de requête et seed Atelier sans enfermer les slots non lockés.
 
-## Tranche #48 — Lock / Reject + Trouver mieux
+## Tranche #49 — Tours idéaux / objectifs temporels finaux
 
 Implémenté sur la branche :
 
-- `WorkshopBuild` porte désormais `lockedSlots` et `rejectedItemIds` comme état applicatif explicite ;
-- Lock est attaché à un slot Atelier stable et survit à la persistence ; retirer ou rejeter l'item retire le lock correspondant ;
-- Reject retire l'item du build courant et l'ajoute à une blacklist persistée ; un bouton permet d'effacer les rejets ;
-- contrôles Lock / Reject directement sur chaque slot, notamment les six slots Dofus / trophées / Prysmaradites ;
-- bouton Atelier **Trouver mieux**, actif seulement pour un stuff complet avec classe ;
-- `workshopOptimizationContext()` dérive du build courant :
-  - les seuls slots explicitement lockés en `lockedItemsBySlot` ;
-  - les rejets en `rejectedItemIds` ;
-  - le build complet courant comme seed ID-only ;
-- `createOptimizerV2Request()` transforme les locks en `requiredItemIds`, déjà imposés strictement par la recherche d'architectures ;
-- les items rejetés sont exclus du catalogue transmis à la recherche ; un conflit Lock + Reject est refusé explicitement ;
-- `NormalizedSearchQuery` passe en schéma 2 : locks et rejects participent au fingerprint et à la compatibilité des requêtes proches ;
-- le seed Atelier ne participe pas au fingerprint : il reste une proposition/lower bound, jamais une contrainte implicite sur les slots non lockés ;
-- les seeds proches et le seed Atelier sont dédupliqués, puis tout seed qui manque un required item ou contient un reject est éliminé avant réévaluation ;
-- un cache exact compatible reste réutilisable ; avec `Trouver mieux`, le résultat en cache est conservé et seul le seed Atelier est réévalué avant fusion ;
-- la fusion cache exact + seed conserve explicitement `cacheHit=true` dans les diagnostics, avec test de non-régression ;
-- les résultats ouverts dans l'Atelier replacent les items lockés dans leurs slots Atelier exacts et conservent la blacklist ;
-- aucune modification de `CandidatePolicy`, `SetCoreCatalog`, des beams/pools ou de `CompleteBuildEvaluator` ;
-- aucun patch global DOM / Worker.
+- nouveau module canonique `js/temporal-objectives.js` pour les objectifs T1, T2, T3, cumul, moyenne, pire tour et `Constant` ;
+- `Constant` est défini mathématiquement comme la moyenne harmonique T1–T3 : `3 / (1/T1 + 1/T2 + 1/T3)` ; si un tour vaut 0, le score Constant vaut 0 ;
+- la même définition est utilisée par le scoring rapide (`spells.js`) et le moteur de rotation exact (`turn-optimizer.js`) ;
+- `Constant` est traité comme un objectif multi-tour par le refiner existant, sans modification de ses budgets, beams ou pools ;
+- l'Atelier expose T1/T2/T3 et `Constant` sur un stuff complet ;
+- l'Atelier affiche une rotation exacte T1–T3 avec dégâts, PA, ordre des sorts et conservation des buffs/états/charges/cooldowns inter-tour ;
+- l'analyse Atelier utilise uniquement `optimizeCombatSequence` sur le build fixé ; elle n'appelle ni Candidate Search, ni Architecture Search, ni l'Optimizer Worker ;
+- `WorkshopEvaluator` reste un recalcul léger : l'analyse exacte des tours est déclenchée séparément au rendu d'un build complet puis mémorisée pour ce rendu ;
+- l'horizon certifié reste T1–T3 ; aucune plage arbitraire au-delà de T3 n'est ajoutée dans cette tranche afin de ne pas empiéter sur la Tranche Performance ;
+- définition et choix documentés dans `docs/TEMPORAL_OBJECTIVES_V2.md` ;
+- tests ciblés ajoutés dans `tests/temporal-objectives-v2.test.mjs`.
 
 ## Frontières canoniques
 
 - Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
-- Sorts / dégâts : moteur combat générique + `evaluateSpell` / combat turn optimizer.
+- Sorts / dégâts : moteur combat générique + `evaluateSpell` / `optimizeCombatSequence`.
+- Objectifs temporels : `js/temporal-objectives.js`.
 - Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
 - Panoplies : `SetCoreCatalog`.
 - Recherche libre : `optimizer-worker.js`.
-- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator`.
-- Persistence Atelier : `BuildRepository` → IndexedDB dédié, snapshots Atelier schéma 2 pour Lock/Reject.
-- Mémoire Optimiseur : `NormalizedSearchQuery` schéma 2 → `SearchMemoryRepository` → IndexedDB Search V2.
-- Seeds : résultat ID-only compatible → catalogue courant → filtre Lock/Reject → `CompleteBuildEvaluator` → moteur combat → fusion avec recherche libre.
+- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator` ; l'analyse exacte T1–T3 est une lecture combat séparée sur build fixé.
+- Persistence Atelier : `BuildRepository` → IndexedDB.
+- Mémoire Optimiseur : `NormalizedSearchQuery` → `SearchMemoryRepository` → IndexedDB Search V2.
 
 ## Invariants à préserver
 
 1. L'UI ne recalcule pas le métier.
-2. Un Lock devient une contrainte stricte de requête et l'item doit rester présent dans tout résultat accepté.
-3. Un Reject exclut strictement l'item du catalogue de la recherche et des seeds réutilisés.
-4. Seuls les slots explicitement lockés deviennent des contraintes ; le reste du stuff Atelier reste libre d'évoluer.
-5. Le build Atelier courant est un seed/lower bound, pas une prison.
-6. Un hit exact n'est servi que si requête canonique, Lock/Reject et versions data/rules/search sont compatibles.
-7. Tout seed est réhydraté depuis le catalogue courant puis réévalué avant réutilisation.
-8. Les seeds complètent la recherche libre ; ils ne réduisent aucun pool/beam et ne remplacent ni Set Cores ni standalone.
-9. Toute solution recalculée repasse par `CompleteBuildEvaluator`.
-10. Un changement/recherche manuel d'item Atelier ne lance pas l'optimiseur ; seul `Trouver mieux` déclenche explicitement la réoptimisation.
-11. `Constant` et les plages/objectifs temporels finaux ne font pas partie de #48.
+2. Les dégâts affichés proviennent du moteur combat canonique.
+3. La définition de chaque objectif temporel est centralisée dans `temporal-objectives.js`.
+4. `Constant` ne doit jamais diverger entre scoring rapide et rotation exacte.
+5. Un simple changement/recherche manuel d'item Atelier ne lance jamais Candidate Search, Architecture Search ou l'Optimizer Worker.
+6. L'analyse T1–T3 d'un stuff fixé peut lancer le moteur combat, mais pas la recherche d'équipement.
+7. Les états inter-tour doivent être conservés dans une rotation T1–T3 cohérente.
+8. Aucun budget de recherche ne doit être augmenté pour cette tranche.
+9. La plage personnalisée > T3 n'est pas implémentée tant que son coût/horizon d'état n'est pas traité explicitement.
+10. La Tranche Performance finale et le polish UI global restent hors #49.
 
-## Validation de #48
+## Validation de #49
 
-Checkpoint code complet avant documentation finale : `d3c2c98cec621d0789b533846dcc3958fe440094`.
+Validation fonctionnelle sur le code de tranche :
 
-Optimizer CI #521 sur le checkpoint précédent `5705293577a1d1edf83f3be896eac7881a930196` : validations métier terminées avec succès :
+- `npm run check` : vert ;
+- tests historiques + tests temporels : verts après correction d'un fixture de test de moyenne harmonique ;
+- `npm run benchmark:v2` : vert ;
+- `npm run benchmark:search` : vert ;
+- `npm run benchmark:workshop` : vert ;
+- `npm run report:spell-support` : vert sur CI #529 ;
+- CI standard #528 : verte sur `c41c9caedfb90bd0ca68471d00a85524ffeb75c0` ;
+- CI #529 avec vérification temporaire explicite `report:spell-support` : verte sur `85ed16aa4da52deedc24526a4c42085540136bca` ;
+- le workflow CI temporairement enrichi pour cette vérification a ensuite été restauré exactement à sa version de départ.
 
-- syntax check / `npm run check` : vert ;
-- tests historiques + tests Lock/Reject/Trouver mieux : verts ;
-- `benchmark:v2` : vert ;
-- `benchmark:search` : vert ;
-- `benchmark:workshop` : vert.
+Le HEAD documentaire final doit encore repasser la CI standard verte avant passage READY. Ne pas merger automatiquement.
 
-Après ce checkpoint, un correctif étroit a uniquement préservé la provenance `cacheHit=true` lors de la fusion d'un cache exact avec le seed Atelier et ajouté son test dédié. La CI du HEAD final documentaire doit être verte avant passage READY. Ne pas merger automatiquement.
+## Prochaine tranche canonique après merge vert de #49
 
-## Prochaine tranche canonique après merge vert de #48
+**Tranche 6 — Performance finale**, uniquement après instruction explicite et depuis un nouveau `main` mergé et vert.
 
-**Tranche 5 — objectifs temporels finaux / Constant**, uniquement après instruction explicite et depuis un nouveau `main` mergé et vert.
-
-Ne pas commencer cette tranche depuis la branche #48.
+Ne pas commencer cette tranche depuis la branche #49.
 
 ## Reprise rapide
 

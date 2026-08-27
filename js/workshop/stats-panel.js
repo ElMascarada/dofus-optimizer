@@ -1,4 +1,5 @@
 import { escapeHtml, formatNumber, statLabel, statSuffix } from './ui-format.js';
+import { analyzeWorkshopTurns } from './workshop-turn-analysis.js';
 
 const PRIMARY_STATS = [
   'ap', 'mp', 'range', 'vit', 'initiative',
@@ -22,6 +23,25 @@ function setBonusText(bonus = {}) {
     .join(' · ');
 }
 
+function turnIndicators(evaluation) {
+  const analysis = analyzeWorkshopTurns(evaluation);
+  if (!analysis) {
+    return `
+      <h4>Tours idéaux</h4>
+      <div class="workshop-empty-inline">Complète les 16 slots pour calculer la rotation T1–T3 sur ce build fixé.</div>`;
+  }
+  const turns = analysis.turns.map(({ turn, damage }) => `
+    <div class="workshop-stat">
+      <span>T${turn}</span>
+      <b>${formatNumber(damage)}</b>
+    </div>`).join('');
+  return `
+    <h4>Tours idéaux · rotation T1–T3</h4>
+    <div class="workshop-stat-grid">${turns}
+      <div class="workshop-stat"><span>Constant</span><b>${formatNumber(analysis.metrics.constant)}</b></div>
+    </div>`;
+}
+
 export function renderStatsPanel(root, evaluation) {
   if (!evaluation?.valid) {
     const message = evaluation?.reason === 'item-condition'
@@ -42,6 +62,8 @@ export function renderStatsPanel(root, evaluation) {
 
   root.innerHTML = `
     <div class="workshop-panel-heading"><div><span class="eyebrow">BUILD LIVE</span><h3>Statistiques</h3></div><span class="workshop-speed">${formatNumber(evaluation.recalculationMs, 2)} ms</span></div>
+    ${turnIndicators(evaluation)}
+    <h4>Statistiques du build</h4>
     <div class="workshop-stat-grid">${tiles(evaluation.stats, PRIMARY_STATS)}</div>
     <h4>Résistances</h4>
     <div class="workshop-stat-grid workshop-res-grid">${tiles(evaluation.stats, RESISTANCES)}</div>

@@ -133,7 +133,7 @@ export function refineCombatTurns({
 } = {}) {
   const requestedTopN = Math.max(1, Number(topN || 10));
   const turnMode = combatObjective?.turnMode || 't1';
-  const multiTurn = ['sum', 'average', 'min'].includes(turnMode);
+  const multiTurn = ['sum', 'average', 'min', 'constant'].includes(turnMode);
   const combatBudget = getSearchProfile(searchProfile).combat;
   let explored = 0;
   let evaluated = 0;

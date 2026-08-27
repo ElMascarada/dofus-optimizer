@@ -1,5 +1,6 @@
 import { addStats, cloneStats, constraintDeficits, stat } from './stats.js';
 import { applyPassiveModifiers } from './passives.js';
+import { aggregateTemporalScore, turnsForTemporalMode } from './temporal-objectives.js';
 
 const ELEMENT_STAT = {
   earth: 'earth',
@@ -182,10 +183,7 @@ export function spellDamageUpperBound(spell, stats, turn = 1) {
 }
 
 export function selectedTurnsForMode(mode) {
-  if (mode === 't1') return [1];
-  if (mode === 't2') return [2];
-  if (mode === 't3') return [3];
-  return [1, 2, 3];
+  return turnsForTemporalMode(mode);
 }
 
 export function requiredApForTurn(selections = [], turn = 1) {
@@ -200,12 +198,7 @@ export function requiredApForTurn(selections = [], turn = 1) {
 }
 
 function aggregateTurnScores(perTurn, turnMode) {
-  const values = Object.values(perTurn);
-  let score = values[0] || 0;
-  if (turnMode === 'sum') score = values.reduce((a, b) => a + b, 0);
-  if (turnMode === 'average') score = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
-  if (turnMode === 'min') score = Math.min(...values);
-  return score;
+  return aggregateTemporalScore(perTurn, turnMode);
 }
 
 function minimumBaseApMpMismatches(stats = {}, constraints = {}) {

@@ -2,7 +2,7 @@ import { BASE_CHARACTER } from '../config.js';
 import { evaluateCompleteBuild } from '../complete-build-evaluator.js';
 import { evaluateSpell } from '../spell-evaluator.js';
 import { spellsForBreed } from '../spell-selection.js';
-import { workshopItems } from './workshop-build.js';
+import { workshopBuildIsComplete, workshopItems } from './workshop-build.js';
 
 function clock() {
   return globalThis.performance?.now?.() ?? Date.now();
@@ -44,17 +44,18 @@ export function evaluateWorkshopBuild({
       stats: null,
       activeSets: [],
       spells: [],
+      combatSpells: [],
+      complete: workshopBuildIsComplete(build),
       recalculationMs: Math.max(0, clock() - startedAt)
     };
   }
 
   const stats = evaluation.result.effectiveStatsByTurn?.[1] || evaluation.result.stats;
-  const spells = build?.classId
-    ? spellsForBreed(spellData, build.classId)
-      .filter((spell) => (spell.hits || []).length > 0)
-      .map((spell) => ({ spell, evaluation: evaluateSpell(spell, stats, { turn: 1 }) }))
-      .filter((entry) => entry.evaluation.supported)
-    : [];
+  const classSpells = build?.classId ? spellsForBreed(spellData, build.classId) : [];
+  const spells = classSpells
+    .filter((spell) => (spell.hits || []).length > 0)
+    .map((spell) => ({ spell, evaluation: evaluateSpell(spell, stats, { turn: 1 }) }))
+    .filter((entry) => entry.evaluation.supported);
 
   return {
     valid: true,
@@ -62,10 +63,13 @@ export function evaluateWorkshopBuild({
     items,
     stats: evaluation.result.stats,
     effectiveStats: stats,
+    effectiveStatsByTurn: evaluation.result.effectiveStatsByTurn || {},
     activeSets: evaluation.result.activeSets || [],
     characteristics: evaluation.result.characteristics,
     fm: evaluation.result.fm,
     spells,
+    combatSpells: classSpells.filter((spell) => spell?.combatRelevant !== false),
+    complete: workshopBuildIsComplete(build),
     recalculationMs: Math.max(0, clock() - startedAt)
   };
 }

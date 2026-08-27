@@ -70,7 +70,7 @@
             <label class="field">Tour / agrégation
               <select id="optimizer-turn-mode"></select>
             </label>
-            <p class="hint">T1, T2, T3, T1–T3, moyenne et pire tour utilisent les objectifs déjà supportés. Constant sera défini dans une tranche dédiée.</p>
+            <p class="hint">T1/T2/T3 ciblent un tour, T1–T3 cumule, Moyenne calcule la moyenne arithmétique et Pire tour maximise le minimum. Constant = moyenne harmonique T1–T3 : 3 / (1/T1 + 1/T2 + 1/T3), avec 0 si un tour vaut 0.</p>
           </section>
 
           <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
