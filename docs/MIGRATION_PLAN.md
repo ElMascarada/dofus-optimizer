@@ -1,10 +1,18 @@
 # Dofus Optimizer V2 — Plan de migration
 
+## État au 26 août 2026
+
+Les tranches Fondation V2, moteur de sorts/combat générique et Candidate Policy / recherche d'équipements sont mergées sur `main`.
+
+La tranche active ajoute maintenant un **SetCoreCatalog canonique** et formalise la recherche hybride minimale **set-core + standalone**. Elle avance volontairement une partie de l'ancienne PR 6, car la Candidate Policy fournit désormais la frontière propre nécessaire. Elle ne dépend ni d'IndexedDB ni des seeds.
+
+Ce découpage ne change pas la cible : la recherche hybride complète restera **seeds + set cores + recherche libre**, avec une seule évaluation finale de vérité.
+
 ## Règle générale
 
 La migration est découpée en PRs courtes. Une PR d'architecture ne change pas volontairement les résultats du solveur. Tout changement de score, de Top N ou de rotation doit être isolé, mesuré et justifié séparément.
 
-## PR 0 — Fondation V2 (cette PR)
+## PR 0 — Fondation V2
 
 Objectif : rendre le dépôt suffisamment lisible et protégé pour commencer la migration.
 
@@ -75,7 +83,29 @@ Objectif : rendre la politique de recherche lisible sans réécrire le solveur.
 5. conserver explicitement des voies pour PA/PM/PO/Vita/Initiative/résistances ;
 6. comparer résultats et benchmark avant/après chaque extraction.
 
+État : terminé et mergé. La Candidate Policy porte maintenant Pareto, réserves spécialistes/contraintes, profils de recherche et diagnostics.
+
 Toute modification des valeurs de beam appartient à une PR performance séparée.
+
+## Tranche active — SetCoreCatalog + recherche hybride set-core / standalone
+
+Objectif : transformer les données réelles de panoplies en noyaux réutilisables sans rendre le solveur dépendant des panoplies.
+
+Étapes :
+
+1. générer automatiquement les combinaisons légales de 2/3/4 pièces ;
+2. agréger `stats items + bonus de panoplie exact atteint` ;
+3. profiler les cores sur les axes élémentaires, crit/do-crit, initiative, vita, résistances, mêlée/distance, PA/PM/PO ;
+4. éliminer uniquement les dominances prouvables et conserver les conditions différées pour validation finale ;
+5. injecter les membres des cores retenus via la Candidate Policy avec `reason: "set-core"` ;
+6. utiliser les mêmes cores comme ancres de la recherche d'architectures ;
+7. conserver une voie standalone indépendante dans chaque recherche ;
+8. exposer compatibilité core/core, diagnostics de génération, pertinence, injection et origine de recherche ;
+9. comparer qualité, branches et temps avec/sans cores sur les scénarios de référence.
+
+Gate : suite Node, `benchmark:v2` et `benchmark:search` verts ; un core doit pouvoir battre le standalone et le standalone doit pouvoir battre les cores.
+
+Hors scope de cette tranche : seeds, IndexedDB, Atelier, Lock/Reject, mémoire locale et nouvelles mécaniques de classe.
 
 ## PR 4 — Persistence IndexedDB
 
@@ -105,19 +135,17 @@ Objectif : utiliser la mémoire des calculs comme accélérateur, pas seulement 
 
 Gate : un seed ne peut jamais contourner contraintes/conditions.
 
-## PR 6 — Recherche hybride
+## PR 6 — Recherche hybride complète
 
-Objectif : formaliser trois voies : seed, cores de panoplies, recherche libre.
+Objectif : terminer la formalisation des trois voies : seed, cores de panoplies, recherche libre.
 
-Étapes :
+La tranche SetCoreCatalog aura déjà livré la voie set-core et la coexistence avec le standalone. Il restera principalement :
 
-1. interfaces communes de `BuildCandidate` ;
-2. voie seeds ;
-3. voie set cores ;
-4. voie libre ;
-5. fusion/dédoublonnage ;
-6. évaluation finale unique ;
-7. diagnostics par origine de candidat.
+1. interface commune explicite de `BuildCandidate` pour les trois origines ;
+2. branchement des seeds issus de la persistence ;
+3. fusion/dédoublonnage générique entre seeds, cores et recherche libre ;
+4. diagnostics homogènes par origine de candidat ;
+5. vérification que chaque origine repasse par `CompleteBuildEvaluator`.
 
 ## PR 7 — Shell produit V2
 
@@ -154,19 +182,25 @@ Le script `npm run benchmark:v2` doit être exécuté avant/après les migration
 - cache/repository ;
 - protocole Worker.
 
+`npm run benchmark:search` compare également la voie standalone à la voie hybride pour les changements Candidate Policy / Set Cores. Il doit reporter :
+
+- cores générés / éliminés / pertinents / injectés ;
+- candidats injectés par les cores ;
+- branches explorées ;
+- temps de préfiltrage et de recherche ;
+- meilleur score ;
+- origine du meilleur résultat quand disponible.
+
 Le rapport conserve deux informations distinctes :
 
 - **fingerprint fonctionnel** : doit être identique pour une PR comportementalement neutre ;
 - **temps** : peut varier avec le runner, mais sert à détecter une régression grossière et à comparer plusieurs exécutions sur la même CI.
 
-## Critères pour déclarer la fondation terminée
+## Critères pour déclarer une tranche terminée
 
-- documentation V2 présente ;
-- runtime actuel documenté ;
-- ancienne UI morte supprimée ;
-- version/cache centralisés ;
-- baseline explicite des cas critiques ;
-- benchmark automatique ;
+- documentation à jour ;
+- tests ciblés de la tranche ;
+- tests historiques toujours verts ;
+- benchmark automatique exécuté ;
 - CI verte ;
-- PR laissée en Draft tant que les contrôles ne sont pas terminés ;
 - aucun merge automatique par l'agent.

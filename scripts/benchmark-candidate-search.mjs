@@ -1,14 +1,16 @@
+import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 
 import { prefilterItems } from '../js/candidate-prefilter.js';
 import { searchArchitecturesV2 } from '../js/architecture-search-v2.js';
+import { buildSetCoreCatalog } from '../optimizer/set-core-catalog.js';
 
-function spell(id, element, base = 55) {
+function spell(id, element, base = 55, crit = 20) {
   return {
     id,
     name: id,
     apCost: 4,
-    baseCritPct: 20,
+    baseCritPct: crit,
     maxCastPerTurn: 3,
     maxCastPerTarget: 3,
     distanceOptions: ['melee', 'ranged'],
@@ -115,8 +117,27 @@ function fixtureItems() {
     gear('range-dofus', 'dofus', { range: 2 })
   );
 
+  // Deliberately non-obvious set: the pieces are only average in isolation,
+  // but their exact 2/3/4-piece payoffs can make a core worth exploring.
+  items.push(
+    gear('bench-core-hat', 'hat', { air: 95, fire: 95, crit: 2, vit: 150 }, { setId: 'benchmark-core' }),
+    gear('bench-core-cape', 'cape', { air: 90, fire: 100, critDamage: 8, vit: 150 }, { setId: 'benchmark-core' }),
+    gear('bench-core-belt', 'belt', { air: 100, fire: 90, initiative: 450, vit: 140 }, { setId: 'benchmark-core' }),
+    gear('bench-core-boots', 'boots', { air: 95, fire: 95, resEarth: 8, vit: 170 }, { setId: 'benchmark-core' })
+  );
+
   return items;
 }
+
+const sets = [{
+  id: 'benchmark-core',
+  name: 'Benchmark Core',
+  bonuses: {
+    '2': { air: 80, fire: 80, crit: 4 },
+    '3': { air: 125, fire: 125, crit: 6, initiative: 250 },
+    '4': { air: 170, fire: 170, crit: 8, resEarth: 6 }
+  }
+}];
 
 const fmPolicy = {
   spellDamagePct: 0,
@@ -127,12 +148,14 @@ const fmPolicy = {
 
 const air = spell('air-benchmark', 'air');
 const fire = spell('fire-benchmark', 'fire', 48);
+const critAir = spell('crit-air-benchmark', 'air', 52, 50);
 const items = fixtureItems();
 
 const baseConstraints = Object.freeze({ ap: 12, mp: 6 });
 const scenarios = [
-  { name: 'mono-element-simple', selections: [selection(air)], constraints: baseConstraints, turnMode: 't1' },
-  { name: 'multi-element', selections: [selection(air), selection(fire)], constraints: baseConstraints, turnMode: 't1' },
+  { name: 'mono-element', selections: [selection(air)], constraints: baseConstraints, turnMode: 't1' },
+  { name: 'multi', selections: [selection(air), selection(fire)], constraints: baseConstraints, turnMode: 't1' },
+  { name: 'crit', selections: [selection(critAir)], constraints: baseConstraints, turnMode: 't1' },
   { name: 'initiative-5000', selections: [selection(air)], constraints: { ...baseConstraints, initiative: 5000 }, turnMode: 't1' },
   { name: 'high-vitality', selections: [selection(air)], constraints: { ...baseConstraints, vit: 5000 }, turnMode: 't1' },
   { name: 'resistance', selections: [selection(air)], constraints: { ...baseConstraints, resEarth: 40 }, turnMode: 't1' },
@@ -144,11 +167,21 @@ function round(value) {
   return Math.round(Number(value || 0) * 1000) / 1000;
 }
 
-function runScenario(entry) {
+function injectedCandidateCount(prefilter) {
+  const ids = new Set();
+  for (const slot of prefilter?.diagnostics?.slots || []) {
+    for (const [id, reasons] of Object.entries(slot.reasons || {})) {
+      if ((reasons || []).includes('set-core')) ids.add(String(id));
+    }
+  }
+  return ids.size;
+}
+
+function execute(entry, activeSets) {
   const prefilterStart = performance.now();
   const prefilter = prefilterItems({
     items,
-    sets: [],
+    sets: activeSets,
     selections: entry.selections,
     constraints: entry.constraints,
     turnMode: entry.turnMode,
@@ -159,7 +192,7 @@ function runScenario(entry) {
   const searchStart = performance.now();
   const output = searchArchitecturesV2({
     items,
-    sets: [],
+    sets: activeSets,
     selections: entry.selections,
     constraints: entry.constraints,
     fmPolicy,
@@ -170,28 +203,83 @@ function runScenario(entry) {
   const searchMs = performance.now() - searchStart;
 
   return {
-    name: entry.name,
-    initialItems: items.length,
     afterFilter: prefilter.items.length,
+    coresGenerated: Number(prefilter.diagnostics?.setCoreCatalog?.generated || 0),
+    coresEliminated: Number(prefilter.diagnostics?.setCoreCatalog?.eliminated || 0),
+    coresRelevant: Number(prefilter.diagnostics?.relevantCores || 0),
+    coresInjected: Number(prefilter.diagnostics?.injectedCores || 0),
+    candidatesInjected: injectedCandidateCount(prefilter),
+    architectureVariants: Number(output.diagnostics?.architectureVariants || 0),
     exploredStates: Number(output.diagnostics?.expandedStates || 0),
     evaluatedBuilds: Number(output.diagnostics?.evaluated || 0),
     validBuilds: Number(output.diagnostics?.valid || 0),
+    evaluatedByOrigin: output.diagnostics?.evaluatedByOrigin || {},
     prefilterMs: round(prefilterMs),
     searchMs: round(searchMs),
     totalMs: round(prefilterMs + searchMs),
     bestScore: output.results?.length ? round(output.results[0].score) : null,
+    bestOrigin: output.results?.[0]?.searchOrigin || null,
     bestInitiative: output.results?.[0]?.stats?.initiative ?? null,
     bestVitality: output.results?.[0]?.stats?.vit ?? null,
     bestEarthResistance: output.results?.[0]?.stats?.resEarth ?? null
   };
 }
 
+function runScenario(entry) {
+  const before = execute(entry, []);
+  const after = execute(entry, sets);
+  if (before.bestScore !== null && (after.bestScore === null || after.bestScore + 1e-6 < before.bestScore)) {
+    throw new Error(`${entry.name}: hybrid set-core search regressed best score (${before.bestScore} -> ${after.bestScore})`);
+  }
+  return {
+    name: entry.name,
+    initialItems: items.length,
+    before,
+    after,
+    delta: {
+      exploredStates: after.exploredStates - before.exploredStates,
+      totalMs: round(after.totalMs - before.totalMs),
+      bestScore: before.bestScore === null || after.bestScore === null ? null : round(after.bestScore - before.bestScore)
+    }
+  };
+}
+
+function realCatalogReport() {
+  const data = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
+  const started = performance.now();
+  const catalog = buildSetCoreCatalog({ items: data.items || [], sets: data.sets || [] });
+  const generationMs = performance.now() - started;
+  const wanted = ['terre', 'crit', 'vita', 'res', 'PA'];
+  const examples = [];
+  for (const tag of wanted) {
+    const core = catalog.cores.find((entry) => entry.tags.includes(tag) && !examples.some((example) => example.id === entry.id));
+    if (!core) continue;
+    examples.push({
+      id: core.id,
+      set: core.setName,
+      pieceCount: core.pieceCount,
+      items: core.items.map((item) => item.name),
+      tags: core.tags.slice(0, 6),
+      strengths: core.profile.strengths
+    });
+  }
+  return {
+    sets: Number((data.sets || []).length),
+    items: Number((data.items || []).length),
+    generationMs: round(generationMs),
+    ...catalog.diagnostics,
+    examples
+  };
+}
+
 const results = scenarios.map(runScenario);
+const realCatalog = realCatalogReport();
 console.log('CANDIDATE_SEARCH_BENCHMARK_BEGIN');
 console.log(JSON.stringify({
   node: process.version,
-  fixture: 'candidate-policy-v1',
+  fixture: 'candidate-policy-v2-set-cores',
   initialItems: items.length,
+  realCatalog,
   results
 }, null, 2));
 console.log('CANDIDATE_SEARCH_BENCHMARK_END');

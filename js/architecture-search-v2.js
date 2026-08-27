@@ -126,6 +126,7 @@ function impossibleRequiredResult(required) {
     candidatePools: {},
     diagnostics: {
       mode: 'architecture-search-v2',
+      searchModes: ['set-core', 'standalone'],
       impossible: true,
       reason: required.missingIds.length
         ? 'required-item-missing'
@@ -135,6 +136,9 @@ function impossibleRequiredResult(required) {
       overfilledRequiredSlots: required.overfilledSlots,
       evaluated: 0,
       valid: 0,
+      evaluatedByOrigin: { 'set-core': 0, standalone: 0 },
+      validByOrigin: { 'set-core': 0, standalone: 0 },
+      bestByOrigin: { 'set-core': null, standalone: null },
       expandedStates: 0,
       safePruned: 0,
       heuristicTrimmed: 0,
@@ -227,6 +231,10 @@ function addCount(map, reason) {
   map.set(reason, (map.get(reason) || 0) + 1);
 }
 
+function originForEntry(entry) {
+  return entry?.architecture ? 'set-core' : 'standalone';
+}
+
 export function searchArchitecturesV2({
   items = [],
   sets = [],
@@ -302,6 +310,9 @@ export function searchArchitecturesV2({
   const results = [];
   const rejectReasons = new Map();
   const pruneReasons = new Map();
+  const evaluatedByOrigin = { 'set-core': 0, standalone: 0 };
+  const validByOrigin = { 'set-core': 0, standalone: 0 };
+  const bestByOrigin = { 'set-core': null, standalone: null };
   let evaluated = 0;
   let valid = 0;
   let expandedStates = 0;
@@ -323,11 +334,13 @@ export function searchArchitecturesV2({
       phase: 'architectures-v2',
       label: required.ids.length ? `${label} · ${required.ids.length} imposé${required.ids.length > 1 ? 's' : ''}` : label,
       rejected: Object.fromEntries(rejectReasons),
-      pruneReasons: Object.fromEntries(pruneReasons)
+      pruneReasons: Object.fromEntries(pruneReasons),
+      setCores: synergy.diagnostics
     });
   }
 
   for (const entry of queue) {
+    const searchOrigin = originForEntry(entry);
     const optionalAnchors = entry.variant.anchorIds.map((id) => originalById.get(String(id))).filter(Boolean);
     const anchors = mergeRequiredAnchors(required.requiredItems, optionalAnchors);
     const counts = slotCounts(anchors);
@@ -456,9 +469,20 @@ export function searchArchitecturesV2({
         scenario
       });
       evaluated++;
+      evaluatedByOrigin[searchOrigin]++;
       if (evaluation.result) {
         valid++;
-        insertTop(results, evaluation.result, Math.max(1, Number(topN || 10)));
+        validByOrigin[searchOrigin]++;
+        bestByOrigin[searchOrigin] = bestByOrigin[searchOrigin] === null
+          ? Number(evaluation.result.score || 0)
+          : Math.max(bestByOrigin[searchOrigin], Number(evaluation.result.score || 0));
+        const decorated = {
+          ...evaluation.result,
+          searchOrigin,
+          searchArchitecture: entry.variant.label,
+          searchWhySelected: [...(entry.architecture?.whySelected || [])]
+        };
+        insertTop(results, decorated, Math.max(1, Number(topN || 10)));
       } else {
         addCount(rejectReasons, evaluation.reason || 'unknown');
       }
@@ -474,16 +498,21 @@ export function searchArchitecturesV2({
     candidatePools: prefilter.pools,
     diagnostics: {
       mode: 'architecture-search-v2',
+      searchModes: ['set-core', 'standalone'],
       searchProfile: searchProfileName,
       profile: synergy.profile,
       targetElement: synergy.targetElement,
       architectures: synergy.architectures.length,
       architectureVariants: queue.length,
+      setCores: synergy.diagnostics,
       requiredItemIds: required.ids,
       extraConstraintSearch: extraConstraints,
       constrainedStats: positiveConstraintKeys(constraints),
       evaluated,
       valid,
+      evaluatedByOrigin,
+      validByOrigin,
+      bestByOrigin,
       legalCandidates,
       expandedStates,
       safePruned,

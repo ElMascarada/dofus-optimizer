@@ -7,6 +7,7 @@ import {
   relevantStatKeys
 } from '../js/search-space.js';
 import { getSearchProfile } from './search-profiles.js';
+import { buildSetCoreCatalog, rankSetCoresForPolicy } from './set-core-catalog.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
 const ELEMENT_DAMAGE = Object.freeze({
@@ -31,15 +32,6 @@ export const STRUCTURAL_SPECIALIST_KEYS = Object.freeze([
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
   return Number.isFinite(value) ? value : 0;
-}
-
-function addStats(target, source = {}) {
-  for (const [key, raw] of Object.entries(source || {})) {
-    const value = Number(raw || 0);
-    if (!Number.isFinite(value) || value === 0) continue;
-    target[key] = Number(target[key] || 0) + value;
-  }
-  return target;
 }
 
 function normalizedHitElement(element) {
@@ -94,77 +86,6 @@ function hasUniqueMechanic(item = {}) {
   );
 }
 
-function slotCapacities(slotRules = SLOT_RULES) {
-  return new Map((slotRules || SLOT_RULES).map((rule) => [rule.id, Math.max(1, Number(rule.count || 1))]));
-}
-
-function chooseSetMembers(profiles, count, capacities) {
-  const chosen = [];
-  const bySlot = new Map();
-  for (const entry of [...profiles].sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)))) {
-    const slot = entry.item?.slot;
-    const capacity = capacities.get(slot) || 1;
-    const used = bySlot.get(slot) || 0;
-    if (used >= capacity) continue;
-    chosen.push(entry);
-    bySlot.set(slot, used + 1);
-    if (chosen.length >= count) break;
-  }
-  return chosen;
-}
-
-function buildSetCoreHints(sets, items, policy, slotRules) {
-  const profilesBySet = new Map();
-  for (const item of items || []) {
-    if (!item?.setId) continue;
-    if (!profilesBySet.has(item.setId)) profilesBySet.set(item.setId, []);
-    profilesBySet.get(item.setId).push(policy.profileItem(item));
-  }
-
-  const capacities = slotCapacities(slotRules);
-  const plans = [];
-  for (const set of sets || []) {
-    const members = profilesBySet.get(set?.id) || [];
-    if (!members.length) continue;
-    let best = null;
-    for (const [countText, bonus] of Object.entries(set?.bonuses || {})) {
-      const count = Number(countText);
-      if (!Number.isInteger(count) || count < 2) continue;
-      const selected = chooseSetMembers(members, count, capacities);
-      if (selected.length < count) continue;
-      const combined = {};
-      for (const member of selected) addStats(combined, member.optimisticStats);
-      addStats(combined, bonus);
-      const combinedRank = policy.rankStats(combined);
-      const bonusRank = policy.rankStats(bonus || {});
-      const constraintSignal = constraintOrderingSignal(combined, policy.constraints);
-      const relevant = combinedRank.objectiveGain > 0
-        || bonusRank.objectiveGain > 0
-        || constraintSignal > 0
-        || num(bonus, 'ap') > 0
-        || num(bonus, 'mp') > 0
-        || num(bonus, 'range') > 0;
-      if (!relevant) continue;
-      const score = combinedRank.rankScore + bonusRank.rankScore
-        + constraintSignal * policy.profile.ranking.constraintWeight;
-      if (!best || score > best.score) {
-        best = {
-          setId: set.id,
-          name: set.name || set.id,
-          targetCount: count,
-          score,
-          memberIds: selected.map((entry) => String(entry.item.id))
-        };
-      }
-    }
-    if (best) plans.push(best);
-  }
-
-  return plans
-    .sort((a, b) => b.score - a.score || b.targetCount - a.targetCount)
-    .slice(0, policy.profile.candidate.maxSetCorePlans);
-}
-
 function specialistDefinitions(policy) {
   const definitions = STRUCTURAL_SPECIALIST_KEYS.map((key) => ({ id: key, keys: [key] }));
   for (const key of GENERIC_OFFENSE_KEYS) {
@@ -208,6 +129,23 @@ function profileIsContextRelevant(entry, policy) {
   if (entry.item?.setId || hasUniqueMechanic(entry.item)) return true;
   if (STRUCTURAL_SPECIALIST_KEYS.some((key) => num(stats, key) > 0)) return true;
   return policy.conditionKeys.some((key) => num(stats, key) > 0);
+}
+
+function setCoreHint(core, policy) {
+  return {
+    coreId: core.id,
+    setId: core.setId,
+    name: core.setName,
+    targetCount: core.pieceCount,
+    score: Number(core.searchScore || 0),
+    memberIds: [...core.itemIds],
+    memberScores: core.items.map((item) => Number(policy.profileItem(item).rankScore || 0)),
+    bonus: { ...core.setBonuses },
+    aggregateStats: { ...core.aggregateStats },
+    tags: [...core.tags],
+    profile: core.profile,
+    whySelected: [...(core.whySelected || [])]
+  };
 }
 
 export function createCandidatePolicy({
@@ -282,7 +220,18 @@ export function createCandidatePolicy({
       };
     }
   };
-  policy.setCoreHints = buildSetCoreHints(sets, items, policy, slotRules);
+
+  policy.setCoreCatalog = buildSetCoreCatalog({
+    items,
+    sets,
+    slotRules,
+    profileItem: (item) => policy.profileItem(item)
+  });
+  const setCoreSelection = rankSetCoresForPolicy(policy.setCoreCatalog, policy, {
+    limit: profile.candidate.maxSetCorePlans
+  });
+  policy.setCoreSelectionDiagnostics = setCoreSelection.diagnostics;
+  policy.setCoreHints = setCoreSelection.selected.map((core) => setCoreHint(core, policy));
   return policy;
 }
 
@@ -429,6 +378,7 @@ export function buildCandidatePools({
     slots.push(selected.diagnostics);
   }
 
+  const selectedSetIds = new Set(policy.setCoreHints.map((plan) => plan.setId));
   return {
     items: output,
     pools,
@@ -441,8 +391,17 @@ export function buildCandidatePools({
       before: items.length,
       afterLevelFilter: items.length,
       after: output.length,
-      relevantSets: policy.setCoreHints.length,
-      topSetPlans: policy.setCoreHints.map((plan) => ({ ...plan, memberIds: [...plan.memberIds] })),
+      relevantSets: selectedSetIds.size,
+      relevantCores: Number(policy.setCoreSelectionDiagnostics?.relevant || 0),
+      injectedCores: policy.setCoreHints.length,
+      setCoreCatalog: { ...(policy.setCoreSelectionDiagnostics || {}) },
+      topSetPlans: policy.setCoreHints.map((plan) => ({
+        ...plan,
+        memberIds: [...plan.memberIds],
+        memberScores: [...plan.memberScores],
+        whySelected: [...plan.whySelected],
+        tags: [...plan.tags]
+      })),
       slots
     }
   };

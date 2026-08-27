@@ -14,7 +14,7 @@ function item(id, slot, setId, stats = {}) {
   return { id, name: id, level: 200, slot, setId, stats, passives: [] };
 }
 
-test('synergy index keeps full and 2-piece tiers and combines compatible fire sets', () => {
+test('synergy index keeps full and 2-piece tiers without expanding multi-core architectures yet', () => {
   const items = [
     item('war-hat', 'hat', 'war', { fire: 100 }),
     item('war-cape', 'cape', 'war', { fire: 100 }),
@@ -36,8 +36,8 @@ test('synergy index keeps full and 2-piece tiers and combines compatible fire se
   assert.equal(index.targetElement, 'fire');
   assert.ok(index.plans.some((plan) => plan.setId === 'war' && plan.targetCount === 4));
   assert.ok(index.plans.some((plan) => plan.setId === 'war' && plan.targetCount === 2));
-  assert.ok(index.architectures.some((architecture) => {
-    const ids = new Set(architecture.plans.map((plan) => plan.setId));
-    return ids.has('war') && ids.has('ember');
-  }));
+  assert.ok(index.architectures.length > 0);
+  assert.ok(index.architectures.every((architecture) => architecture.plans.length === 1));
+  assert.equal(index.diagnostics.combinedCoreArchitectures, false);
+  assert.equal(index.diagnostics.compatibilityAvailable, true);
 });
