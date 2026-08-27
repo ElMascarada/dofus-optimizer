@@ -2,148 +2,155 @@
 
 ## État au 27 août 2026
 
-Les tranches Fondation V2, moteur de sorts/combat générique, Candidate Policy / recherche d'équipements et **SetCoreCatalog** sont mergées sur `main`.
+La V2 est désormais dans sa phase de finition produit. Les grosses fondations sont mergées sur `main` : architecture, combat générique, recherche d'équipements, Set Cores et Atelier manuel.
 
-La tranche active est maintenant le **premier Atelier V2 utilisable**. Elle avance volontairement le shell produit et le cœur de l'éditeur manuel avant la persistence : cette PR ne sauvegarde rien, ne lance aucune recherche automatique et ne modifie aucune politique du solveur.
-
-La cible reste inchangée : Atelier et Optimiseur consomment les mêmes données et moteurs, puis la persistence/seeds/recherche hybride complète pourront être branchées derrière des contrats explicites.
+La suite ne doit plus rouvrir ces fondations sans régression démontrée. Les dernières tranches branchent persistence, nouvelle interface Optimiseur, mémoire/seeds, interactions Lock/Reject, objectifs temporels et performance finale.
 
 ## Règle générale
 
-La migration est découpée en PRs courtes. Une PR d'architecture ne change pas volontairement les résultats du solveur. Tout changement de score, de Top N ou de rotation doit être isolé, mesuré et justifié séparément.
+- Une tranche = une PR courte et testable.
+- Toute PR part du `main` mergé et vert.
+- Une PR d'architecture ne change pas volontairement les résultats métier.
+- Tout changement de score, Top N, rotation ou temps significatif doit être mesuré et justifié.
+- Les sources de vérité décrites dans `AGENTS.md` ne doivent pas être dupliquées.
 
-## PR 0 — Fondation V2
+## Tranches terminées
 
-Objectif : rendre le dépôt suffisamment lisible et protégé pour commencer la migration.
+### Fondation V2
+
+Livré : audit du runtime, spec produit, architecture actuelle/cible, baseline de non-régression, version/cache runtime centralisés et filet de tests/benchmarks.
+
+### Combat / sorts génériques
+
+Livré : moteur de combat générique, registre de mécaniques, `evaluateSpell`, couverture de support des sorts et retrait des dépendances directes aux classes/sorts du cœur générique.
+
+### Candidate Policy / recherche de builds — PR #38
+
+Livré : Pareto contextuel, réserves spécialistes, contraintes prises en compte en amont, pruning de faisabilité, upper bounds offensifs, profils de recherche et diagnostics centralisés.
+
+### SetCoreCatalog — PR #40
+
+Livré : cores 2/3/4 pièces générés automatiquement, bonus exacts, profils, compatibilité core/core, injection `reason: "set-core"`, recherche hybride set-core + standalone et benchmarks dédiés.
+
+### Atelier V2 foundation — PR #41
+
+Livré : shell `[ATELIER] [OPTIMISEUR]`, 16 slots, navigateur d'items, `WorkshopBuild` / `WorkshopController` / `WorkshopEvaluator`, stats live via `CompleteBuildEvaluator`, dégâts de sorts via `evaluateSpell`, style néo-rétro de base et benchmark interactif.
+
+## Tranches restantes — ordre canonique
+
+Le détail et les critères de sortie sont dans `docs/V2_COMPLETION_PLAN.md`.
+
+### 1. Persistence Atelier + bibliothèque + Smart Item Search
+
+Objectif : rendre l'Atelier durable et réellement pratique.
 
 Livrables :
 
-- audit du runtime réellement exécuté ;
-- baseline transversale de non-régression ;
-- benchmark V2 reproductible ;
-- spécification produit V2 ;
-- architecture actuelle et architecture cible ;
-- runtime UI canonique explicitement choisi ;
-- suppression uniquement de l'ancienne UI clairement morte ;
-- source unique de version/cache runtime ;
-- contrats/interfaces préparatoires sans changement d'heuristique.
+- IndexedDB versionné ;
+- repository de builds ;
+- sauvegarde, chargement, renommage, duplication, suppression ;
+- autosave du draft courant ;
+- migrations/invalidation par version de données/règles ;
+- vocabulaire déterministe de recherche d'items (`multi do crit`, `terre ini`, etc.) ;
+- ranking explicable et rapide, sans LLM ni heuristique opaque.
 
-Gate : syntaxe + suite Node + benchmark V2 verts.
+Hors scope : solveur `Trouver mieux`, seeds, Lock/Reject, refonte Optimiseur.
 
-## PR 1 — OptimizerClient et suppression des patches Worker
+### 2. Optimiseur V2 simplifié
 
-Objectif : déplacer les responsabilités de `optimizer-session-bridge.js` et `optimizer-stop-bridge.js` vers une API explicite.
-
-Étapes cibles : ownership du Worker, requête sérialisable, arrêt/finalisation, cache derrière repository et suppression progressive des patches globaux historiques.
-
-## PR 2 — Registre déclaratif de mécaniques de combat
-
-Objectif : rendre le moteur de combat générique indépendant des noms/IDs de classes et sorts.
-
-État : fondation générique mergée. Les mécaniques supportées passent par le registre et `evaluateSpell` / le moteur de rotation restent les sources canoniques de dégâts.
-
-## PR 3 — SearchPolicy + préfiltrage unique
-
-Objectif : rendre la politique de recherche lisible sans réécrire le solveur.
-
-État : terminé et mergé. La Candidate Policy porte Pareto, réserves spécialistes/contraintes, profils de recherche et diagnostics. `CandidatePrefilter` est la frontière catalogue → pools.
-
-## PR #40 — SetCoreCatalog + recherche hybride set-core / standalone
-
-Objectif : transformer les données réelles de panoplies en noyaux réutilisables sans rendre le solveur dépendant des panoplies.
-
-État : terminé et mergé.
-
-Livré :
-
-- cores 2/3/4 pièces générés depuis `items` + `sets` ;
-- bonus exacts, profils et légalité ;
-- dominance prudente ;
-- compatibilité core/core ;
-- injection Candidate Policy avec `reason: "set-core"` ;
-- voie standalone toujours indépendante ;
-- diagnostics et benchmark standalone/hybride.
-
-## PR #41 — Atelier V2 foundation — tranche active
-
-Objectif : livrer le premier éditeur manuel utilisable sans optimiser automatiquement le stuff.
-
-Architecture :
+Objectif : remplacer l'interface historique complexe par le parcours principal :
 
 ```text
-index.html
-  -> shell [Atelier] [Optimiseur]
-  -> js/workshop/workshop-app.js
-    -> WorkshopController
-      -> WorkshopBuild
-      -> WorkshopEvaluator
-        -> CompleteBuildEvaluator
-        -> evaluateSpell / CombatMechanicRegistry
-    -> equipment-grid
-    -> item-browser
-    -> stats-panel
-    -> spell-panel
+Classe → Élément → Contraintes → Objectif
 ```
 
-Livrables de la tranche :
+Objectifs temporels disponibles au minimum : T1, T2, T3, T1–T3 / moyenne / pire tour selon le contrat existant, puis extension explicite vers Constant et plage personnalisée.
 
-1. navigation Atelier / Optimiseur, l'écran historique restant intact dans sa vue ;
-2. `WorkshopBuild` canonique avec classe, 16 emplacements, politique FM et sorts sélectionnés ;
-3. équipement/remplacement/retrait manuel ;
-4. navigateur du catalogue certifié : filtre de slot, recherche nom, icône, stats, panoplie ;
-5. stats, conditions, bonus de panoplie et FM issus uniquement de `CompleteBuildEvaluator` ;
-6. dégâts normaux/crit, chance critique et support des mécaniques via `evaluateSpell` ;
-7. aucune création de Worker / Candidate Search / Architecture Search sur changement d'item ;
-8. benchmark dédié de recalcul d'un stuff complet ;
-9. fondation visuelle noir `#000000`, gris `#CCCFCA`, rouge `#DC2636` ;
-10. tests des invariants Atelier et non-régression du shell Optimiseur.
+Cette tranche réutilise les moteurs actuels ; elle ne réécrit pas Candidate Policy, SetCoreCatalog ou le combat.
 
-Hors scope strict : IndexedDB, bibliothèque de stuffs, recherche sémantique, Trouver mieux, Lock/Reject, seeds, nouvelle Candidate Policy, nouveau Set Core engine, refonte Optimiseur et nouvelles mécaniques de classe.
+### 3. Mémoire des recherches + cache exact + seeds
 
-Gate : `npm run check`, `npm test`, `benchmark:v2`, `benchmark:search`, `benchmark:workshop` et CI verts.
+Objectif : une requête déjà calculée et encore compatible doit être instantanée ; une requête proche doit réutiliser les meilleurs builds connus comme points de départ.
 
-## PR suivante recommandée — Persistence / bibliothèque Atelier
+Livrables :
 
-Après #41, la prochaine tranche peut introduire le repository IndexedDB derrière l'état Atelier sans modifier les calculs métier :
+- requête normalisée et fingerprint stable ;
+- cache exact IndexedDB ;
+- compatibilité data/rules/search version ;
+- recherche de requêtes proches ;
+- réévaluation obligatoire de tout seed ;
+- fusion seed + set-core + standalone sans supprimer la recherche libre.
 
-1. `SearchRepository` / `BuildRepository` persistant ;
-2. sauvegarde, liste, renommage et suppression des builds Atelier ;
-3. versionnement par data version / engine epoch ;
-4. migrations/effacement sûrs ;
-5. aucune dépendance IndexedDB dans `CompleteBuildEvaluator` ou le moteur combat.
+### 4. Lock / Reject + Trouver mieux
 
-La recherche intelligente (`multi do crit`, etc.), Trouver mieux et les seeds restent des tranches ultérieures.
+Objectif : rendre l'optimisation interactive.
 
-## Persistence IndexedDB
+- `requiredItemIds` / équivalent canonique pour Lock ;
+- `excludedItemIds` pour Reject ;
+- réoptimisation autour du résultat courant ;
+- bouton Atelier `Trouver mieux` utilisant le build comme seed, jamais comme prison ;
+- aucun patch global `window.Worker` ou MutationObserver métier.
 
-Objectif historique : remplacer le cache principal `localStorage` par un repository persistant et porter les builds Atelier. Cette tranche reste nécessaire ; #41 ne l'implémente pas.
+### 5. Objectifs temporels finaux / tours idéaux
 
-## Recherche par seeds
+Objectif : exposer clairement les meilleures rotations d'un build et finaliser le contrat des objectifs temporels :
 
-Objectif : utiliser la mémoire des calculs comme accélérateur, jamais comme résultat automatiquement valide. Chaque seed repasse les règles courantes.
+- T1 ;
+- T2 ;
+- T3 ;
+- Constant ;
+- plage de tours personnalisée lorsque raisonnable.
 
-## Recherche hybride complète
+L'Atelier doit pouvoir afficher les tours idéaux en haut sans lancer une recherche d'équipements.
 
-Objectif : terminer la formalisation des trois voies seed, set cores et recherche libre via un contrat commun `BuildCandidate`, avec dédoublonnage et diagnostics par origine.
+### 6. Performance finale
 
-## Résultats interactifs Lock / Reject
+Objectif : accélérer sans sacrifier la qualité.
 
-Objectif : intégrer Lock/Reject comme propriétés natives de la requête et réoptimiser sans hacks DOM/Worker.
+Priorités :
+
+1. éviter tout recalcul connu ;
+2. cache combat par état/entrée compatible ;
+3. pipeline cheap → coarse → precise ;
+4. déduplication d'états ;
+5. parallélisation finale entre workers uniquement si les mesures la justifient.
+
+Ne pas introduire GPU/WASM ou complexité supplémentaire sans benchmark prouvant le besoin.
+
+### 7. Polish / recette V2
+
+Objectif : rendre la V2 cohérente et prête à utiliser.
+
+- style néo-rétro noir `#000000`, gris `#CCCFCA`, rouge `#DC2636` ;
+- lisibilité des items/stats/dégâts prioritaire ;
+- responsive raisonnable ;
+- parcours complet Atelier ↔ Optimiseur ;
+- tests de recette et benchmarks finaux ;
+- suppression/documentation de l'historique encore réellement mort uniquement après preuve qu'il n'est plus exécuté.
 
 ## Discipline de benchmark
 
-`npm run benchmark:v2` reste obligatoire pour les migrations qui touchent au calcul global. `npm run benchmark:search` protège Candidate Policy / Set Cores. `npm run benchmark:workshop` mesure uniquement le chemin synchrone connu **item changé → stats + dégâts unitaires**, sans Worker.
+Toujours exécuter `npm run check` et `npm test`.
 
-Le rapport distingue toujours :
+Benchmarks selon la tranche :
 
-- **fingerprint fonctionnel** : stabilité attendue pour une PR comportementalement neutre côté solveur ;
-- **temps** : mesure de détection de régression grossière, à comparer sur un même environnement.
+- `npm run benchmark:v2` : changements globaux / solveur / combat / persistence de recherche ;
+- `npm run benchmark:search` : Candidate Policy / Set Cores / seeds / Lock-Reject côté recherche ;
+- `npm run benchmark:workshop` : chemin interactif Atelier.
 
-## Critères pour déclarer une tranche terminée
+Le rapport doit distinguer :
 
-- documentation à jour ;
-- tests ciblés de la tranche ;
-- tests historiques toujours verts ;
-- benchmarks concernés exécutés ;
-- CI verte ;
-- aucun merge automatique par l'agent.
+- fingerprint / qualité fonctionnelle ;
+- temps de calcul ;
+- nombre de candidats/états explorés lorsque pertinent.
+
+## Critères de fin d'une tranche
+
+- scope terminé ;
+- tests ciblés ajoutés ;
+- tests historiques verts ;
+- benchmarks concernés verts sans régression inexpliquée ;
+- CI GitHub verte ;
+- `PROJECT_STATE.md` mis à jour ;
+- PR READY ;
+- pas de merge automatique sauf instruction explicite.
