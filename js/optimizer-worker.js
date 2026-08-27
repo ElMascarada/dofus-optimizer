@@ -3,6 +3,7 @@ import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 import { diversifyBuilds } from './result-diversity.js';
+import { evaluateSearchSeeds } from './search-seeds.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
@@ -226,6 +227,25 @@ self.addEventListener('message', (event) => {
     }
 
     output.results = keepRequiredBuilds(output.results, requiredIds);
+    const freeSearchCandidates = output.results.length;
+    const seedEvaluation = evaluateSearchSeeds({
+      seedBuilds: payload?.seedBuilds || [],
+      payload: normalizedPayload
+    });
+    if (seedEvaluation.results.length) {
+      output.results = keepRequiredBuilds(
+        mergeBuildCandidates([output.results, seedEvaluation.results]),
+        requiredIds
+      );
+    }
+    output.diagnostics = {
+      ...(output.diagnostics || {}),
+      searchMemorySeeds: {
+        ...seedEvaluation.diagnostics,
+        freeSearchCandidates,
+        fusedCandidates: output.results.length
+      }
+    };
     const candidateItems = output.candidateItems?.length ? output.candidateItems : normalizedPayload.items;
 
     if (output.results?.length) {
@@ -275,7 +295,7 @@ self.addEventListener('message', (event) => {
       if (feedbackSelections.length) {
         const feedbackTopN = multiTurn
           ? Math.min(searchTopN, capped(budget.multiFeedbackRefineFloor, budget.multiFeedbackRefineMultiplier, requestedTopN))
-          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackRefineMultiplier, requestedTopN));
+          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackMultiplier, requestedTopN));
         const feedbackRefined = refineOffensiveSlots({
           ...normalizedPayload,
           items: candidateItems,
