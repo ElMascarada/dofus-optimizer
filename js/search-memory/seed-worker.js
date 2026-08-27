@@ -71,7 +71,9 @@ self.addEventListener('message', (event) => {
       constraints: payload.constraints || {},
       fmPolicy: payload.fmPolicy || {},
       turnMode,
-      scenario
+      scenario,
+      requiredItemIds: payload.requiredItemIds || [],
+      rejectedItemIds: payload.rejectedItemIds || []
     });
 
     let results = evaluated.results;
