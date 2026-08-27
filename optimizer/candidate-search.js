@@ -197,21 +197,45 @@ function remainingProfileCaps(groups = [], profilesFor, keys = []) {
   return { caps, bounded: true, impossibleShape: false };
 }
 
+export function createBranchFeasibilityEnvelope({
+  remainingGroups = [],
+  profilesFor,
+  constraints = {},
+  sets = []
+} = {}) {
+  const keys = positiveConstraintKeys(constraints);
+  if (!keys.length) {
+    return {
+      keys,
+      remaining: { caps: {}, bounded: true, impossibleShape: false },
+      setCaps: {}
+    };
+  }
+  return {
+    keys,
+    remaining: remainingProfileCaps(remainingGroups, profilesFor, keys),
+    setCaps: positiveSetBonusCaps(sets, keys)
+  };
+}
+
 export function branchFeasibility({
   items = [],
   remainingGroups = [],
   profilesFor,
   constraints = {},
   sets = [],
-  setsById = {}
+  setsById = {},
+  currentStats = null,
+  envelope = null
 } = {}) {
-  const keys = positiveConstraintKeys(constraints);
+  const prepared = envelope || createBranchFeasibilityEnvelope({ remainingGroups, profilesFor, constraints, sets });
+  const keys = prepared.keys || [];
   if (!keys.length) return { feasible: true, key: null, actual: 0, maximum: Infinity, target: 0 };
-  const current = staticBuildStats(items, setsById);
-  const remaining = remainingProfileCaps(remainingGroups, profilesFor, keys);
+  const current = currentStats || staticBuildStats(items, setsById);
+  const remaining = prepared.remaining;
   if (remaining.impossibleShape) return { feasible: false, key: 'shape', actual: 0, maximum: 0, target: 1 };
   if (!remaining.bounded) return { feasible: true, key: null, actual: 0, maximum: Infinity, target: 0 };
-  const setCaps = positiveSetBonusCaps(sets, keys);
+  const setCaps = prepared.setCaps || {};
   for (const key of keys) {
     const target = Number(constraints[key] || 0);
     const actual = num(current, key) + characteristicUpperAllowance(key);
