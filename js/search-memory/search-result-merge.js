@@ -23,6 +23,7 @@ export function mergeSearchOutputs(primary = {}, seeds = {}, {
   const seedKeys = new Set((seeds.results || []).map(resultKey).filter(Boolean));
   const seedReturned = results.filter((result) => seedKeys.has(resultKey(result))).length;
   const seedEvaluation = seeds?.diagnostics?.seedEvaluation || {};
+  const primaryMemory = primary?.diagnostics?.searchMemory || {};
 
   return {
     ...primary,
@@ -30,9 +31,9 @@ export function mergeSearchOutputs(primary = {}, seeds = {}, {
     diagnostics: {
       ...(primary.diagnostics || {}),
       searchMemory: {
-        cacheHit: false,
-        fingerprint: String(fingerprint || ''),
-        nearbyRecords: Number(nearbyRecords || 0),
+        cacheHit: Boolean(primaryMemory.cacheHit),
+        fingerprint: String(fingerprint || primaryMemory.fingerprint || ''),
+        nearbyRecords: Number(nearbyRecords || primaryMemory.nearbyRecords || 0),
         seedsAttempted: Number(seedEvaluation.attempted || 0),
         seedsValid: Number(seedEvaluation.valid || 0),
         seedsReturned: seedReturned,
