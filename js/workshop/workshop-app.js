@@ -16,7 +16,7 @@ const tabs = [...document.querySelectorAll('[data-product-tab]')];
 let pendingOptimizerBuild = null;
 let openOptimizerBuild = null;
 
-function activateTab(tabId) {
+function activateTab(tabId, { focus = false } = {}) {
   const workshopActive = tabId === 'workshop';
   workshopView.hidden = !workshopActive;
   optimizerView.hidden = workshopActive;
@@ -24,10 +24,26 @@ function activateTab(tabId) {
     const active = tab.dataset.productTab === tabId;
     tab.classList.toggle('is-active', active);
     tab.setAttribute('aria-selected', String(active));
+    tab.tabIndex = active ? 0 : -1;
+    if (active && focus) tab.focus();
   }
 }
 
 for (const tab of tabs) tab.addEventListener('click', () => activateTab(tab.dataset.productTab));
+const tabList = document.querySelector('[role="tablist"]');
+tabList?.addEventListener('keydown', (event) => {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+  const current = Math.max(0, tabs.indexOf(document.activeElement));
+  const next = event.key === 'Home'
+    ? 0
+    : event.key === 'End'
+      ? tabs.length - 1
+      : event.key === 'ArrowRight'
+        ? (current + 1) % tabs.length
+        : (current - 1 + tabs.length) % tabs.length;
+  event.preventDefault();
+  activateTab(tabs[next].dataset.productTab, { focus: true });
+});
 activateTab('workshop');
 
 document.addEventListener(OPEN_WORKSHOP_BUILD_EVENT, (event) => {
@@ -38,30 +54,41 @@ document.addEventListener(OPEN_WORKSHOP_BUILD_EVENT, (event) => {
 });
 
 function renderSkeleton() {
+  workshopView.setAttribute('aria-busy', 'true');
   workshopView.innerHTML = `
     <section class="workshop-hero">
-      <div><span class="eyebrow">ATELIER V2</span><h2>Construire. Mesurer. Ajuster.</h2><p>Équipe un stuff manuellement : les stats et dégâts sont recalculés par les moteurs canoniques.</p></div>
+      <div>
+        <span class="eyebrow">ATELIER V2</span>
+        <h2>Construire. Mesurer. Ajuster.</h2>
+        <p>Compose ton stuff à la main. Les statistiques, dégâts et tours idéaux sont recalculés par les moteurs canoniques.</p>
+      </div>
       <div class="workshop-hero-controls">
         <label class="field workshop-class-field">Classe<select id="workshop-class-select" disabled><option>Chargement…</option></select></label>
         <div class="workshop-find-better-actions">
           <button type="button" id="workshop-find-better" class="primary" disabled>Trouver mieux</button>
           <button type="button" id="workshop-clear-rejects" class="secondary" hidden>Effacer les rejets</button>
         </div>
+        <small id="workshop-find-better-hint" class="workshop-find-better-hint">Choisis une classe et complète les 16 slots pour lancer une amélioration ciblée.</small>
       </div>
     </section>
     <p id="workshop-feedback" class="workshop-feedback" aria-live="polite"></p>
     <div class="workshop-layout">
       <section id="workshop-build-library" class="panel workshop-build-library"></section>
       <section class="panel workshop-equipment-panel">
-        <div class="workshop-panel-heading"><div><span class="eyebrow">ÉQUIPEMENT</span><h3>Stuff</h3></div><span class="pill">16 slots</span></div>
+        <div class="workshop-panel-heading">
+          <div><span class="eyebrow">ÉQUIPEMENT</span><h3>Stuff</h3></div>
+          <span id="workshop-slot-progress" class="pill workshop-progress-pill" data-complete="false">0 / 16</span>
+        </div>
         <div id="workshop-equipment-grid" class="workshop-equipment-grid"></div>
       </section>
       <aside id="workshop-item-browser" class="panel workshop-item-browser" hidden></aside>
-      <section id="workshop-stats-panel" class="panel workshop-stats-panel"><div class="empty">Chargement des données certifiées…</div></section>
+      <section id="workshop-stats-panel" class="panel workshop-stats-panel">
+        <div class="ui-state" data-state="loading"><strong>Préparation des statistiques</strong><span>Chargement des équipements et des règles certifiées.</span></div>
+      </section>
     </div>
     <section class="panel workshop-spells-panel">
-      <div class="workshop-panel-heading"><div><span class="eyebrow">COMBAT</span><h3>Dégâts des sorts · T1</h3></div><span class="pill">moteur générique</span></div>
-      <div id="workshop-spell-panel"><div class="empty">Chargement du catalogue de sorts…</div></div>
+      <div class="workshop-panel-heading"><div><span class="eyebrow">COMBAT</span><h3>Dégâts et rotation</h3></div><span class="pill">moteur générique</span></div>
+      <div id="workshop-spell-panel"><div class="ui-state" data-state="loading"><strong>Préparation du combat</strong><span>Chargement du catalogue de sorts certifiés.</span></div></div>
     </section>`;
 }
 
@@ -96,6 +123,8 @@ async function initWorkshop() {
     const libraryRoot = document.querySelector('#workshop-build-library');
     const findBetterButton = document.querySelector('#workshop-find-better');
     const clearRejectsButton = document.querySelector('#workshop-clear-rejects');
+    const progressPill = document.querySelector('#workshop-slot-progress');
+    const findBetterHint = document.querySelector('#workshop-find-better-hint');
     const repository = new BuildRepository();
     let controller = null;
     let autosave = null;
@@ -132,7 +161,7 @@ async function initWorkshop() {
       onNew: async () => {
         applyHydrated({ build: createWorkshopBuild() });
         await refreshLibrary();
-        feedback('Nouveau brouillon.', 'ok');
+        feedback('Nouveau brouillon prêt.', 'ok');
       },
       onSave: async ({ id, name }) => {
         try {
@@ -222,7 +251,7 @@ async function initWorkshop() {
       onOpen: (slotKey) => browser.open(slotKey),
       onToggleLock(slotKey, locked) {
         controller.setSlotLocked(slotKey, locked);
-        feedback(locked ? 'Item locké pour la prochaine optimisation.' : 'Lock retiré.', 'ok');
+        feedback(locked ? 'Item verrouillé pour la prochaine optimisation.' : 'Verrouillage retiré.', 'ok');
       },
       onReject(slotKey) {
         const item = controller.build.equipmentBySlot?.[slotKey];
@@ -245,9 +274,17 @@ async function initWorkshop() {
         renderSpellPanel(spellsRoot, evaluation, build.classId);
         classSelect.value = build.classId || '';
         const rejectedCount = build.rejectedItemIds?.length || 0;
+        const filledCount = Object.values(build.equipmentBySlot || {}).filter(Boolean).length;
+        const complete = workshopBuildIsComplete(build);
         clearRejectsButton.hidden = rejectedCount === 0;
         clearRejectsButton.textContent = rejectedCount ? `Effacer les rejets (${rejectedCount})` : 'Effacer les rejets';
-        findBetterButton.disabled = !(build.classId && workshopBuildIsComplete(build));
+        findBetterButton.disabled = !(build.classId && complete);
+        progressPill.textContent = `${filledCount} / 16`;
+        progressPill.dataset.complete = String(complete);
+        findBetterHint.dataset.ready = String(Boolean(build.classId && complete));
+        findBetterHint.textContent = build.classId && complete
+          ? 'Stuff complet : Trouver mieux conserve uniquement les items explicitement verrouillés.'
+          : `Choisis une classe et complète les ${Math.max(0, 16 - filledCount)} slot${16 - filledCount > 1 ? 's' : ''} restant${16 - filledCount > 1 ? 's' : ''}.`;
         if (autosave && !suppressAutosave) autosave.queue(build);
       }
     });
@@ -305,6 +342,7 @@ async function initWorkshop() {
       library.setStatus(`Bibliothèque indisponible · ${error instanceof Error ? error.message : String(error)}`, 'error');
     }
 
+    workshopView.setAttribute('aria-busy', 'false');
     if (restored) {
       applyHydrated(restored);
       feedback(hydrationMessage(restored, 'Brouillon restauré'), restored.degraded ? 'error' : 'ok');
@@ -313,10 +351,11 @@ async function initWorkshop() {
       autosave.queue(controller.build);
     }
   } catch (error) {
+    workshopView.setAttribute('aria-busy', 'false');
     classSelect.disabled = true;
     feedback(error instanceof Error ? error.message : String(error), 'error');
-    document.querySelector('#workshop-stats-panel').innerHTML = '<div class="empty">Impossible de charger l’Atelier.</div>';
-    document.querySelector('#workshop-spell-panel').innerHTML = '<div class="empty">Catalogue de sorts indisponible.</div>';
+    document.querySelector('#workshop-stats-panel').innerHTML = '<div class="ui-state" data-state="error"><strong>Atelier indisponible</strong><span>Impossible de charger les données certifiées. Recharge la page pour réessayer.</span></div>';
+    document.querySelector('#workshop-spell-panel').innerHTML = '<div class="ui-state" data-state="error"><strong>Sorts indisponibles</strong><span>Le catalogue de sorts n’a pas pu être chargé.</span></div>';
   }
 }
 
