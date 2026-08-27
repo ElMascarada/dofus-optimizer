@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import { createOptimizerV2Request } from '../js/optimizer-v2-orchestrator.js';
 import { normalizeSearchQuery, searchFingerprint, searchQueryDistance } from '../js/search-memory/search-query.js';
+import { mergeSearchOutputs, withExactCacheDiagnostics } from '../js/search-memory/search-result-merge.js';
 import { evaluateSearchSeedBuilds } from '../js/search-memory/search-seeds.js';
 import {
   WORKSHOP_SLOTS,
@@ -110,6 +111,21 @@ test('Lock/Reject invalident la compatibilité cache mais le seed Atelier ne pol
   assert.equal(searchFingerprint(first), searchFingerprint(sameConstraintsNewSeed));
   assert.equal(searchQueryDistance(first, sameConstraintsNewSeed), 0);
   assert.equal(searchQueryDistance(first, changedReject), Infinity);
+});
+
+test('la fusion d’un cache exact avec le seed Atelier conserve la provenance cache exacte', () => {
+  const cached = withExactCacheDiagnostics({
+    results: [{ score: 10, items: [item('cached', 'hat')] }],
+    diagnostics: { visited: 3 }
+  }, { fingerprint: 'fp-lock' });
+  const merged = mergeSearchOutputs(cached, {
+    results: [{ score: 11, items: [item('workshop-seed', 'hat')] }],
+    diagnostics: { seedEvaluation: { attempted: 1, valid: 1, rejected: {} } }
+  }, { topN: 10, diversityMode: 'score', fingerprint: 'fp-lock' });
+  assert.equal(merged.diagnostics.searchMemory.cacheHit, true);
+  assert.equal(merged.diagnostics.searchMemory.fingerprint, 'fp-lock');
+  assert.equal(merged.diagnostics.searchMemory.seedsAttempted, 1);
+  assert.equal(merged.diagnostics.searchMemory.seedsValid, 1);
 });
 
 test('les seeds incompatibles avec Lock/Reject sont éliminés avant CompleteBuildEvaluator', () => {
