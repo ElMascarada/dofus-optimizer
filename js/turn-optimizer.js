@@ -13,15 +13,15 @@ import {
   CombatEffectType,
   activeSpellCharges,
   applyCombatEffects,
+  combatEffectsOfType,
   combatStateSignature,
   expireCombatStates,
+  firstCombatEffect,
   spellChargeSignature,
   spellCombatEffects,
   spellWithActiveCombatCharge
 } from './combat/effects.js';
 import { defaultCombatMechanicsRegistry } from './combat/mechanics/default-registry.js';
-
-const spellEffectsCache = new WeakMap();
 
 function num(value, fallback = 0) {
   const parsed = Number(value);
@@ -30,20 +30,6 @@ function num(value, fallback = 0) {
 
 function positiveInt(value, fallback = 1) {
   return Math.max(1, Math.floor(num(value, fallback)));
-}
-
-function effectsForSpell(spell) {
-  if (!spell || typeof spell !== 'object') return spellCombatEffects(spell || {});
-  let effects = spellEffectsCache.get(spell);
-  if (!effects) {
-    effects = spellCombatEffects(spell);
-    spellEffectsCache.set(spell, effects);
-  }
-  return effects;
-}
-
-function firstEffect(effects, type) {
-  return (effects || []).find((effect) => effect.type === type) || null;
 }
 
 function objectiveTurns(objective = {}) {
@@ -69,15 +55,14 @@ function spellUsableOnTurn(spell, state, turn, targetKind = 'enemy') {
   const cost = Math.max(0, num(spell.apCost, 0));
   if (cost > state.apRemaining) return false;
   const id = String(spell.id);
-  const effects = effectsForSpell(spell);
-  const limit = firstEffect(effects, CombatEffectType.CAST_LIMIT) || {};
+  const limit = firstCombatEffect(spell, CombatEffectType.CAST_LIMIT) || {};
   const totalCastCount = state.castCounts[id] || 0;
   const perTurn = positiveInt(limit.perTurn || 99, 99);
   const perTarget = positiveInt(limit.perTarget || perTurn, perTurn);
   if (totalCastCount >= perTurn) return false;
   if ((state.targetCastCounts?.[targetCastKey(id, targetKind)] || 0) >= perTarget) return false;
 
-  const cooldown = firstEffect(effects, CombatEffectType.COOLDOWN) || {};
+  const cooldown = firstCombatEffect(spell, CombatEffectType.COOLDOWN) || {};
   const readyTurn = num(state.cooldowns[id], 1);
   if (readyTurn > turn) return false;
   const initialCooldown = Math.max(0, num(cooldown.initialTurns, 0));
@@ -100,7 +85,7 @@ function areaMultiplier(spell, objective = {}) {
 
 function applySpellState(spell, state, turn, targetKind) {
   const cost = Math.max(0, num(spell.apCost, 0));
-  const effects = effectsForSpell(spell);
+  const effects = spellCombatEffects(spell);
   const effected = applyCombatEffects(state, effects, {
     sourceId: String(spell.id),
     turn,
@@ -116,7 +101,7 @@ function applySpellState(spell, state, turn, targetKind) {
   const key = targetCastKey(id, targetKind);
   const targetCastCounts = { ...state.targetCastCounts, [key]: (state.targetCastCounts?.[key] || 0) + 1 };
   const cooldowns = { ...state.cooldowns };
-  const cooldown = firstEffect(effects, CombatEffectType.COOLDOWN);
+  const cooldown = firstCombatEffect(effects, CombatEffectType.COOLDOWN);
   const interval = Math.max(0, num(cooldown?.intervalTurns, 0));
   if (interval > 0) cooldowns[id] = turn + interval;
 
@@ -187,7 +172,7 @@ function castSpellVariant(spell, variant, state, turn, objective, targetKind = '
 function castSelfCharge(spell, state, turn) {
   const next = applySpellState(spell, state, turn, 'self');
   const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
-  const config = firstEffect(effectsForSpell(spell), CombatEffectType.SPELL_CHARGE) || {};
+  const config = firstCombatEffect(spell, CombatEffectType.SPELL_CHARGE) || {};
   const critChance = Math.max(0, Math.min(1, (num(spell.baseCritPct, 0) + num(selfStats.crit, 0)) / 100));
   const normalBonus = Math.max(0, num(config.baseDamageBonus, 0));
   const critBonus = Math.max(normalBonus, num(config.critBaseDamageBonus, normalBonus));
@@ -238,7 +223,7 @@ function castSelfCharge(spell, state, turn) {
 function castAttackCandidates(spell, state, turn, objective) {
   const selfStats = statsWithCombatModifiers(baseStatsForTurn(state, turn), state.modifiers, turn, 'self');
   const chargedSpell = spellWithActiveCombatCharge(spell, state.spellCharges, turn);
-  const variants = effectsForSpell(spell).some((effect) => effect.type === CombatEffectType.DAMAGE)
+  const variants = combatEffectsOfType(spell, CombatEffectType.DAMAGE).length
     ? spellDamageVariants(chargedSpell, selfStats, turn)
     : [null];
   return variants.map((variant) => castSpellVariant(spell, variant, state, turn, objective, variant ? 'enemy' : 'support'));
@@ -246,7 +231,7 @@ function castAttackCandidates(spell, state, turn, objective) {
 
 function actionCandidatesForSpell(spell, state, turn, objective) {
   const candidates = [];
-  const effects = effectsForSpell(spell);
+  const effects = spellCombatEffects(spell);
   const hasDamage = effects.some((effect) => effect.type === CombatEffectType.DAMAGE);
   const hasSupportEffects = effects.some((effect) => [
     CombatEffectType.STAT_MODIFIER,
@@ -389,7 +374,7 @@ export function optimizeCombatSequence({
   const firstTurnBase = baseStatsByTurn?.[firstTurn] || baseStats || {};
   const preparedSpells = (spells || []).map((spell) => defaultCombatMechanicsRegistry.prepareSpell(spell));
   const candidates = preparedSpells.filter((spell) => {
-    const effects = effectsForSpell(spell);
+    const effects = spellCombatEffects(spell);
     const actionable = effects.some((effect) => ![CombatEffectType.COOLDOWN, CombatEffectType.CAST_LIMIT].includes(effect.type));
     return spell?.combatRelevant !== false
       && Math.max(0, num(spell.apCost, 0)) <= Math.max(0, num(firstTurnBase.ap, 0) + 12)
