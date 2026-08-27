@@ -83,15 +83,13 @@ test('required equipment participates in the local cache key independent of id o
   assert.equal(harebourg, sameHarebourg);
 });
 
-test('runtime metadata and session bridge load before stop bridge', () => {
+test('le parcours V2 ne réactive pas le cache/session historique avant sa tranche dédiée', () => {
   const runtimeIndex = index.indexOf('js/runtime-meta.js');
-  const sessionIndex = index.indexOf('js/optimizer-session-bridge.js');
-  const stopIndex = index.indexOf('js/optimizer-stop-bridge.js');
+  const optimizerIndex = index.indexOf('js/optimizer-v2-app.js');
   assert.ok(runtimeIndex >= 0);
-  assert.ok(sessionIndex > runtimeIndex, 'runtime metadata must load before the session bridge');
-  assert.ok(stopIndex > sessionIndex, 'session bridge must patch Worker before the stop bridge');
-  assert.match(index, /styles-session\.css/);
+  assert.ok(optimizerIndex > runtimeIndex);
+  assert.equal(index.includes('js/optimizer-session-bridge.js'), false);
+  assert.equal(index.includes('js/optimizer-stop-bridge.js'), false);
   assert.match(bridgeSource, /5\. Équipement imposé/);
   assert.match(bridgeSource, /Panoplie du Comte Harebourg/);
-  assert.match(bridgeSource, /output\?\.diagnostics\?\.stoppedEarly/);
 });
