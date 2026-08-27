@@ -23,6 +23,14 @@ function requestPromise(request) {
   });
 }
 
+function transactionPromise(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = () => resolve(true);
+    transaction.onabort = () => reject(transaction.error || new Error('Transaction IndexedDB annulée.'));
+    transaction.onerror = () => reject(transaction.error || new Error('Transaction IndexedDB en erreur.'));
+  });
+}
+
 export class IndexedDbBuildStore {
   constructor({
     indexedDB = globalThis.indexedDB,
@@ -71,8 +79,17 @@ export class IndexedDbBuildStore {
   async transact(mode, action) {
     const database = await this.open();
     const transaction = database.transaction(this.storeName, mode);
+    const completion = transactionPromise(transaction);
     const store = transaction.objectStore(this.storeName);
-    return action(store, transaction);
+    try {
+      const result = await action(store, transaction);
+      await completion;
+      return result;
+    } catch (error) {
+      try { transaction.abort(); } catch {}
+      await completion.catch(() => {});
+      throw error;
+    }
   }
 
   async get(id) {
