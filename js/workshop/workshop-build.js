@@ -76,7 +76,10 @@ export function createWorkshopBuildFromOptimizerResult({
   }
 
   const selectedSpells = [...new Set(
-    (result?.combatPlan?.sequence || []).map((entry) => entry?.id).filter(Boolean).map(String)
+    (result?.combatPlan?.sequence || [])
+      .map((entry) => entry?.spellId ?? entry?.id)
+      .filter(Boolean)
+      .map(String)
   )];
   const build = createWorkshopBuild({ classId, equipmentBySlot, fmPolicy, selectedSpells });
   if (!specialSlotRulesAreValid(workshopItems(build))) {
