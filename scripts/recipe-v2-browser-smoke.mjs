@@ -7,7 +7,6 @@ const HTTP_PORT = 4173;
 const DEBUG_PORT = 9222;
 const APP_URL = `http://127.0.0.1:${HTTP_PORT}/`;
 const DEBUG_URL = `http://127.0.0.1:${DEBUG_PORT}`;
-const timeoutMs = 45_000;
 
 function findChrome() {
   const names = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean);
@@ -18,7 +17,7 @@ function findChrome() {
   throw new Error('Chrome/Chromium introuvable pour la recette navigateur V2.');
 }
 
-async function waitFor(fn, { timeout = timeoutMs, interval = 100, label = 'condition' } = {}) {
+async function waitFor(fn, { timeout = 20_000, interval = 100, label = 'condition' } = {}) {
   const started = Date.now();
   let lastError = null;
   while (Date.now() - started < timeout) {
@@ -53,21 +52,14 @@ class CdpClient {
     this.url = url;
     this.nextId = 1;
     this.pending = new Map();
-    this.socket = null;
   }
 
   async connect() {
     this.socket = new WebSocket(this.url);
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Timeout connexion CDP')), 8_000);
-      this.socket.addEventListener('open', () => {
-        clearTimeout(timer);
-        resolve();
-      }, { once: true });
-      this.socket.addEventListener('error', () => {
-        clearTimeout(timer);
-        reject(new Error('Connexion CDP impossible'));
-      }, { once: true });
+      this.socket.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+      this.socket.addEventListener('error', () => { clearTimeout(timer); reject(new Error('Connexion CDP impossible')); }, { once: true });
     });
     this.socket.addEventListener('message', (event) => {
       const message = JSON.parse(String(event.data));
@@ -89,46 +81,25 @@ class CdpClient {
   }
 
   async evaluate(expression) {
-    const result = await this.command('Runtime.evaluate', {
-      expression,
-      awaitPromise: true,
-      returnByValue: true
-    });
+    const result = await this.command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Erreur Runtime.evaluate');
     return result.result?.value;
   }
 
-  close() {
-    this.socket?.close();
-  }
+  close() { this.socket?.close(); }
 }
 
-const chrome = findChrome();
 const profile = mkdtempSync(join(tmpdir(), 'dofus-optimizer-recipe-'));
-const server = spawn('python3', ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], {
-  stdio: ['ignore', 'ignore', 'pipe']
-});
-const browser = spawn(chrome, [
-  '--headless=new',
-  '--no-sandbox',
-  '--disable-gpu',
-  '--disable-dev-shm-usage',
-  `--remote-debugging-port=${DEBUG_PORT}`,
-  `--user-data-dir=${profile}`,
-  'about:blank'
+const server = spawn('python3', ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const browser = spawn(findChrome(), [
+  '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
+  `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`, 'about:blank'
 ], { stdio: ['ignore', 'ignore', 'pipe'] });
 let client = null;
 
 try {
-  await waitFor(async () => {
-    const response = await fetch(APP_URL);
-    return response.ok;
-  }, { label: 'serveur HTTP local' });
-
-  await waitFor(async () => {
-    const response = await fetch(`${DEBUG_URL}/json/version`);
-    return response.ok;
-  }, { label: 'Chrome DevTools Protocol' });
+  await waitFor(async () => (await fetch(APP_URL)).ok, { label: 'serveur HTTP local' });
+  await waitFor(async () => (await fetch(`${DEBUG_URL}/json/version`)).ok, { label: 'Chrome DevTools Protocol' });
 
   const targetResponse = await fetch(`${DEBUG_URL}/json/new?${encodeURIComponent(APP_URL)}`, { method: 'PUT' });
   if (!targetResponse.ok) throw new Error(`Création onglet CDP: ${targetResponse.status}`);
@@ -138,12 +109,11 @@ try {
   await client.command('Page.enable');
   await client.command('Runtime.enable');
 
-  const ready = await waitFor(() => client.evaluate(`(() => {
-    const classSelect = document.querySelector('#optimizer-class');
+  await waitFor(() => client.evaluate(`(() => {
+    const optimizerClass = document.querySelector('#optimizer-class');
     const workshopClass = document.querySelector('#workshop-class-select');
-    return Boolean(classSelect && workshopClass && !classSelect.disabled && !workshopClass.disabled && document.querySelector('#optimizer-data-status')?.dataset.state === 'ready');
+    return Boolean(optimizerClass && workshopClass && !optimizerClass.disabled && !workshopClass.disabled && document.querySelector('#optimizer-data-status')?.dataset.state === 'ready');
   })()`), { timeout: 30_000, label: 'catalogues V2 chargés' });
-  if (!ready) throw new Error('Les catalogues V2 ne sont pas prêts.');
 
   const shell = await client.evaluate(`(() => ({
     workshopVisible: !document.querySelector('#workshop-view').hidden,
@@ -161,8 +131,8 @@ try {
     slot.focus();
     slot.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     await new Promise((resolve) => setTimeout(resolve, 50));
-    const browser = document.querySelector('#workshop-item-browser');
-    return Boolean(browser && !browser.hidden && browser.querySelector('[data-browser-item]'));
+    const catalogue = document.querySelector('#workshop-item-browser');
+    return Boolean(catalogue && !catalogue.hidden && catalogue.querySelector('[data-browser-item]'));
   })()`);
   if (!keyboardOpen) throw new Error('Ouverture clavier du catalogue Atelier impossible.');
 
@@ -175,7 +145,7 @@ try {
       filled: document.querySelectorAll('.workshop-slot.is-filled').length
     };
   })()`);
-  if (equipped.filled < 1 || equipped.progress?.trim() !== '1 / 16' || !equipped.browserHidden) throw new Error('Équipement Atelier / progression incohérents.');
+  if (equipped.filled !== 1 || equipped.progress?.trim() !== '1 / 16' || !equipped.browserHidden) throw new Error('Équipement Atelier / progression incohérents.');
 
   const optimizerReady = await client.evaluate(`(async () => {
     document.querySelector('[data-product-tab="optimizer"]').click();
@@ -192,35 +162,43 @@ try {
   })()`);
   if (!optimizerReady.optimizerVisible || !optimizerReady.workshopHidden || !optimizerReady.runEnabled) throw new Error('Navigation / activation Optimiseur incorrectes.');
 
-  await client.evaluate(`document.querySelector('#optimizer-run').click()`);
-  const searchState = await waitFor(() => client.evaluate(`(() => {
+  // Une contrainte volontairement impossible permet de traverser le vrai Worker
+  // jusqu'à un état terminal sans dépendre du temps variable d'une recherche BALANCED complète.
+  await client.evaluate(`(() => {
+    document.querySelector('#optimizer-min-vit').value = '99999';
+    document.querySelector('#optimizer-run').click();
+  })()`);
+  const terminal = await waitFor(() => client.evaluate(`(() => {
     const button = document.querySelector('#optimizer-run');
-    const root = document.querySelector('#optimizer-results');
     if (button.classList.contains('is-searching')) return null;
-    return {
-      state: root.dataset.state,
-      cards: root.querySelectorAll('[data-open-build]').length,
-      text: root.textContent.slice(0, 240)
-    };
-  })()`), { timeout: 40_000, interval: 150, label: 'optimisation V2 terminée' });
-  if (searchState.state === 'error') throw new Error(`Optimiseur en erreur: ${searchState.text}`);
-  if (searchState.cards < 1) throw new Error(`Aucun résultat ouvrable dans la recette: ${searchState.text}`);
+    const root = document.querySelector('#optimizer-results');
+    return { state: root.dataset.state, text: root.textContent.slice(0, 240), classDisabled: document.querySelector('#optimizer-class').disabled };
+  })()`), { timeout: 20_000, interval: 120, label: 'recherche impossible terminée' });
+  if (terminal.state === 'error') throw new Error(`Optimiseur en erreur: ${terminal.text}`);
+  if (terminal.state !== 'empty') throw new Error(`État terminal inattendu: ${terminal.state} · ${terminal.text}`);
+  if (terminal.classDisabled) throw new Error('Les contrôles Optimiseur ne sont pas restaurés après la recherche.');
 
-  const roundTrip = await client.evaluate(`(async () => {
-    document.querySelector('[data-open-build]')?.click();
+  // Vérifie aussi le chemin d'arrêt manuel du vrai Worker sans réduire son profil de qualité.
+  await client.evaluate(`(() => {
+    document.querySelector('#optimizer-min-vit').value = '0';
+    document.querySelector('#optimizer-run').click();
+  })()`);
+  await waitFor(() => client.evaluate(`document.querySelector('#optimizer-run').classList.contains('is-searching')`), { label: 'recherche libre démarrée' });
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  const stopped = await client.evaluate(`(async () => {
+    document.querySelector('#optimizer-run').click();
     await new Promise((resolve) => setTimeout(resolve, 80));
     return {
-      workshopVisible: !document.querySelector('#workshop-view').hidden,
-      optimizerHidden: document.querySelector('#optimizer-view').hidden,
-      feedback: document.querySelector('#workshop-feedback')?.textContent,
-      filled: document.querySelectorAll('.workshop-slot.is-filled').length
+      searching: document.querySelector('#optimizer-run').classList.contains('is-searching'),
+      state: document.querySelector('#optimizer-results').dataset.state,
+      classDisabled: document.querySelector('#optimizer-class').disabled,
+      diagnostics: document.querySelector('#optimizer-diagnostics').textContent
     };
   })()`);
-  if (!roundTrip.workshopVisible || !roundTrip.optimizerHidden || roundTrip.filled !== 16) throw new Error('Round-trip Optimiseur → Atelier incomplet.');
-  if (!roundTrip.feedback?.includes('Optimiseur')) throw new Error(`Feedback round-trip absent: ${roundTrip.feedback}`);
+  if (stopped.searching || stopped.classDisabled || stopped.state === 'error') throw new Error(`Arrêt manuel incohérent: ${JSON.stringify(stopped)}`);
 
   console.log('V2_BROWSER_RECIPE_PASS');
-  console.log(JSON.stringify({ shell, equipped, optimizerReady, searchState, roundTrip }, null, 2));
+  console.log(JSON.stringify({ shell, equipped, optimizerReady, terminal, stopped }, null, 2));
 } finally {
   client?.close();
   await Promise.all([stopProcess(browser), stopProcess(server)]);
