@@ -143,7 +143,7 @@ export class MemorySearchStore {
 
 function serializeResult(result = {}) {
   const clone = copy(result) || {};
-  const itemIds = [...new Set((clone.items || []).map((item) => String(item?.id || '')).filter(Boolean))];
+  const itemIds = (clone.items || []).map((item) => String(item?.id || '')).filter(Boolean);
   delete clone.items;
   return { ...clone, itemIds };
 }
@@ -186,7 +186,6 @@ export function migrateSearchRecord(record = {}) {
   }
   const fingerprint = String(record?.fingerprint || '');
   if (!fingerprint || !record?.query || !record?.output) throw new Error('Entrée de mémoire Optimiseur incomplète.');
-  if (searchFingerprint(record.query) !== fingerprint) throw new Error('Fingerprint de mémoire Optimiseur incohérent.');
   return {
     schemaVersion: SEARCH_MEMORY_RECORD_VERSION,
     fingerprint,
@@ -206,7 +205,7 @@ export function seedBuildsFromNearby(nearby = [], { limit = DEFAULT_SEED_BUILDS 
     const record = entry?.record || entry;
     const similarity = Number(entry?.similarity || 0);
     for (const result of record?.output?.results || []) {
-      const itemIds = [...new Set((result?.itemIds || []).map(String).filter(Boolean))];
+      const itemIds = (result?.itemIds || []).map(String).filter(Boolean);
       if (!itemIds.length) continue;
       ranked.push({
         itemIds,
@@ -268,6 +267,10 @@ export class SearchRepository {
     try {
       record = migrateSearchRecord(raw);
     } catch {
+      await this.store.delete(fingerprint).catch(() => {});
+      return { hit: false, reason: 'invalid-record', fingerprint, output: null, record: null };
+    }
+    if (record.fingerprint !== fingerprint) {
       await this.store.delete(fingerprint).catch(() => {});
       return { hit: false, reason: 'invalid-record', fingerprint, output: null, record: null };
     }
