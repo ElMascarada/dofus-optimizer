@@ -152,11 +152,12 @@ test('changer un item dans WorkshopController ne crée aucun optimizer Worker', 
   }
 });
 
-test('le shell conserve l’ancien Optimiseur et son bootstrap historique', () => {
+test('le shell conserve Atelier et fait du nouvel Optimiseur V2 le parcours visible', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   assert.match(html, /id="workshop-view"/);
   assert.match(html, /id="optimizer-view"/);
-  assert.match(html, /id="optimize"/);
-  assert.match(html, /js\/app-experimental\.js/);
+  assert.match(html, /id="optimizer-run"/);
+  assert.match(html, /js\/optimizer-v2-app\.js/);
+  assert.doesNotMatch(html, /js\/app-experimental\.js/);
   assert.match(html, /data-product-tab="optimizer"/);
 });
