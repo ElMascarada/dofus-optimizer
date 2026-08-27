@@ -54,6 +54,7 @@ export function createOptimizerV2Request({
   const classSpells = combatSpellsForElement(spellData, normalizedClassId, normalizedElement);
 
   return {
+    classId: normalizedClassId,
     items: dataset?.items || [],
     sets: dataset?.sets || [],
     selections: [],
