@@ -54,6 +54,8 @@ jobs:
           NODE
       - name: Syntax check
         run: npm run check
+      - name: Spell support report
+        run: npm run report:spell-support
       - name: Tests
         id: tests
         shell: bash
