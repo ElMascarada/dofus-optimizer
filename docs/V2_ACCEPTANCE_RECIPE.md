@@ -33,21 +33,20 @@ Vérifie notamment :
 
 `npm run recipe:browser`
 
-Le script démarre l’application sur un serveur HTTP local et pilote Chrome headless via CDP, sans dépendance npm supplémentaire. Il valide :
+Le script démarre l’application sur un serveur HTTP local et pilote Chrome headless via CDP, sans dépendance npm supplémentaire. Il valide réellement :
 
-1. cold start de l’application ;
-2. chargement réel des catalogues équipements + sorts ;
-3. Atelier visible et progression initiale `0 / 16` ;
-4. ouverture d’un slot au clavier avec `Enter` ;
-5. sélection d’un vrai item et progression `1 / 16` ;
-6. passage à l’Optimiseur ;
-7. sélection d’une vraie classe ;
-8. lancement d’une recherche réelle ;
-9. obtention d’au moins un résultat ouvrable ;
-10. ouverture du résultat dans l’Atelier ;
-11. vérification du retour Atelier avec un stuff complet `16 / 16`.
+1. démarrage du serveur local et connexion Chrome DevTools Protocol ;
+2. chargement réel des catalogues équipements + sorts jusqu’aux deux sélecteurs de classe disponibles ;
+3. shell initial sur l’Atelier, Optimiseur masqué, version UI `v0.14.2…` et progression `0 / 16` ;
+4. ouverture du premier slot Atelier au clavier avec `Enter` et présence d’items réels dans le catalogue ;
+5. équipement d’un vrai item, fermeture du catalogue et progression `1 / 16` ;
+6. passage réel à l’Optimiseur, masquage de l’Atelier et activation du bouton après sélection d’une vraie classe ;
+7. lancement du vrai Worker avec une contrainte de vitalité volontairement impossible (`99999`) afin d’obtenir de façon déterministe un état terminal `empty`, sans erreur ;
+8. restauration des contrôles Optimiseur après cette recherche ;
+9. lancement d’une recherche libre avec le vrai Worker, puis arrêt manuel via le même bouton ;
+10. sortie effective de l’état de recherche, contrôles restaurés et absence d’état `error` après l’arrêt.
 
-Ce smoke est exécuté par la CI standard V2.
+Le smoke navigateur ne prétend pas ouvrir un résultat complet dans l’Atelier : le round-trip résultat → Atelier, le stuff `16 / 16`, Lock/Reject et Trouver mieux restent couverts par les tests Node canoniques et la recette UI statique. Ce smoke est exécuté par la CI standard V2.
 
 ## 3. Couverture fonctionnelle historique réutilisée
 
