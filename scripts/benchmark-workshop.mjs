@@ -3,6 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { validateDofusSnapshot, validateSpellSnapshot } from '../js/data-loader.js';
 import { WORKSHOP_SLOTS, createWorkshopBuild, equipWorkshopItem } from '../js/workshop/workshop-build.js';
 import { evaluateWorkshopBuild } from '../js/workshop/workshop-evaluator.js';
+import { createItemSearchIndex } from '../js/workshop/item-search.js';
 
 const rawItems = JSON.parse(await readFile(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
 const rawSpells = JSON.parse(await readFile(new URL('../data/normalized/spell-data.json', import.meta.url), 'utf8'));
@@ -56,3 +57,31 @@ console.log(`WORKSHOP_RECALC median=${median.toFixed(3)}ms p95=${p95.toFixed(3)}
 if (p95 > 100) {
   throw new Error(`Régression Atelier: p95 ${p95.toFixed(3)}ms > 100ms`);
 }
+
+const indexStart = performance.now();
+const itemSearch = createItemSearchIndex(dataset.items, dataset.sets);
+const indexMs = performance.now() - indexStart;
+const smartQueries = [
+  'multi do crit',
+  'terre ini',
+  'eau distance',
+  'grosse vita res',
+  'anneau PA multi'
+];
+for (const query of smartQueries) itemSearch.search(query, { limit: 120 });
+
+const searchSamples = [];
+for (let index = 0; index < 100; index++) {
+  const query = smartQueries[index % smartQueries.length];
+  const start = performance.now();
+  itemSearch.search(query, { limit: 120 });
+  searchSamples.push(performance.now() - start);
+}
+searchSamples.sort((a, b) => a - b);
+const searchMedian = searchSamples[Math.floor(searchSamples.length / 2)];
+const searchP95 = searchSamples[Math.min(searchSamples.length - 1, Math.ceil(searchSamples.length * 0.95) - 1)];
+const searchMax = searchSamples.at(-1);
+console.log(`WORKSHOP_ITEM_SEARCH index=${indexMs.toFixed(3)}ms median=${searchMedian.toFixed(3)}ms p95=${searchP95.toFixed(3)}ms max=${searchMax.toFixed(3)}ms samples=${searchSamples.length} items=${itemSearch.size}`);
+
+if (indexMs > 150) throw new Error(`Régression index Smart Item Search: ${indexMs.toFixed(3)}ms > 150ms`);
+if (searchP95 > 25) throw new Error(`Régression Smart Item Search: p95 ${searchP95.toFixed(3)}ms > 25ms`);
