@@ -101,15 +101,19 @@ Checkpoint de code performant : `c63abf8cddf1cb73d4d2a32357afb83ee262b438`.
 
 - CI #535 attempt 1 : verte ;
 - CI #535 attempt 2 : verte ;
+- CI standard documentaire #539 : verte ;
+- CI #540 avec vérification temporaire explicite `npm run report:spell-support` : verte ;
+- le workflow temporairement enrichi pour #540 a ensuite été restauré exactement à sa version de départ ;
 - `npm run check` : vert ;
 - `npm test` : vert, y compris `tests/performance-reuse.test.mjs` ;
 - `benchmark:v2` : vert ;
 - `benchmark:search` : vert ;
 - `benchmark:workshop` : vert ;
+- `report:spell-support` : vert ;
 - fingerprints qualité inchangés ;
 - Search diagnostics structurels identiques au baseline.
 
-Le HEAD documentaire final doit encore repasser la CI standard verte avant passage READY. Ne pas merger automatiquement.
+Le HEAD final après restauration CI/documentation doit encore repasser la CI standard verte avant passage READY. Ne pas merger automatiquement.
 
 ## Prochaine tranche canonique après merge vert de #50
 
