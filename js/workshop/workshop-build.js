@@ -112,15 +112,12 @@ export function createWorkshopBuildFromOptimizerResult({
     usedIndexes.add(index);
   }
 
-  const usedBySlot = new Map();
   for (let index = 0; index < resultItems.length; index++) {
     if (usedIndexes.has(index)) continue;
     const item = resultItems[index];
-    const keys = (SLOT_KEYS_BY_SLOT.get(item?.slot) || []).filter((key) => !equipmentBySlot[key]);
-    const slotIndex = usedBySlot.get(item?.slot) || 0;
-    if (!keys[slotIndex]) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
-    equipmentBySlot[keys[slotIndex]] = item;
-    usedBySlot.set(item.slot, slotIndex + 1);
+    const slotKey = (SLOT_KEYS_BY_SLOT.get(item?.slot) || []).find((key) => !equipmentBySlot[key]);
+    if (!slotKey) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
+    equipmentBySlot[slotKey] = item;
   }
 
   const selectedSpells = [...new Set(
