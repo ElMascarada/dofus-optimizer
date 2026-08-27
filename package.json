@@ -6,7 +6,7 @@
     "test": "node --test",
     "check": "node --check js/*.js && node --check js/workshop/*.js && node --check optimizer/*.js && node --check scripts/*.mjs",
     "benchmark:v2": "node scripts/benchmark-v2-baseline.mjs",
-    "benchmark:search": "node scripts/benchmark-candidate-search.mjs",
+    "benchmark:search": "node scripts/benchmark-candidate-search.mjs && node scripts/benchmark-search-memory.mjs",
     "benchmark:workshop": "node scripts/benchmark-workshop.mjs",
     "report:spell-support": "node scripts/report-spell-support.mjs",
     "sync:data": "node scripts/sync-dofusdude.mjs",
