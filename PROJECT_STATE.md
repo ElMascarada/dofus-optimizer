@@ -40,6 +40,7 @@ Implémenté sur la branche :
 - le seed Atelier ne participe pas au fingerprint : il reste une proposition/lower bound, jamais une contrainte implicite sur les slots non lockés ;
 - les seeds proches et le seed Atelier sont dédupliqués, puis tout seed qui manque un required item ou contient un reject est éliminé avant réévaluation ;
 - un cache exact compatible reste réutilisable ; avec `Trouver mieux`, le résultat en cache est conservé et seul le seed Atelier est réévalué avant fusion ;
+- la fusion cache exact + seed conserve explicitement `cacheHit=true` dans les diagnostics, avec test de non-régression ;
 - les résultats ouverts dans l'Atelier replacent les items lockés dans leurs slots Atelier exacts et conservent la blacklist ;
 - aucune modification de `CandidatePolicy`, `SetCoreCatalog`, des beams/pools ou de `CompleteBuildEvaluator` ;
 - aucun patch global DOM / Worker.
@@ -72,9 +73,9 @@ Implémenté sur la branche :
 
 ## Validation de #48
 
-Checkpoint code avant mise à jour documentaire : `5705293577a1d1edf83f3be896eac7881a930196`.
+Checkpoint code complet avant documentation finale : `d3c2c98cec621d0789b533846dcc3958fe440094`.
 
-Optimizer CI #521 sur ce checkpoint : validations métier terminées avec succès :
+Optimizer CI #521 sur le checkpoint précédent `5705293577a1d1edf83f3be896eac7881a930196` : validations métier terminées avec succès :
 
 - syntax check / `npm run check` : vert ;
 - tests historiques + tests Lock/Reject/Trouver mieux : verts ;
@@ -82,7 +83,7 @@ Optimizer CI #521 sur ce checkpoint : validations métier terminées avec succè
 - `benchmark:search` : vert ;
 - `benchmark:workshop` : vert.
 
-La CI du HEAD documentaire final doit encore être verte avant passage READY. Ne pas merger automatiquement.
+Après ce checkpoint, un correctif étroit a uniquement préservé la provenance `cacheHit=true` lors de la fusion d'un cache exact avec le seed Atelier et ajouté son test dédié. La CI du HEAD final documentaire doit être verte avant passage READY. Ne pas merger automatiquement.
 
 ## Prochaine tranche canonique après merge vert de #48
 
