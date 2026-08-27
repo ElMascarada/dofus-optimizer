@@ -4,6 +4,14 @@ import {
   createOptimizerV2Request,
   OPTIMIZER_V2_ELEMENTS
 } from './optimizer-v2-orchestrator.js';
+import {
+  createSearchVersionContext,
+  normalizeSearchQuery
+} from './search-query.js';
+import {
+  SearchRepository,
+  seedBuildsFromNearby
+} from './search-repository.js';
 import { createWorkshopBuildFromOptimizerResult } from './workshop/workshop-build.js';
 import { OPEN_WORKSHOP_BUILD_EVENT } from './workshop/workshop-events.js';
 
@@ -32,10 +40,14 @@ const CONSTRAINT_INPUTS = Object.freeze({
 let dataset = null;
 let spellData = null;
 let worker = null;
+let searchRepository = null;
 let activeRequestId = 0;
+let memoryLookupToken = 0;
+let preparingSearch = false;
 let displayedBuilds = [];
 let latestPartialResults = [];
 let currentPayload = null;
+let currentQuery = null;
 
 function escapeHtml(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -104,23 +116,35 @@ function setIdle() {
   const finished = worker;
   worker = null;
   if (finished) finished.terminate();
+  preparingSearch = false;
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
   optimizeButton.textContent = 'Optimiser';
 }
 
 function stopSearch() {
-  if (!worker) return;
-  worker.terminate();
-  worker = null;
-  activeRequestId++;
-  renderResults(latestPartialResults, 'Aucun build valide trouvé avant l’arrêt.');
-  diagnosticsRoot.textContent = latestPartialResults.length
-    ? `Recherche arrêtée · ${latestPartialResults.length} résultat${latestPartialResults.length > 1 ? 's' : ''} conservé${latestPartialResults.length > 1 ? 's' : ''}.`
-    : 'Recherche arrêtée.';
+  memoryLookupToken++;
+  if (!worker && !preparingSearch) return;
+  if (worker) {
+    worker.terminate();
+    worker = null;
+    activeRequestId++;
+    renderResults(latestPartialResults, 'Aucun build valide trouvé avant l’arrêt.');
+    diagnosticsRoot.textContent = latestPartialResults.length
+      ? `Recherche arrêtée · ${latestPartialResults.length} résultat${latestPartialResults.length > 1 ? 's' : ''} conservé${latestPartialResults.length > 1 ? 's' : ''}.`
+      : 'Recherche arrêtée.';
+  } else {
+    diagnosticsRoot.textContent = 'Préparation de la recherche annulée.';
+  }
   setIdle();
 }
 
-function handleWorkerMessage(event, requestId) {
+function memoryDiagnostics(output = {}) {
+  const seeds = output?.diagnostics?.searchMemorySeeds || {};
+  if (!Number(seeds.requested || 0)) return 'cache miss · aucun seed proche';
+  return `cache miss · ${Number(seeds.valid || 0)}/${Number(seeds.requested || 0)} seeds proches valides`;
+}
+
+function handleWorkerMessage(event, requestId, query) {
   const message = event.data || {};
   if (requestId !== activeRequestId || message.requestId !== requestId) return;
   if (message.type === 'progress') {
@@ -140,12 +164,17 @@ function handleWorkerMessage(event, requestId) {
   latestPartialResults = output.results || [];
   renderResults(output.results || []);
   const combat = output.diagnostics?.combatRefine;
-  diagnosticsRoot.textContent = `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''}`;
+  diagnosticsRoot.textContent = `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryDiagnostics(output)}`;
+  if (searchRepository && query) {
+    searchRepository.save(query, output).catch((error) => {
+      console.warn('Mémoire de recherche indisponible:', error);
+    });
+  }
   setIdle();
 }
 
-function runSearch() {
-  if (worker) return stopSearch();
+async function runSearch() {
+  if (worker || preparingSearch) return stopSearch();
   if (!dataset || !spellData) return;
   try {
     const payload = createOptimizerV2Request({
@@ -162,12 +191,53 @@ function runSearch() {
       return;
     }
 
+    const query = normalizeSearchQuery(
+      payload,
+      createSearchVersionContext({ dataset, spellData })
+    );
     currentPayload = payload;
+    currentQuery = query;
     latestPartialResults = [];
     displayedBuilds = [];
+    preparingSearch = true;
+    optimizeButton.textContent = 'Arrêter';
+    resultsRoot.innerHTML = '<div class="empty">Vérification de la mémoire locale…</div>';
+    diagnosticsRoot.textContent = 'Recherche d’un résultat compatible en cache…';
+    const lookupToken = ++memoryLookupToken;
+
+    let nearby = [];
+    if (searchRepository) {
+      try {
+        const exact = await searchRepository.findExact(query, { items: dataset.items });
+        if (lookupToken !== memoryLookupToken) return;
+        if (exact.hit) {
+          const output = {
+            ...exact.output,
+            diagnostics: {
+              ...(exact.output?.diagnostics || {}),
+              searchMemory: { cacheHit: true, fingerprint: exact.fingerprint }
+            }
+          };
+          latestPartialResults = output.results || [];
+          renderResults(output.results || []);
+          diagnosticsRoot.textContent = `Cache exact · ${latestPartialResults.length} résultat${latestPartialResults.length > 1 ? 's' : ''} · aucun recalcul lourd.`;
+          setIdle();
+          return;
+        }
+        nearby = await searchRepository.findNearby(query);
+      } catch (error) {
+        console.warn('Mémoire de recherche indisponible:', error);
+      }
+    }
+    if (lookupToken !== memoryLookupToken) return;
+
+    const seedBuilds = seedBuildsFromNearby(nearby);
+    payload.seedBuilds = seedBuilds;
+    currentPayload = payload;
+    preparingSearch = false;
     const requestId = ++activeRequestId;
     worker = new Worker(new URL('./optimizer-worker.js', import.meta.url), { type: 'module' });
-    worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
+    worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId, query));
     worker.addEventListener('error', (event) => {
       if (requestId !== activeRequestId) return;
       renderResults([], `Erreur du worker : ${event.message || 'inconnue'}`);
@@ -177,10 +247,11 @@ function runSearch() {
 
     optimizeButton.textContent = 'Arrêter';
     resultsRoot.innerHTML = '<div class="empty">Recherche en cours…</div>';
-    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts disponibles.`;
+    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · cache miss · ${seedBuilds.length} seed${seedBuilds.length > 1 ? 's' : ''}.`;
     worker.postMessage({ type: 'optimize', requestId, payload });
   } catch (error) {
     renderResults([], error instanceof Error ? error.message : String(error));
+    setIdle();
   }
 }
 
@@ -208,6 +279,7 @@ async function init() {
   turnSelect.value = 'sum';
   try {
     [dataset, spellData] = await Promise.all([loadDofusData(), loadSpellData()]);
+    searchRepository = new SearchRepository();
     classSelect.innerHTML = '<option value="">Choisir une classe</option>'
       + spellData.breeds.map((breed) => `<option value="${breed.id}">${escapeHtml(breed.name)}</option>`).join('');
     classSelect.disabled = false;
@@ -220,7 +292,7 @@ async function init() {
 }
 
 classSelect.addEventListener('change', () => {
-  if (worker) stopSearch();
+  if (worker || preparingSearch) stopSearch();
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
 });
 optimizeButton.addEventListener('click', runSearch);
