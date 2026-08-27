@@ -58,5 +58,6 @@ export const TURN_MODES = [
   ['t3', 'T3'],
   ['sum', 'T1 + T2 + T3'],
   ['average', 'Moyenne T1–T3'],
-  ['min', 'Pire tour']
+  ['min', 'Pire tour'],
+  ['constant', 'Constant']
 ];
