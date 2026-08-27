@@ -9,49 +9,61 @@
   <link rel="apple-touch-icon" sizes="180x180" href="assets/app/icon-180.png">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="styles-experimental.css">
-  <link rel="stylesheet" href="styles-session.css">
   <link rel="stylesheet" href="styles-workshop.css">
   <link rel="stylesheet" href="styles-optimizer-v2.css">
+  <link rel="stylesheet" href="styles-v2-polish.css">
 </head>
 <body>
   <header class="topbar">
-    <div><span class="eyebrow">BUILD SOLVER</span><h1>Dofus Optimizer</h1><p>Trouver le meilleur stuff sous contraintes, pas simplement additionner des stats.</p></div>
-    <span id="version" class="pill"></span>
+    <div class="topbar-brand">
+      <span class="eyebrow">DOFUS · BUILD LAB</span>
+      <h1>Dofus Optimizer</h1>
+      <p>Construis ton stuff dans l’Atelier, mesure ses dégâts exacts, puis laisse l’Optimiseur chercher mieux sous tes contraintes.</p>
+    </div>
+    <div class="topbar-meta" aria-label="Version de l’application">
+      <span class="pill">V2</span>
+      <span id="version" class="pill">version…</span>
+    </div>
   </header>
 
   <main>
     <nav class="product-tabs" role="tablist" aria-label="Dofus Optimizer V2">
-      <button type="button" class="product-tab is-active" data-product-tab="workshop" role="tab" aria-selected="true">ATELIER</button>
-      <button type="button" class="product-tab" data-product-tab="optimizer" role="tab" aria-selected="false">OPTIMISEUR</button>
+      <button id="tab-workshop" type="button" class="product-tab is-active" data-product-tab="workshop" role="tab" aria-controls="workshop-view" aria-selected="true" tabindex="0">ATELIER</button>
+      <button id="tab-optimizer" type="button" class="product-tab" data-product-tab="optimizer" role="tab" aria-controls="optimizer-view" aria-selected="false" tabindex="-1">OPTIMISEUR</button>
     </nav>
 
-    <section id="workshop-view" class="product-view" role="tabpanel"></section>
+    <section id="workshop-view" class="product-view" role="tabpanel" aria-labelledby="tab-workshop"></section>
 
-    <section id="optimizer-view" class="product-view" role="tabpanel" hidden>
+    <section id="optimizer-view" class="product-view" role="tabpanel" aria-labelledby="tab-optimizer" hidden>
       <section class="panel optimizer-v2-hero">
-        <div><span class="eyebrow">OPTIMISEUR V2</span><h2>Classe → Élément → Contraintes → Objectif</h2><p>Le parcours simplifié orchestre les moteurs de recherche et de combat existants.</p></div>
-        <span id="optimizer-data-status" class="status">Chargement des bases certifiées…</span>
+        <div>
+          <span class="eyebrow">OPTIMISEUR V2</span>
+          <h2>Classe → Élément → Contraintes → Objectif</h2>
+          <p>Définis ce que tu veux obtenir. Les moteurs existants cherchent ensuite des builds complets et certifiés.</p>
+        </div>
+        <span id="optimizer-data-status" class="status" data-state="loading" aria-live="polite">Chargement des données certifiées…</span>
       </section>
 
+      <div id="optimizer-refinement-context" class="optimizer-refinement-context" hidden aria-live="polite"></div>
+
       <div class="optimizer-v2-layout">
-        <aside class="optimizer-v2-controls">
+        <aside class="optimizer-v2-controls" aria-label="Paramètres de recherche">
           <section class="panel">
-            <h2>1. Classe</h2>
+            <h2>01 · Classe</h2>
             <label class="field">Classe
               <select id="optimizer-class" disabled><option>Chargement…</option></select>
             </label>
           </section>
 
           <section class="panel">
-            <h2>2. Élément</h2>
+            <h2>02 · Élément</h2>
             <label class="field">Élément
               <select id="optimizer-element"></select>
             </label>
           </section>
 
           <section class="panel">
-            <h2>3. Contraintes</h2>
+            <h2>03 · Contraintes</h2>
             <div class="form-grid optimizer-v2-constraints">
               <label class="field">PA minimum<input id="optimizer-min-ap" type="number" min="0" step="1" value="12"></label>
               <label class="field">PM minimum<input id="optimizer-min-mp" type="number" min="0" step="1" value="6"></label>
@@ -63,31 +75,41 @@
               <label class="field">Résistance Eau %<input id="optimizer-res-water" type="number" min="0" max="50" step="1" value="0"></label>
               <label class="field">Résistance Air %<input id="optimizer-res-air" type="number" min="0" max="50" step="1" value="0"></label>
             </div>
+            <p class="hint">Laisse une valeur à 0 pour ne pas imposer cette contrainte.</p>
           </section>
 
           <section class="panel">
-            <h2>4. Objectif</h2>
+            <h2>04 · Objectif</h2>
             <label class="field">Tour / agrégation
               <select id="optimizer-turn-mode"></select>
             </label>
-            <p class="hint">T1/T2/T3 ciblent un tour, T1–T3 cumule, Moyenne calcule la moyenne arithmétique et Pire tour maximise le minimum. Constant = moyenne harmonique T1–T3 : 3 / (1/T1 + 1/T2 + 1/T3), avec 0 si un tour vaut 0.</p>
+            <details class="optimizer-objective-help">
+              <summary>Comprendre les objectifs temporels</summary>
+              <p>T1/T2/T3 ciblent un tour. T1–T3 cumule, Moyenne calcule la moyenne arithmétique, Pire tour maximise le minimum. Constant utilise la moyenne harmonique T1–T3 et vaut 0 si un tour vaut 0.</p>
+            </details>
           </section>
 
           <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
-          <p id="optimizer-diagnostics" class="diagnostics" aria-live="polite"></p>
+          <p id="optimizer-diagnostics" class="diagnostics" aria-live="polite">Prêt après sélection d’une classe.</p>
         </aside>
 
-        <section class="optimizer-v2-output">
-          <div class="section-title"><div><span class="eyebrow">RÉSULTATS</span><h2>Top builds</h2></div><span class="pill">Top 10</span></div>
-          <div id="optimizer-results"><div class="empty">Chargement des bases certifiées…</div></div>
+        <section class="optimizer-v2-output" aria-labelledby="optimizer-results-title">
+          <div class="section-title">
+            <div><span class="eyebrow">RÉSULTATS</span><h2 id="optimizer-results-title">Top builds</h2></div>
+            <span class="pill">Top 10</span>
+          </div>
+          <div id="optimizer-results" aria-live="polite" aria-busy="true">
+            <div class="ui-state" data-state="loading"><strong>Préparation de l’Optimiseur</strong><span>Chargement des équipements et des sorts certifiés.</span></div>
+          </div>
         </section>
       </div>
     </section>
   </main>
 
-  <script src="js/runtime-meta.js?v=20260827-2"></script>
-  <script type="module" src="js/workshop/workshop-app.js?v=20260827-2"></script>
-  <script type="module" src="js/optimizer-v2-app.js?v=20260827-2"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260827-2', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script src="js/runtime-meta.js?v=20260827-3"></script>
+  <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
+  <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
+  <script type="module" src="js/optimizer-v2-app.js?v=20260827-3"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260827-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
