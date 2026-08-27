@@ -29,6 +29,17 @@ function nonNegativeNumber(value) {
   return Number.isFinite(number) ? Math.max(0, number) : 0;
 }
 
+function normalizeItemIds(value = []) {
+  return [...new Set((value || []).map(String).filter(Boolean))].sort();
+}
+
+function normalizeLockedItemsBySlot(value = {}) {
+  return Object.fromEntries(Object.entries(value || {})
+    .map(([slotKey, itemId]) => [String(slotKey), String(itemId || '')])
+    .filter(([, itemId]) => Boolean(itemId))
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
+
 export function normalizeOptimizerV2Constraints(constraints = {}) {
   return Object.fromEntries(
     OPTIMIZER_V2_CONSTRAINT_KEYS.map((key) => [key, nonNegativeNumber(constraints?.[key])])
@@ -42,7 +53,9 @@ export function createOptimizerV2Request({
   element = 'earth',
   constraints = {},
   turnMode = 'sum',
-  topN = 10
+  topN = 10,
+  lockedItemsBySlot = {},
+  rejectedItemIds = []
 } = {}) {
   const normalizedClassId = String(classId || '');
   if (!normalizedClassId || !(spellData?.breeds || []).some((breed) => String(breed.id) === normalizedClassId)) {
@@ -52,10 +65,16 @@ export function createOptimizerV2Request({
   const normalizedElement = ELEMENT_IDS.has(String(element)) ? String(element) : 'earth';
   const normalizedTurnMode = TURN_MODE_IDS.has(String(turnMode)) ? String(turnMode) : 'sum';
   const classSpells = combatSpellsForElement(spellData, normalizedClassId, normalizedElement);
+  const normalizedLocks = normalizeLockedItemsBySlot(lockedItemsBySlot);
+  const requiredItemIds = normalizeItemIds(Object.values(normalizedLocks));
+  const normalizedRejected = normalizeItemIds(rejectedItemIds);
+  const rejected = new Set(normalizedRejected);
+  const conflict = requiredItemIds.find((itemId) => rejected.has(itemId));
+  if (conflict) throw new Error(`Un item ne peut pas être à la fois locké et rejeté (${conflict}).`);
 
   return {
     classId: normalizedClassId,
-    items: dataset?.items || [],
+    items: (dataset?.items || []).filter((item) => !rejected.has(String(item?.id))),
     sets: dataset?.sets || [],
     selections: [],
     classSpells,
@@ -79,6 +98,9 @@ export function createOptimizerV2Request({
     scenario: { requiredApByTurn: {} },
     diversityMode: 'gear',
     searchProfile: 'BALANCED',
-    topN: Math.max(1, Number(topN || 10))
+    topN: Math.max(1, Number(topN || 10)),
+    requiredItemIds,
+    lockedItemsBySlot: normalizedLocks,
+    rejectedItemIds: normalizedRejected
   };
 }
