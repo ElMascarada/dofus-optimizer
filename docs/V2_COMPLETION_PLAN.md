@@ -9,12 +9,17 @@ Ce document est la roadmap de fin de course. Il doit permettre à une nouvelle f
 - [x] Candidate Policy / préfiltrage / Pareto / contraintes
 - [x] SetCoreCatalog / recherche hybride set-core + standalone
 - [x] Atelier V2 foundation : 16 slots, stats live, dégâts sorts, shell produit
+- [x] Persistence Atelier + bibliothèque de builds + Smart Item Search (PR #44)
 
 ## Tranche 1 — Persistence Atelier + bibliothèque + Smart Item Search
 
 ### Dépendances
 
 Atelier #41 mergé.
+
+### Statut
+
+Livrée par la PR #44. La tranche suivante ne doit partir que du `main` après merge vert de #44.
 
 ### Scope
 

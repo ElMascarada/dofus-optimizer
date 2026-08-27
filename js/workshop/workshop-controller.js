@@ -33,6 +33,11 @@ export class WorkshopController {
     return snapshot;
   }
 
+  replaceBuild(build = createWorkshopBuild()) {
+    this.build = createWorkshopBuild(build);
+    return this.refresh();
+  }
+
   setClass(classId) {
     this.build = setWorkshopClass(this.build, classId);
     return this.refresh();
