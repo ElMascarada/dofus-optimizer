@@ -164,12 +164,13 @@ test('baseline: buff/state spells may improve the chosen sequence', () => {
   assert.ok(result.totalDamage > 240);
 });
 
-test('baseline: manual stop keeps the partial-finalization production path wired', async () => {
+test('baseline: manual stop keeps partial results in the simplified production path', async () => {
   const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  const bridge = await readFile(new URL('../js/optimizer-stop-bridge.js', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
 
-  assert.match(index, /optimizer-stop-bridge\.js/);
-  assert.match(bridge, /finalizeCurrentCandidates/);
-  assert.match(bridge, /partial-finalizer-worker\.js/);
-  assert.match(bridge, /stopImmediatePropagation\(\)/);
+  assert.match(index, /optimizer-v2-app\.js/);
+  assert.match(app, /function stopSearch\(\)/);
+  assert.match(app, /worker\.terminate\(\)/);
+  assert.match(app, /latestPartialResults/);
+  assert.match(app, /Recherche arrêtée/);
 });
