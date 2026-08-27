@@ -2,12 +2,13 @@
 
 Dernière mise à jour : 2026-08-27
 
-## Main actuel
+## État actuel
 
 - dépôt : `ElMascarada/dofus-optimizer`
-- `main` : `106ffb567c351799a9e0b5d8f55f2acbe1ac1c02`
-- ce commit merge la PR #41 — Atelier V2 foundation
-- branche de handoff en cours : `docs/v2-project-handoff`
+- reprendre toujours depuis le `main` mergé et vert au moment où l'agent commence ;
+- la PR #41 — Atelier V2 foundation est mergée ;
+- la PR #42 — handoff V2 autonome est mergée ;
+- `AGENTS.md` et `docs/V2_COMPLETION_PLAN.md` sont désormais les points d'entrée de reprise.
 
 ## V2 déjà mergée
 
@@ -40,15 +41,14 @@ Dernière mise à jour : 2026-08-27
 
 ## Validation actuelle
 
-Après #41 :
+Après #41 et la PR documentaire #42 :
 
 - `npm run check` : vert ;
-- `npm test` : 240/240 ;
+- `npm test` : 240/240 sur la tranche Atelier ;
 - `npm run benchmark:v2` : vert ;
 - `npm run benchmark:search` : vert ;
 - `npm run benchmark:workshop` : vert ;
-- Optimizer CI #455 : verte ;
-- Sync spell icons #78 : verte.
+- Optimizer CI #457 : verte sur le handoff documentaire.
 
 Benchmark Atelier observé sur la CI #41, stuff complet + 26 sorts + 30 changements d'item :
 
@@ -69,7 +69,7 @@ Ordre canonique dans `docs/V2_COMPLETION_PLAN.md` :
 6. Performance finale : coarse → precise, cache combat, parallélisation si utile.
 7. Polish néo-rétro + recette V2 complète.
 
-## Prochaine tranche après cette PR de handoff
+## Prochaine tranche canonique
 
 **Persistence Atelier / bibliothèque + Smart Item Search**.
 
