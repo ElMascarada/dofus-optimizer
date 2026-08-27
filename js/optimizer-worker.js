@@ -240,6 +240,11 @@ self.addEventListener('message', (event) => {
     }
     output.diagnostics = {
       ...(output.diagnostics || {}),
+      searchMemory: {
+        cacheHit: false,
+        requestedSeeds: seedEvaluation.diagnostics.requested,
+        validSeeds: seedEvaluation.diagnostics.valid
+      },
       searchMemorySeeds: {
         ...seedEvaluation.diagnostics,
         freeSearchCandidates,
@@ -295,7 +300,7 @@ self.addEventListener('message', (event) => {
       if (feedbackSelections.length) {
         const feedbackTopN = multiTurn
           ? Math.min(searchTopN, capped(budget.multiFeedbackRefineFloor, budget.multiFeedbackRefineMultiplier, requestedTopN))
-          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackMultiplier, requestedTopN));
+          : Math.min(searchTopN, capped(budget.singleFeedbackRefineFloor, budget.singleFeedbackRefineMultiplier, requestedTopN));
         const feedbackRefined = refineOffensiveSlots({
           ...normalizedPayload,
           items: candidateItems,
