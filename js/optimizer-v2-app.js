@@ -20,6 +20,7 @@ const optimizeButton = $('#optimizer-run');
 const resultsRoot = $('#optimizer-results');
 const diagnosticsRoot = $('#optimizer-diagnostics');
 const dataStatus = $('#optimizer-data-status');
+const refinementContext = $('#optimizer-refinement-context');
 
 const ELEMENT_LABELS = Object.fromEntries(OPTIMIZER_V2_ELEMENTS);
 const CONSTRAINT_INPUTS = Object.freeze({
@@ -78,6 +79,44 @@ function activeTurns(turnMode) {
   return [1, 2, 3];
 }
 
+function stateMarkup(kind, title, message) {
+  return `<div class="ui-state" data-state="${escapeHtml(kind)}"${kind === 'error' ? ' role="alert"' : ''}><strong>${escapeHtml(title)}</strong><span>${escapeHtml(message)}</span></div>`;
+}
+
+function renderState(kind, title, message) {
+  displayedBuilds = [];
+  resultsRoot.dataset.state = kind;
+  resultsRoot.setAttribute('aria-busy', String(kind === 'loading'));
+  resultsRoot.innerHTML = stateMarkup(kind, title, message);
+}
+
+function setRefinementContext(refinement = null) {
+  activeRefinement = refinement;
+  if (!refinement) {
+    refinementContext.hidden = true;
+    refinementContext.textContent = '';
+    return;
+  }
+  const locks = Object.keys(refinement.lockedItemsBySlot || {}).length;
+  const rejects = refinement.rejectedItemIds?.length || 0;
+  refinementContext.hidden = false;
+  refinementContext.innerHTML = `<strong>Optimisation depuis l’Atelier</strong> · ${locks} item${locks > 1 ? 's' : ''} verrouillé${locks > 1 ? 's' : ''} · ${rejects} rejet${rejects > 1 ? 's' : ''}. Les autres slots restent libres de changer.`;
+}
+
+function setSearchControlsDisabled(disabled) {
+  classSelect.disabled = disabled || !(dataset && spellData);
+  elementSelect.disabled = disabled;
+  turnSelect.disabled = disabled;
+  for (const id of Object.values(CONSTRAINT_INPUTS)) document.getElementById(id).disabled = disabled;
+}
+
+function setSearchingUi(searching, label = '') {
+  optimizeButton.classList.toggle('is-searching', searching);
+  optimizeButton.setAttribute('aria-busy', String(searching));
+  optimizeButton.textContent = searching ? 'Arrêter la recherche' : 'Optimiser';
+  if (searching && label) diagnosticsRoot.textContent = label;
+}
+
 function renderBuild(build, index) {
   const itemRows = (build.items || []).map((item) => `<li>${escapeHtml(item.name)}</li>`).join('');
   const turns = activeTurns(currentPayload?.turnMode || turnSelect.value)
@@ -85,7 +124,7 @@ function renderBuild(build, index) {
     .join('');
   return `
     <article class="optimizer-v2-result-card">
-      <header><span class="rank">#${index + 1}</span><div><strong>${fmt(build.score)}</strong><small>dégâts / score moteur</small></div></header>
+      <header><span class="rank">#${index + 1}</span><div><strong>${fmt(build.score)}</strong><small>score de l’objectif sélectionné</small></div></header>
       <div class="optimizer-v2-turns">${turns}</div>
       <div class="optimizer-v2-stats">
         <span>PA <b>${fmt(build.stats?.ap)}</b></span>
@@ -103,16 +142,20 @@ function renderBuild(build, index) {
         <span>Res Eau <b>${fmt(build.stats?.resWater)}%</b></span>
         <span>Res Air <b>${fmt(build.stats?.resAir)}%</b></span>
       </div>
-      <details><summary>Équipement</summary><ul class="optimizer-v2-gear">${itemRows}</ul></details>
-      <button type="button" class="optimizer-v2-open-workshop" data-open-build="${index}">Ouvrir dans l’Atelier</button>
+      <details><summary>Voir les 16 équipements</summary><ul class="optimizer-v2-gear">${itemRows}</ul></details>
+      <button type="button" class="optimizer-v2-open-workshop" data-open-build="${index}">Ouvrir et ajuster dans l’Atelier</button>
     </article>`;
 }
 
-function renderResults(builds = [], emptyText = 'Aucun build certifié ne satisfait les contraintes.') {
+function renderResults(builds = [], emptyText = 'Aucun stuff certifié ne satisfait ces contraintes.') {
   displayedBuilds = Array.isArray(builds) ? builds : [];
-  resultsRoot.innerHTML = displayedBuilds.length
-    ? displayedBuilds.map(renderBuild).join('')
-    : `<div class="empty">${escapeHtml(emptyText)}</div>`;
+  resultsRoot.setAttribute('aria-busy', 'false');
+  if (displayedBuilds.length) {
+    resultsRoot.dataset.state = 'results';
+    resultsRoot.innerHTML = displayedBuilds.map(renderBuild).join('');
+    return;
+  }
+  renderState('empty', 'Aucun stuff trouvé', emptyText);
 }
 
 function isSearching() {
@@ -127,8 +170,10 @@ function setIdle() {
   preparing = false;
   if (main) main.terminate();
   if (seeds) seeds.terminate();
+  setSearchControlsDisabled(false);
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
-  optimizeButton.textContent = 'Optimiser';
+  setSearchingUi(false);
+  resultsRoot.setAttribute('aria-busy', 'false');
 }
 
 function stopSearch() {
@@ -143,22 +188,24 @@ function stopSearch() {
       ...currentMemoryContext
     }
   );
-  renderResults(partial.results, 'Aucun build valide trouvé avant l’arrêt.');
+  renderResults(partial.results, 'Aucun stuff valide n’avait encore été trouvé au moment de l’arrêt.');
   diagnosticsRoot.textContent = partial.results.length
     ? `Recherche arrêtée · ${partial.results.length} résultat${partial.results.length > 1 ? 's' : ''} conservé${partial.results.length > 1 ? 's' : ''}.`
-    : 'Recherche arrêtée.';
+    : 'Recherche arrêtée sans résultat validé.';
   setIdle();
 }
 
 function finalDiagnostics(output = {}) {
   const combat = output.diagnostics?.combatRefine;
   const memory = output.diagnostics?.searchMemory || {};
+  const attempted = Number(memory.seedsAttempted || 0);
+  const validSeeds = Number(memory.seedsValid || 0);
   const memoryLabel = memory.cacheHit
-    ? 'cache exact'
-    : `${Number(memory.seedsValid || 0)}/${Number(memory.seedsAttempted || 0)} seeds valides`;
+    ? 'mémoire instantanée'
+    : `${validSeeds}/${attempted} piste${attempted > 1 ? 's' : ''} réutilisée${validSeeds > 1 ? 's' : ''}`;
   const locks = currentPayload?.requiredItemIds?.length || 0;
   const rejects = currentPayload?.rejectedItemIds?.length || 0;
-  return `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryLabel}${locks || rejects ? ` · ${locks} lock · ${rejects} reject` : ''}`;
+  return `${Number(output.diagnostics?.visited || 0).toLocaleString('fr-FR')} builds complets · ${Number(output.diagnostics?.nodes || 0).toLocaleString('fr-FR')} nœuds${combat ? ` · ${Number(combat.evaluated || 0).toLocaleString('fr-FR')} rotations` : ''} · ${memoryLabel}${locks || rejects ? ` · ${locks} verrouillé${locks > 1 ? 's' : ''} · ${rejects} rejet${rejects > 1 ? 's' : ''}` : ''}`;
 }
 
 function finalizeIfReady(requestId) {
@@ -185,12 +232,12 @@ function handleWorkerMessage(event, requestId) {
   if (message.type === 'progress') {
     const progress = message.progress || {};
     if (Array.isArray(progress.partialResults) && progress.partialResults.length) latestPartialResults = progress.partialResults;
-    diagnosticsRoot.textContent = `${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds · meilleur ${fmt(progress.best)} · cache miss`;
+    diagnosticsRoot.textContent = `Recherche en cours · ${Number(progress.nodes || 0).toLocaleString('fr-FR')} nœuds explorés · meilleur score ${fmt(progress.best)}.`;
     return;
   }
   if (message.type === 'error') {
-    renderResults([], `Erreur de calcul : ${message.message || 'inconnue'}`);
-    diagnosticsRoot.textContent = 'Le solveur a interrompu la recherche.';
+    renderState('error', 'Erreur de calcul', message.message || 'Le solveur a interrompu la recherche.');
+    diagnosticsRoot.textContent = 'La recherche a été interrompue. Les paramètres restent disponibles pour réessayer.';
     setIdle();
     return;
   }
@@ -239,8 +286,10 @@ async function runSearch(refinement = null) {
   if (!dataset || !spellData) return;
   const requestId = ++activeRequestId;
   preparing = true;
+  setSearchControlsDisabled(true);
   optimizeButton.disabled = true;
-  optimizeButton.textContent = 'Vérification…';
+  setSearchingUi(true, 'Vérification de la mémoire de recherche…');
+  renderState('loading', 'Préparation de la recherche', 'Vérification des résultats compatibles déjà connus avant de lancer un nouveau calcul.');
 
   try {
     const payload = createOptimizerV2Request({
@@ -255,7 +304,7 @@ async function runSearch(refinement = null) {
       rejectedItemIds: refinement?.rejectedItemIds || []
     });
     if (!payload.classSpells.some((spell) => (spell.hits || []).length > 0)) {
-      renderResults([], `Aucun sort offensif ${ELEMENT_LABELS[elementSelect.value] || elementSelect.value} certifié pour cette classe.`);
+      renderState('empty', 'Aucun sort offensif disponible', `Aucun sort ${ELEMENT_LABELS[elementSelect.value] || elementSelect.value} certifié n’est disponible pour cette classe.`);
       setIdle();
       return;
     }
@@ -280,7 +329,7 @@ async function runSearch(refinement = null) {
       if (exact.hit && !workshopSeeds.length) {
         const output = withExactCacheDiagnostics(exact.output, { fingerprint: exact.fingerprint });
         renderResults(output.results || []);
-        diagnosticsRoot.textContent = `Résultat instantané · cache exact · ${output.results?.length || 0} build${output.results?.length > 1 ? 's' : ''}.`;
+        diagnosticsRoot.textContent = `Résultat instantané · mémoire compatible · ${output.results?.length || 0} build${output.results?.length > 1 ? 's' : ''}.`;
         setIdle();
         return;
       }
@@ -308,8 +357,9 @@ async function runSearch(refinement = null) {
       pendingMainOutput = withExactCacheDiagnostics(exact.output, { fingerprint: exact.fingerprint });
       startSeedWorker(requestId, payload, seedBuilds);
       optimizeButton.disabled = false;
-      optimizeButton.textContent = 'Arrêter';
-      diagnosticsRoot.textContent = `Cache exact compatible · réévaluation du stuff Atelier comme lower bound · ${payload.requiredItemIds.length} lock · ${payload.rejectedItemIds.length} reject.`;
+      setSearchingUi(true);
+      diagnosticsRoot.textContent = `Mémoire compatible · comparaison avec le stuff Atelier · ${payload.requiredItemIds.length} verrouillé${payload.requiredItemIds.length > 1 ? 's' : ''} · ${payload.rejectedItemIds.length} rejet${payload.rejectedItemIds.length > 1 ? 's' : ''}.`;
+      renderState('loading', 'Comparaison avec le stuff Atelier', 'Le résultat mémorisé est comparé au build courant avec les mêmes règles et données.');
       finalizeIfReady(requestId);
       return;
     }
@@ -318,21 +368,22 @@ async function runSearch(refinement = null) {
     worker.addEventListener('message', (event) => handleWorkerMessage(event, requestId));
     worker.addEventListener('error', (event) => {
       if (requestId !== activeRequestId) return;
-      renderResults([], `Erreur du worker : ${event.message || 'inconnue'}`);
-      diagnosticsRoot.textContent = 'Le calcul a été interrompu.';
+      renderState('error', 'Worker interrompu', event.message || 'Le calcul n’a pas pu continuer.');
+      diagnosticsRoot.textContent = 'Le calcul a été interrompu. Réessaie avec les mêmes paramètres.';
       setIdle();
     });
 
     startSeedWorker(requestId, payload, seedBuilds);
 
     optimizeButton.disabled = false;
-    optimizeButton.textContent = 'Arrêter';
-    resultsRoot.innerHTML = '<div class="empty">Recherche en cours…</div>';
-    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · cache ${memoryError ? 'indisponible' : 'miss'} · ${seedBuilds.length} seed${seedBuilds.length > 1 ? 's' : ''} · ${payload.requiredItemIds.length} lock · ${payload.rejectedItemIds.length} reject.`;
+    setSearchingUi(true);
+    renderState('loading', 'Recherche en cours', 'Exploration des builds complets, puis validation des meilleurs candidats. Tu peux arrêter et conserver les meilleurs résultats déjà trouvés.');
+    diagnosticsRoot.textContent = `${ELEMENT_LABELS[payload.combatObjective.element]} · ${TURN_MODES.find(([id]) => id === payload.turnMode)?.[1] || payload.turnMode} · ${payload.classSpells.length} sorts · mémoire ${memoryError ? 'indisponible' : 'sans résultat exact'} · ${seedBuilds.length} piste${seedBuilds.length > 1 ? 's' : ''} réutilisée${seedBuilds.length > 1 ? 's' : ''}.`;
     worker.postMessage({ type: 'optimize', requestId, payload });
   } catch (error) {
     if (requestId !== activeRequestId) return;
-    renderResults([], error instanceof Error ? error.message : String(error));
+    renderState('error', 'Recherche impossible', error instanceof Error ? error.message : String(error));
+    diagnosticsRoot.textContent = 'Vérifie les paramètres puis réessaie.';
     setIdle();
   }
 }
@@ -344,7 +395,7 @@ async function findBetter(build) {
     return;
   }
   if (isSearching()) stopSearch();
-  activeRefinement = refinement;
+  setRefinementContext(refinement);
   classSelect.value = refinement.classId;
   optimizeButton.disabled = false;
   await runSearch(refinement);
@@ -378,6 +429,7 @@ resultsRoot.addEventListener('click', (event) => {
 
 async function init() {
   optimizeButton.disabled = true;
+  dataStatus.dataset.state = 'loading';
   elementSelect.innerHTML = OPTIMIZER_V2_ELEMENTS.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
   turnSelect.innerHTML = TURN_MODES.map(([id, label]) => `<option value="${id}">${label}</option>`).join('');
   turnSelect.value = 'sum';
@@ -386,27 +438,33 @@ async function init() {
     classSelect.innerHTML = '<option value="">Choisir une classe</option>'
       + spellData.breeds.map((breed) => `<option value="${breed.id}">${escapeHtml(breed.name)}</option>`).join('');
     classSelect.disabled = false;
+    dataStatus.dataset.state = 'ready';
     dataStatus.textContent = `${dataset.items.length.toLocaleString('fr-FR')} équipements · ${spellData.spells.length.toLocaleString('fr-FR')} sorts · moteur V${APP_VERSION}`;
-    resultsRoot.innerHTML = '<div class="empty">Choisis une classe, un élément, tes contraintes et l’objectif temporel.</div>';
+    renderState('empty', 'Prêt à optimiser', 'Choisis une classe, un élément, tes contraintes et l’objectif temporel, puis lance la recherche.');
+    diagnosticsRoot.textContent = 'Prêt · sélectionne une classe pour activer Optimiser.';
     if (queuedFindBetterBuild) {
       const build = queuedFindBetterBuild;
       queuedFindBetterBuild = null;
       await findBetter(build);
     }
   } catch (error) {
-    dataStatus.textContent = error instanceof Error ? error.message : String(error);
-    resultsRoot.innerHTML = '<div class="empty">Impossible de charger les données certifiées.</div>';
+    dataStatus.dataset.state = 'error';
+    dataStatus.textContent = 'Données indisponibles';
+    classSelect.disabled = true;
+    renderState('error', 'Données certifiées indisponibles', 'L’Optimiseur ne peut pas démarrer sans les catalogues certifiés. Recharge la page pour réessayer.');
+    diagnosticsRoot.textContent = error instanceof Error ? error.message : String(error);
   }
 }
 
 classSelect.addEventListener('change', () => {
   if (isSearching()) stopSearch();
-  activeRefinement = null;
+  setRefinementContext(null);
   optimizeButton.disabled = !(dataset && spellData && classSelect.value);
+  diagnosticsRoot.textContent = classSelect.value ? 'Classe sélectionnée · prêt à optimiser.' : 'Sélectionne une classe pour continuer.';
 });
 optimizeButton.addEventListener('click', () => {
   if (isSearching()) return stopSearch();
-  activeRefinement = null;
+  setRefinementContext(null);
   runSearch();
 });
 init();
