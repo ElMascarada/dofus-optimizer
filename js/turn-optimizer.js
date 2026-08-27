@@ -289,8 +289,10 @@ function keepBestStates(states, turn, beamWidth) {
     if (!previous || state.damage > previous.damage) byKey.set(key, state);
   }
   return [...byKey.values()]
-    .sort((a, b) => (b.damage + supportPotential(b, turn)) - (a.damage + supportPotential(a, turn)))
-    .slice(0, beamWidth);
+    .map((state) => ({ state, rank: state.damage + supportPotential(state, turn) }))
+    .sort((a, b) => b.rank - a.rank)
+    .slice(0, beamWidth)
+    .map(({ state }) => state);
 }
 
 function optimizeSingleTurn({ spells, state, turn, objective, beamWidth = 1600, maxActions = 12 }) {
@@ -422,13 +424,16 @@ export function optimizeCombatSequence({
     frontier = keepBestStates(turnResults, turn, beamWidth);
   }
 
-  const ranked = frontier.sort((a, b) => finalScore(b, normalizedObjective) - finalScore(a, normalizedObjective));
-  const best = ranked[0] || frontier[0];
+  const ranked = frontier
+    .map((state) => ({ state, score: finalScore(state, normalizedObjective) }))
+    .sort((a, b) => b.score - a.score);
+  const bestEntry = ranked[0] || null;
+  const best = bestEntry?.state || frontier[0];
   const perTurn = {};
   for (const turn of selected.turns) perTurn[turn] = 0;
   for (const entry of best?.sequence || []) perTurn[entry.turn] = (perTurn[entry.turn] || 0) + num(entry.expectedDamage, 0);
   return {
-    score: best ? finalScore(best, normalizedObjective) : 0,
+    score: bestEntry?.score ?? (best ? finalScore(best, normalizedObjective) : 0),
     totalDamage: best?.damage || 0,
     sequence: best?.sequence || [],
     perTurn,
