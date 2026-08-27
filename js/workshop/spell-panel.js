@@ -22,16 +22,16 @@ function rotationRows(evaluation) {
         <span>${formatNumber(damage)} dégâts</span>
         <small>${actions.length ? actions.map(actionText).join(' → ') : 'Aucune action offensive retenue.'}</small>
       </div>`).join('')}</div>
-    <p class="hint">La séquence conserve les buffs, états, charges et cooldowns entre les tours. Les cartes T1/T2/T3 correspondent à cette même rotation cohérente.</p>`;
+    <p class="hint">La séquence conserve buffs, états, charges et cooldowns entre les tours. Les indicateurs T1/T2/T3 proviennent de cette même rotation cohérente.</p>`;
 }
 
 export function renderSpellPanel(root, evaluation, classId) {
   if (!classId) {
-    root.innerHTML = '<div class="workshop-empty-inline">Choisis une classe pour afficher ses sorts offensifs supportés.</div>';
+    root.innerHTML = '<div class="ui-state-inline" data-state="empty">Choisis une classe pour afficher les sorts offensifs supportés et leurs dégâts exacts.</div>';
     return;
   }
   if (!evaluation?.valid) {
-    root.innerHTML = '<div class="workshop-empty-inline">Corrige le build pour recalculer les dégâts exacts.</div>';
+    root.innerHTML = '<div class="ui-state-inline" data-state="error">Corrige le build invalide pour recalculer les dégâts et la rotation.</div>';
     return;
   }
 
@@ -43,5 +43,5 @@ export function renderSpellPanel(root, evaluation, classId) {
       <div><span>Chance crit.</span><b>${formatNumber(result.critChancePct, 1)}%</b></div>
     </article>`).join('');
 
-  root.innerHTML = `${rotationRows(evaluation)}${rows || '<div class="workshop-empty-inline">Aucun sort offensif supporté pour cette classe.</div>'}`;
+  root.innerHTML = `${rotationRows(evaluation)}${rows || '<div class="ui-state-inline" data-state="empty">Aucun sort offensif supporté pour cette classe.</div>'}`;
 }

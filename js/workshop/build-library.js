@@ -23,7 +23,7 @@ export function createBuildLibrary(root, {
   root.innerHTML = `
     <div class="workshop-panel-heading">
       <div><span class="eyebrow">BIBLIOTHÈQUE</span><h3>Mes stuffs</h3></div>
-      <span class="pill" data-library-count>0</span>
+      <span class="pill" data-library-count>0 sauvegardé</span>
     </div>
     <label class="field workshop-build-name">Nom du stuff
       <input type="text" maxlength="80" data-library-name placeholder="Ex. Iop Terre T1" autocomplete="off">
@@ -41,20 +41,32 @@ export function createBuildLibrary(root, {
       <button type="button" data-library-duplicate>Dupliquer</button>
       <button type="button" data-library-delete>Supprimer</button>
     </div>
-    <p class="hint" data-library-status>Le brouillon courant est sauvegardé automatiquement.</p>`;
+    <p class="hint" data-library-status aria-live="polite">Le brouillon courant est sauvegardé automatiquement.</p>`;
 
   const nameInput = root.querySelector('[data-library-name]');
   const list = root.querySelector('[data-library-list]');
   const count = root.querySelector('[data-library-count]');
   const status = root.querySelector('[data-library-status]');
+  const recordActions = [
+    root.querySelector('[data-library-load]'),
+    root.querySelector('[data-library-rename]'),
+    root.querySelector('[data-library-duplicate]'),
+    root.querySelector('[data-library-delete]')
+  ];
 
   function selectedRecord() {
     return records.find((record) => record.id === list.value) || null;
   }
 
+  function syncActions() {
+    const hasSelection = Boolean(selectedRecord());
+    for (const button of recordActions) button.disabled = !hasSelection;
+  }
+
   function syncSelectionName() {
     const selected = selectedRecord();
     if (selected && selected.id !== activeId) nameInput.value = selected.name;
+    syncActions();
   }
 
   list.addEventListener('change', syncSelectionName);
@@ -84,10 +96,13 @@ export function createBuildLibrary(root, {
     render(nextRecords = [], { currentId = null, currentName = '' } = {}) {
       records = [...nextRecords];
       activeId = currentId ? String(currentId) : null;
-      count.textContent = String(records.length);
-      list.innerHTML = records.map((record) => `<option value="${escapeHtml(record.id)}"${record.id === activeId ? ' selected' : ''}>${escapeHtml(record.name)}${record.updatedAt ? ` · ${escapeHtml(formatDate(record.updatedAt))}` : ''}</option>`).join('');
+      count.textContent = `${records.length} sauvegardé${records.length > 1 ? 's' : ''}`;
+      list.innerHTML = records.length
+        ? records.map((record) => `<option value="${escapeHtml(record.id)}"${record.id === activeId ? ' selected' : ''}>${escapeHtml(record.name)}${record.updatedAt ? ` · ${escapeHtml(formatDate(record.updatedAt))}` : ''}</option>`).join('')
+        : '<option value="" disabled>Aucun stuff sauvegardé</option>';
       if (!list.value && records[0]) list.value = records[0].id;
       nameInput.value = currentName || records.find((record) => record.id === activeId)?.name || '';
+      syncActions();
     },
     setStatus(message, kind = '') {
       status.textContent = message;
@@ -97,6 +112,7 @@ export function createBuildLibrary(root, {
       activeId = id ? String(id) : null;
       nameInput.value = name || '';
       if (activeId && records.some((record) => record.id === activeId)) list.value = activeId;
+      syncActions();
     },
     currentName() {
       return nameInput.value.trim();

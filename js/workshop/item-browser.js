@@ -28,13 +28,13 @@ export function createItemBrowser(root, { items = [], sets = [], onSelect, onClo
   root.innerHTML = `
     <div class="workshop-browser-head">
       <div><span class="eyebrow">CATALOGUE</span><h3 id="workshop-browser-title">Choisir un item</h3></div>
-      <button type="button" class="workshop-browser-close" data-browser-close aria-label="Fermer">×</button>
+      <button type="button" class="workshop-browser-close" data-browser-close aria-label="Fermer le catalogue">×</button>
     </div>
     <label class="field workshop-search">Recherche intelligente
-      <input type="search" data-browser-search placeholder="Ex. multi do crit, terre ini, anneau PA multi…" autocomplete="off">
+      <input type="search" data-browser-search aria-describedby="workshop-search-help" placeholder="Ex. multi do crit, terre ini, anneau PA multi…" autocomplete="off">
     </label>
-    <p class="hint workshop-search-hint">Nom ou vocabulaire déterministe : élément, multi, do crit, ini, vita, res, distance, mêlée, PA, PM, PO…</p>
-    <p class="workshop-browser-count" data-browser-count></p>
+    <p id="workshop-search-help" class="hint workshop-search-hint">Nom ou vocabulaire déterministe : élément, multi, do crit, ini, vita, res, distance, mêlée, PA, PM, PO…</p>
+    <p class="workshop-browser-count" data-browser-count aria-live="polite"></p>
     <div class="workshop-browser-results" data-browser-results></div>`;
 
   const searchInput = root.querySelector('[data-browser-search]');
@@ -57,7 +57,7 @@ export function createItemBrowser(root, { items = [], sets = [], onSelect, onClo
           <span class="workshop-item-icon">${image}</span>
           <span class="workshop-item-copy"><strong>${escapeHtml(item.name)}</strong><small>${escapeHtml(item.typeName || activeSlot.label)} · niv. ${formatNumber(item.level, 0)}${setName ? ` · ${escapeHtml(setName)}` : ''}</small><span>${itemStats(item) || 'Aucune stat chiffrée'}</span>${searchReasons(match, Boolean(query))}</span>
         </button>`;
-    }).join('') || '<div class="empty">Aucun item ne correspond à cette recherche.</div>';
+    }).join('') || '<div class="ui-state" data-state="empty"><strong>Aucun item trouvé</strong><span>Essaie un terme plus large ou retire un filtre implicite de la recherche.</span></div>';
   }
 
   searchInput.addEventListener('input', render);

@@ -1,31 +1,68 @@
 # Dofus Optimizer
 
-Web app statique/PWA destinée à rechercher un équipement Dofus optimal sous contraintes.
+Web app statique/PWA destinée à construire, analyser et optimiser des équipements Dofus sous contraintes.
+
+## Produit V2
+
+L’application finale est organisée autour de deux espaces :
+
+- **Atelier** — construction manuelle d’un stuff 16 slots, recherche intelligente d’items, sauvegarde locale, statistiques live, dégâts exacts et rotation T1–T3 ;
+- **Optimiseur** — recherche de builds complets à partir de la classe, de l’élément, des contraintes et de l’objectif temporel.
+
+Le parcours canonique est :
+
+```text
+Atelier
+  -> construire / sauvegarder / analyser
+  -> Lock / Reject / Trouver mieux
+Optimiseur
+  -> cache exact / seeds proches / recherche
+  -> résultat certifié
+  -> Ouvrir dans l’Atelier
+```
 
 ## Runtime actuel
 
-Le runtime canonique est :
+Le runtime UI de production est :
 
 ```text
 index.html
-  -> js/app-experimental.js
-    -> js/optimizer-worker.js
-      -> js/architecture-search-v2.js
-      -> js/offensive-slot-refiner.js
-      -> js/combat-turn-refiner.js
-      -> js/result-diversity.js
+  -> js/workshop/workshop-app.js
+     -> WorkshopController
+     -> WorkshopEvaluator
+     -> BuildRepository / IndexedDB
+     -> moteurs canoniques de stats et combat
+
+  -> js/optimizer-v2-app.js
+     -> js/optimizer-v2-orchestrator.js
+     -> Search Memory V2 / IndexedDB
+     -> js/optimizer-worker.js
+        -> js/architecture-search-v2.js
+        -> js/offensive-slot-refiner.js
+        -> js/combat-turn-refiner.js
+        -> js/result-diversity.js
+     -> js/search-memory/seed-worker.js
 ```
 
-`js/runtime-meta.js` est la source canonique de version et d'identité des caches runtime.
+`js/runtime-meta.js` est la source canonique de version et d’identité des caches runtime.
 
-Les bridges `optimizer-session-bridge.js` et `optimizer-stop-bridge.js` font encore partie de la production actuelle pour le cache/items imposés et l'arrêt avec finalisation partielle. Leur remplacement par un client Worker explicite est planifié pour la migration V2.
+Les anciens fichiers `app-experimental.js`, `optimizer-session-bridge.js`, `optimizer-stop-bridge.js`, `styles-experimental.css` et `styles-session.css` peuvent rester présents comme historique, mais **ne sont plus des entrypoints de production V2** et ne sont plus préchargés par le service worker final.
 
-La description complète de l'état réel et de la cible se trouve dans :
+## Frontières métier canoniques
 
-- `docs/ARCHITECTURE_CURRENT.md` ;
-- `docs/ARCHITECTURE_TARGET.md` ;
-- `docs/OPTIMIZER_V2_SPEC.md` ;
-- `docs/MIGRATION_PLAN.md`.
+- `js/complete-build-evaluator.js` — validation et évaluation finale d’un build complet ;
+- `js/candidate-prefilter.js` + `optimizer/candidate-policy.js` — présélection contextuelle ;
+- `optimizer/set-core-catalog.js` + `js/set-synergy-index.js` — noyaux de panoplies / architectures ;
+- `js/architecture-search-v2.js` — recherche libre ;
+- `js/offensive-slot-refiner.js` — raffinement des slots offensifs ;
+- `js/combat-turn-refiner.js` — sélection des finalistes combat ;
+- `js/turn-optimizer.js` — rotation exacte T1/T2/T3 ;
+- `js/temporal-objectives.js` — objectifs T1, T2, T3, cumul, moyenne, pire tour et Constant ;
+- `js/spells.js` / `js/combat-state.js` / `js/combat/` — dégâts et états combat génériques ;
+- `js/sets.js`, `js/build-legality.js`, `js/characteristics.js`, `js/fm.js` — règles de build ;
+- `js/data-loader.js` — validation des snapshots certifiés.
+
+L’UI ne doit pas recalculer ces règles.
 
 ## Données
 
@@ -37,41 +74,60 @@ Le navigateur consomme uniquement les snapshots normalisés et certifiés :
 
 Le pipeline de maintenance utilise Dofusdude et synchronise équipements/sorts sur une version de jeu cohérente. Voir `SOURCE_DATA.md` pour les règles de certification et de provenance.
 
-Le runtime ne retombe pas silencieusement sur des données de démonstration et exclut les données qu'il ne sait pas interpréter de manière certifiée.
+Le runtime ne retombe pas silencieusement sur des données de démonstration et exclut les données qu’il ne sait pas interpréter de manière certifiée.
 
-## Modules principaux
+## Search Memory V2
 
-- `js/app-experimental.js` — UI canonique et orchestration actuelle ;
-- `js/optimizer-worker.js` — orchestration hors thread UI ;
-- `js/candidate-prefilter.js` — préfiltrage initial des équipements ;
-- `js/architecture-search-v2.js` — génération/recherche d'architectures ;
-- `js/complete-build-evaluator.js` — validation et évaluation finale d'un build complet ;
-- `js/offensive-slot-refiner.js` — raffinement des slots offensifs ;
-- `js/combat-turn-refiner.js` — sélection des builds à passer au solveur de rotations ;
-- `js/turn-optimizer.js` — moteur de séquences de combat T1/T2/T3 ;
-- `js/spells.js` / `js/combat-state.js` — dégâts, statistiques temporelles et états génériques ;
-- `js/sets.js` — bonus de panoplie ;
-- `js/build-legality.js` — conditions d'équipement et règles de slots ;
-- `js/characteristics.js` — allocation automatique des caractéristiques ;
-- `js/fm.js` — politique de FM ;
-- `js/data-loader.js` — validation des snapshots certifiés ;
-- `js/runtime-meta.js` — version et identifiants de cache runtime ;
-- `js/optimizer-protocol.js` — contrat de messages préparatoire au futur `OptimizerClient` ;
-- `js/combat-mechanics-registry.js` — interface de registre déclaratif préparatoire, pas encore branchée au moteur actuel.
+L’Optimiseur conserve localement :
 
-`js/architecture-search.js` et `js/solver.js` sont historiques mais encore conservés car ils restent couverts/référencés. L'ancienne UI `js/app.js`, non exécutée, a été supprimée dans la fondation V2.
+- les résultats exacts compatibles avec une requête normalisée ;
+- des requêtes proches utilisées comme sources de seeds ;
+- uniquement des identifiants d’items pour les seeds, qui sont toujours réhydratés et réévalués avec les moteurs courants.
 
-## Tests et benchmark
+Les versions de données/règles participent à la compatibilité. Un simple polish UI ne change donc pas `appVersion` ni les fingerprints métier.
+
+## Lock / Reject / Trouver mieux
+
+Depuis l’Atelier :
+
+- **Lock** impose réellement l’item verrouillé à la recherche ;
+- **Reject** exclut réellement l’item ;
+- **Trouver mieux** envoie le stuff complet comme seed/lower bound, mais ne verrouille pas implicitement les autres slots.
+
+Un résultat Optimiseur peut ensuite être rouvert dans l’Atelier en conservant les métadonnées de raffinement utiles.
+
+## Tests, recette et benchmarks
+
+Validation standard :
 
 ```bash
-npm test
 npm run check
+npm test
+npm run recipe:v2
+npm run recipe:browser
 npm run benchmark:v2
+npm run benchmark:search
+npm run benchmark:workshop
 ```
 
-`npm run benchmark:v2` fige les scénarios critiques avant les migrations structurelles : mono-tour, T1-T3, contraintes PA/PM, Initiative, Vitalité, résistances, panoplies, buffs/états et arrêt manuel.
+- `recipe:v2` verrouille les contrats du shell/UX final ;
+- `recipe:browser` pilote réellement Chrome headless sur l’application servie en HTTP : cold start, Atelier, clavier, équipement, Optimiseur, recherche et retour Atelier ;
+- les benchmarks historiques servent de garde-fou de non-régression.
 
-La CI archive les sorties de tests et de benchmark pour permettre une comparaison avant/après des PRs de migration.
+La recette de clôture détaillée est dans `docs/V2_ACCEPTANCE_RECIPE.md`.
+
+## Documentation V2
+
+Lire en priorité :
+
+1. `AGENTS.md`
+2. `PROJECT_STATE.md`
+3. `docs/OPTIMIZER_V2_SPEC.md`
+4. `docs/ARCHITECTURE_TARGET.md`
+5. `docs/V2_COMPLETION_PLAN.md`
+6. `docs/V2_ACCEPTANCE_RECIPE.md`
+7. `docs/PERFORMANCE_V2.md`
+8. `docs/TEMPORAL_OBJECTIVES_V2.md`
 
 ## Lancer localement
 
@@ -91,4 +147,4 @@ Lorsque la machine a accès au réseau :
 npm run sync:normalize
 ```
 
-Les normaliseurs doivent préférer l'exclusion explicite à toute approximation silencieuse d'un effet ou d'une condition Dofus inconnue.
+Les normaliseurs doivent préférer l’exclusion explicite à toute approximation silencieuse d’un effet ou d’une condition Dofus inconnue.

@@ -63,6 +63,9 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "status=${status}" >> "$GITHUB_OUTPUT"
           exit 0
+      - name: V2 browser acceptance recipe
+        shell: bash
+        run: npm run recipe:browser 2>&1 | tee recipe-v2-browser-output.txt
       - name: V2 migration baseline benchmark
         if: always()
         shell: bash
@@ -82,6 +85,7 @@ jobs:
           name: node-test-report
           path: |
             test-output.txt
+            recipe-v2-browser-output.txt
             benchmark-v2-output.txt
             benchmark-candidate-search-output.txt
             benchmark-workshop-output.txt

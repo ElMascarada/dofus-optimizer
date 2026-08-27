@@ -28,7 +28,7 @@ function turnIndicators(evaluation) {
   if (!analysis) {
     return `
       <h4>Tours idéaux</h4>
-      <div class="workshop-empty-inline">Complète les 16 slots pour calculer la rotation T1–T3 sur ce build fixé.</div>`;
+      <div class="ui-state-inline" data-state="empty">Complète les 16 slots pour calculer une rotation cohérente T1–T3 sur ce build fixé.</div>`;
   }
   const turns = analysis.turns.map(({ turn, damage }) => `
     <div class="workshop-stat">
@@ -49,7 +49,7 @@ export function renderStatsPanel(root, evaluation) {
       : evaluation?.reason === 'structural-invalid'
         ? 'La combinaison d’équipements est structurellement invalide.'
         : 'Le build ne peut pas être évalué exactement.';
-    root.innerHTML = `<div class="workshop-eval-error"><strong>Build invalide</strong><p>${message}</p></div>`;
+    root.innerHTML = `<div class="ui-state" data-state="error" role="alert"><strong>Build invalide</strong><span>${message} Modifie les équipements concernés pour reprendre le calcul.</span></div>`;
     return;
   }
 
@@ -58,10 +58,10 @@ export function renderStatsPanel(root, evaluation) {
       <strong>${escapeHtml(set.name)}</strong>
       <span>${set.count} pièce${set.count > 1 ? 's' : ''}</span>
       <small>${setBonusText(set.bonus) || 'Bonus actif'}</small>
-    </div>`).join('') || '<div class="workshop-empty-inline">Aucune panoplie active.</div>';
+    </div>`).join('') || '<div class="ui-state-inline" data-state="empty">Aucune panoplie active sur le stuff courant.</div>';
 
   root.innerHTML = `
-    <div class="workshop-panel-heading"><div><span class="eyebrow">BUILD LIVE</span><h3>Statistiques</h3></div><span class="workshop-speed">${formatNumber(evaluation.recalculationMs, 2)} ms</span></div>
+    <div class="workshop-panel-heading"><div><span class="eyebrow">STATS LIVE</span><h3>Statistiques</h3></div><span class="workshop-speed" title="Temps de recalcul du build">${formatNumber(evaluation.recalculationMs, 2)} ms</span></div>
     ${turnIndicators(evaluation)}
     <h4>Statistiques du build</h4>
     <div class="workshop-stat-grid">${tiles(evaluation.stats, PRIMARY_STATS)}</div>
