@@ -57,6 +57,7 @@ export function createOptimizerV2Request({
     items: dataset?.items || [],
     sets: dataset?.sets || [],
     selections: [],
+    classId: normalizedClassId,
     classSpells,
     objectiveMode: 'combat',
     combatObjective: {
