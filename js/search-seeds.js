@@ -36,7 +36,7 @@ export function evaluateSearchSeeds({
   let evaluated = 0;
 
   for (const seed of seedBuilds || []) {
-    const itemIds = [...new Set((seed?.itemIds || []).map(String).filter(Boolean))];
+    const itemIds = (seed?.itemIds || []).map(String).filter(Boolean);
     const key = [...itemIds].sort().join('|');
     if (!key || seen.has(key)) continue;
     seen.add(key);
