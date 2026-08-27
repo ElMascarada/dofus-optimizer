@@ -171,5 +171,5 @@ test('l’UI Atelier affiche T1/T2/T3 et la rotation sans appeler la recherche �
   assert.match(spellSource, /Rotation exacte T1–T3/);
   assert.match(analysisSource, /optimizeCombatSequence/);
   assert.doesNotMatch(analysisSource, /candidate-search|architecture-search|optimizer-worker|CandidatePolicy|SetCoreCatalog/);
-  assert.match(html, /Constant = moyenne harmonique/);
+  assert.match(html, /Constant utilise la moyenne harmonique T1–T3/);
 });
