@@ -5,84 +5,121 @@ Dernière mise à jour : 2026-08-27
 ## État actuel
 
 - dépôt : `ElMascarada/dofus-optimizer` ;
-- base stricte de la tranche : `main@6d94dbb32f416b0ac3caccbc212f5eb2e48e2cd0`, merge vert de la PR #48 ;
-- PR active : #49 — `feat: finalize V2 temporal objectives and ideal turns` ;
-- branche : `feat/v2-final-turn-objectives` ;
-- scope strict : **Tranche 5 — Tours idéaux / objectifs temporels finaux** ;
-- Tranche 6 Performance finale et Tranche 7 polish/recette restent explicitement hors scope.
+- base stricte de la tranche : `main@58918c98276004edf7fc7d0e570f34fbd8431603`, merge vert de la PR #49 ;
+- PR active : #50 — `perf: finalize V2 search and combat performance` ;
+- branche : `perf/v2-final-performance` ;
+- scope strict : **Tranche 6 — Performance finale** ;
+- Tranche 7 — polish UI global / recette finale reste explicitement hors scope.
 
-## V2 déjà mergée avant #49
+## V2 déjà mergée avant #50
 
 - Fondation V2 / moteur combat générique.
 - `CandidatePolicy` / `CandidatePrefilter` canoniques.
 - `SetCoreCatalog` + recherche hybride set-core / standalone.
 - Atelier V2 : 16 slots, stats live, dégâts sorts, persistence, bibliothèque et Smart Item Search.
 - Optimiseur V2 simplifié : `Classe → Élément → Contraintes → Objectif → Optimiser`.
-- Search Memory V2 : cache exact IndexedDB, requêtes proches, seeds ID-only réévalués par les moteurs courants.
-- Lock / Reject / Trouver mieux : contraintes explicites de requête et seed Atelier sans enfermer les slots non lockés.
+- Search Memory V2 : cache exact IndexedDB, requêtes proches et seeds réévalués.
+- Lock / Reject / Trouver mieux.
+- Tours idéaux T1/T2/T3, rotations exactes et objectifs temporels finaux dont `Constant`.
 
-## Tranche #49 — Tours idéaux / objectifs temporels finaux
+## Tranche #50 — Performance finale
 
-Implémenté sur la branche :
+### Base mesurée
 
-- nouveau module canonique `js/temporal-objectives.js` pour les objectifs T1, T2, T3, cumul, moyenne, pire tour et `Constant` ;
-- `Constant` est défini mathématiquement comme la moyenne harmonique T1–T3 : `3 / (1/T1 + 1/T2 + 1/T3)` ; si un tour vaut 0, le score Constant vaut 0 ;
-- la même définition est utilisée par le scoring rapide (`spells.js`) et le moteur de rotation exact (`turn-optimizer.js`) ;
-- `Constant` est traité comme un objectif multi-tour par le refiner existant, sans modification de ses budgets, beams ou pools ;
-- l'Atelier expose T1/T2/T3 et `Constant` sur un stuff complet ;
-- l'Atelier affiche une rotation exacte T1–T3 avec dégâts, PA, ordre des sorts et conservation des buffs/états/charges/cooldowns inter-tour ;
-- l'analyse Atelier utilise uniquement `optimizeCombatSequence` sur le build fixé ; elle n'appelle ni Candidate Search, ni Architecture Search, ni l'Optimizer Worker ;
-- `WorkshopEvaluator` reste un recalcul léger : l'analyse exacte des tours est déclenchée séparément au rendu d'un build complet puis mémorisée pour ce rendu ;
-- l'horizon certifié reste T1–T3 ; aucune plage arbitraire au-delà de T3 n'est ajoutée dans cette tranche afin de ne pas empiéter sur la Tranche Performance ;
-- définition et choix documentés dans `docs/TEMPORAL_OBJECTIVES_V2.md` ;
-- tests ciblés ajoutés dans `tests/temporal-objectives-v2.test.mjs`.
+Baseline stricte : `main@58918c98276004edf7fc7d0e570f34fbd8431603`.
 
-## Frontières canoniques
+Deux exécutions indépendantes du même workflow ont été conservées pour la comparaison :
 
-- Build final / stats / conditions / sets / FM : `CompleteBuildEvaluator`.
-- Sorts / dégâts : moteur combat générique + `evaluateSpell` / `optimizeCombatSequence`.
-- Objectifs temporels : `js/temporal-objectives.js`.
-- Recherche candidats : `CandidatePolicy` + `CandidatePrefilter`.
-- Panoplies : `SetCoreCatalog`.
-- Recherche libre : `optimizer-worker.js`.
-- Atelier : `WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator` ; l'analyse exacte T1–T3 est une lecture combat séparée sur build fixé.
-- Persistence Atelier : `BuildRepository` → IndexedDB.
-- Mémoire Optimiseur : `NormalizedSearchQuery` → `SearchMemoryRepository` → IndexedDB Search V2.
+- Optimizer CI #532 attempts 1 et 2 sur le baseline ;
+- Optimizer CI #535 attempts 1 et 2 sur le tree optimisé `c63abf8cddf1cb73d4d2a32357afb83ee262b438`.
 
-## Invariants à préserver
+Le détail est documenté dans `docs/PERFORMANCE_V2.md`.
 
-1. L'UI ne recalcule pas le métier.
-2. Les dégâts affichés proviennent du moteur combat canonique.
-3. La définition de chaque objectif temporel est centralisée dans `temporal-objectives.js`.
-4. `Constant` ne doit jamais diverger entre scoring rapide et rotation exacte.
-5. Un simple changement/recherche manuel d'item Atelier ne lance jamais Candidate Search, Architecture Search ou l'Optimizer Worker.
-6. L'analyse T1–T3 d'un stuff fixé peut lancer le moteur combat, mais pas la recherche d'équipement.
-7. Les états inter-tour doivent être conservés dans une rotation T1–T3 cohérente.
-8. Aucun budget de recherche ne doit être augmenté pour cette tranche.
-9. La plage personnalisée > T3 n'est pas implémentée tant que son coût/horizon d'état n'est pas traité explicitement.
-10. La Tranche Performance finale et le polish UI global restent hors #49.
+### Optimisations retenues
 
-## Validation de #49
+#### Candidate Search
 
-Validation fonctionnelle sur le code de tranche :
+`optimizer/candidate-search.js` réutilise désormais par contexte de recherche les calculs sûrs qui étaient recomputés pour chaque état :
 
+- bornes de contraintes des groupes restants ;
+- caps positifs de bonus de panoplies ;
+- caps offensifs restants ;
+- nombre de slots forgeables pour l'upper bound.
+
+Les caches sont des `WeakMap` liés aux objets de contexte de la recherche courante. Aucune persistence et aucune donnée de requête n'est modifiée.
+
+`branchFeasibility()` accepte également une enveloppe pré-calculée / des stats déjà connues. `tests/performance-reuse.test.mjs` protège l'équivalence exacte avec le calcul frais, y compris les formes impossibles.
+
+#### Combat
+
+`js/turn-optimizer.js` conserve exactement le même `stateKey`, les mêmes beams, les mêmes séquences admissibles et les mêmes formules, mais :
+
+- `damage + supportPotential` est calculé une fois par état unique avant le tri ;
+- `finalScore` est calculé une fois par finaliste avant le classement final.
+
+Auparavant ces deux valeurs étaient recalculées plusieurs fois par état dans les comparateurs de `sort`.
+
+### Gains reproductibles retenus
+
+Moyenne de deux runs baseline et deux runs optimisés :
+
+- Combat mono-tour : environ **-10,1 %** ; fingerprint `400` inchangé ;
+- Combat T1–T3 : environ **-29,3 %** ; fingerprint `960` inchangé ;
+- Candidate Search mono-element : environ **-9,1 %** ;
+- Candidate Search crit : environ **-15,1 %** ;
+- Candidate Search T1 : environ **-10,0 %** ;
+- contraintes initiative : environ **-8,4 %** ;
+- haute vitalité : environ **-7,7 %** ;
+- multi : environ **-5,6 %**.
+
+Les scénarios Search conservent exactement, sur les deux paires de runs, leurs `bestScore`, `expandedStates`, `evaluatedBuilds`, `validBuilds`, `architectureVariants` et `bestOrigin`.
+
+Le micro-benchmark `manual-stop-finalization` reste sous la milliseconde et conserve le fingerprint `1:true`. Aucun gain n'est revendiqué sur ce cas ; la finalisation après stop reste fonctionnellement inchangée.
+
+### Expérience rejetée
+
+Un cache supplémentaire des descripteurs d'effets de sorts a été essayé après le checkpoint performant. Il n'a apporté aucun gain reproductible supplémentaire. Il a été retiré avant le tree final : le HEAD retenu ne conserve donc pas cette complexité.
+
+Le tree de code après retrait est identique au checkpoint performant `c63abf8cddf1cb73d4d2a32357afb83ee262b438` pour les fichiers concernés.
+
+## Frontières / invariants à préserver
+
+1. `CompleteBuildEvaluator` reste la validation finale de toute solution.
+2. `CandidatePolicy`, `CandidatePrefilter` et `SetCoreCatalog` ne sont pas remplacés ni contournés.
+3. Aucun beam, pool, budget ou profil de `optimizer/search-profiles.js` n'a été diminué dans #50.
+4. Les upper bounds gardent exactement la même sémantique ; seuls leurs sous-calculs invariants sont réutilisés.
+5. Le moteur combat garde le même `stateKey`, les mêmes formules et les mêmes états admissibles.
+6. Le pipeline cheap → coarse → precise existant dans `combat-turn-refiner.js` est conservé.
+7. Aucune parallélisation supplémentaire n'est ajoutée sans benchmark démontrant un gain réel.
+8. Aucun GPU/WASM n'est ajouté sans besoin mesuré.
+9. Fingerprints Search Memory / requêtes canoniques inchangés.
+10. Le polish UI global et la recette finale restent hors PR #50.
+
+## Validation de #50
+
+Checkpoint de code performant : `c63abf8cddf1cb73d4d2a32357afb83ee262b438`.
+
+- CI #535 attempt 1 : verte ;
+- CI #535 attempt 2 : verte ;
+- CI standard documentaire #539 : verte ;
+- CI #540 avec vérification temporaire explicite `npm run report:spell-support` : verte ;
+- le workflow temporairement enrichi pour #540 a ensuite été restauré exactement à sa version de départ ;
 - `npm run check` : vert ;
-- tests historiques + tests temporels : verts après correction d'un fixture de test de moyenne harmonique ;
-- `npm run benchmark:v2` : vert ;
-- `npm run benchmark:search` : vert ;
-- `npm run benchmark:workshop` : vert ;
-- `npm run report:spell-support` : vert sur CI #529 ;
-- CI standard #528 : verte sur `c41c9caedfb90bd0ca68471d00a85524ffeb75c0` ;
-- CI #529 avec vérification temporaire explicite `report:spell-support` : verte sur `85ed16aa4da52deedc24526a4c42085540136bca` ;
-- le workflow CI temporairement enrichi pour cette vérification a ensuite été restauré exactement à sa version de départ.
+- `npm test` : vert, y compris `tests/performance-reuse.test.mjs` ;
+- `benchmark:v2` : vert ;
+- `benchmark:search` : vert ;
+- `benchmark:workshop` : vert ;
+- `report:spell-support` : vert ;
+- fingerprints qualité inchangés ;
+- Search diagnostics structurels identiques au baseline.
 
-Le HEAD documentaire final doit encore repasser la CI standard verte avant passage READY. Ne pas merger automatiquement.
+Le HEAD final après restauration CI/documentation doit encore repasser la CI standard verte avant passage READY. Ne pas merger automatiquement.
 
-## Prochaine tranche canonique après merge vert de #49
+## Prochaine tranche canonique après merge vert de #50
 
-**Tranche 6 — Performance finale**, uniquement après instruction explicite et depuis un nouveau `main` mergé et vert.
+**Tranche 7 — Polish / recette V2**, uniquement après instruction explicite et depuis un nouveau `main` mergé et vert.
 
-Ne pas commencer cette tranche depuis la branche #49.
+Ne pas commencer cette tranche depuis la branche #50.
 
 ## Reprise rapide
 
@@ -91,4 +128,5 @@ Lire dans cet ordre :
 1. `AGENTS.md`
 2. `PROJECT_STATE.md`
 3. `docs/V2_COMPLETION_PLAN.md`
-4. puis uniquement les modules nécessaires à la tranche.
+4. `docs/PERFORMANCE_V2.md` si la reprise concerne les performances ;
+5. puis uniquement les modules nécessaires à la tranche.
