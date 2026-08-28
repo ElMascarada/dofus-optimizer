@@ -6,6 +6,12 @@ function normalizeType(value = '') {
 
 const INVESTABLE_STATS = new Set(['earth', 'fire', 'water', 'air']);
 
+export const CONDITION_FEASIBILITY = Object.freeze({
+  IMPOSSIBLE: 'impossible',
+  UNRESOLVED: 'unresolved',
+  COMPATIBLE: 'compatible'
+});
+
 export function isPrysmaradite(item) {
   return item?.slotSubtype === 'prysmaradite' || normalizeType(item?.typeName).includes('prysmaradite');
 }
@@ -41,6 +47,99 @@ export function evaluateNormalizedCondition(node, stats = {}) {
   if (node.operator === 'lt') return actual < node.value;
   if (node.operator === 'lte') return actual <= node.value;
   return false;
+}
+
+export function normalizedConditionSignature(node) {
+  if (!node) return 'none';
+  if (node.kind === 'relation') {
+    const relation = node.relation === 'and' || node.relation === 'or' ? node.relation : 'unknown';
+    const children = (node.children || []).map(normalizedConditionSignature).sort();
+    return `${relation}(${children.join(',')})`;
+  }
+  return `${String(node.stat || 'unknown')}:${String(node.operator || 'unknown')}:${String(node.value)}`;
+}
+
+function finiteOwnStat(stats = {}, key) {
+  if (!Object.prototype.hasOwnProperty.call(stats || {}, key)) return null;
+  const value = Number(stats[key]);
+  return Number.isFinite(value) ? value : null;
+}
+
+function leafFeasibility(node, minimums = {}, exactStats = {}) {
+  const target = Number(node?.value);
+  if (!Number.isFinite(target)) return CONDITION_FEASIBILITY.UNRESOLVED;
+
+  const exact = finiteOwnStat(exactStats, node.stat);
+  if (exact !== null) {
+    return evaluateNormalizedCondition(node, { [node.stat]: exact })
+      ? CONDITION_FEASIBILITY.COMPATIBLE
+      : CONDITION_FEASIBILITY.IMPOSSIBLE;
+  }
+
+  const minimum = finiteOwnStat(minimums, node.stat);
+  if (minimum === null) return CONDITION_FEASIBILITY.UNRESOLVED;
+
+  if (node.operator === 'lt') {
+    return minimum >= target ? CONDITION_FEASIBILITY.IMPOSSIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  if (node.operator === 'lte') {
+    return minimum > target ? CONDITION_FEASIBILITY.IMPOSSIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  if (node.operator === 'eq') {
+    return minimum > target ? CONDITION_FEASIBILITY.IMPOSSIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  if (node.operator === 'neq') {
+    return minimum > target ? CONDITION_FEASIBILITY.COMPATIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  if (node.operator === 'gt') {
+    return minimum > target ? CONDITION_FEASIBILITY.COMPATIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  if (node.operator === 'gte') {
+    return minimum >= target ? CONDITION_FEASIBILITY.COMPATIBLE : CONDITION_FEASIBILITY.UNRESOLVED;
+  }
+  return CONDITION_FEASIBILITY.UNRESOLVED;
+}
+
+export function analyzeNormalizedConditionFeasibility(node, {
+  minimums = {},
+  exactStats = {}
+} = {}) {
+  const signature = normalizedConditionSignature(node);
+  if (!node) return { classification: CONDITION_FEASIBILITY.COMPATIBLE, signature };
+
+  if (node.kind !== 'relation') {
+    return {
+      classification: leafFeasibility(node, minimums, exactStats),
+      signature
+    };
+  }
+
+  const children = (node.children || []).map((child) => analyzeNormalizedConditionFeasibility(child, {
+    minimums,
+    exactStats
+  }).classification);
+
+  if (node.relation === 'and') {
+    if (children.some((value) => value === CONDITION_FEASIBILITY.IMPOSSIBLE)) {
+      return { classification: CONDITION_FEASIBILITY.IMPOSSIBLE, signature };
+    }
+    if (children.every((value) => value === CONDITION_FEASIBILITY.COMPATIBLE)) {
+      return { classification: CONDITION_FEASIBILITY.COMPATIBLE, signature };
+    }
+    return { classification: CONDITION_FEASIBILITY.UNRESOLVED, signature };
+  }
+
+  if (node.relation === 'or') {
+    if (children.every((value) => value === CONDITION_FEASIBILITY.IMPOSSIBLE)) {
+      return { classification: CONDITION_FEASIBILITY.IMPOSSIBLE, signature };
+    }
+    if (children.some((value) => value === CONDITION_FEASIBILITY.COMPATIBLE)) {
+      return { classification: CONDITION_FEASIBILITY.COMPATIBLE, signature };
+    }
+    return { classification: CONDITION_FEASIBILITY.UNRESOLVED, signature };
+  }
+
+  return { classification: CONDITION_FEASIBILITY.UNRESOLVED, signature };
 }
 
 function mergeMinimums(a = {}, b = {}) {
