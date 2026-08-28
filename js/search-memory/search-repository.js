@@ -190,6 +190,7 @@ export class SearchMemoryRepository {
 
   async remember(query, output) {
     if (!query || !output || output?.diagnostics?.stoppedEarly) return null;
+    if (!Array.isArray(output.results) || output.results.length === 0) return null;
     const fingerprint = searchFingerprint(query);
     const previous = await this.store.get(fingerprint);
     const timestamp = this.now();
@@ -224,6 +225,8 @@ export class SearchMemoryRepository {
     try { record = migrateSearchRecord(raw); } catch { return { hit: false, reason: 'record-version', fingerprint, output: null }; }
     if (!searchQueriesEqual(record.query, query)) return { hit: false, reason: 'fingerprint-collision', fingerprint, output: null };
     if (!searchVersionsCompatible(record.query.versions, query.versions)) return { hit: false, reason: 'version', fingerprint, output: null };
+    if (!Array.isArray(record.output?.results)) return { hit: false, reason: 'invalid-results', fingerprint, output: null };
+    if (record.output.results.length === 0) return { hit: false, reason: 'empty-results', fingerprint, output: null };
     const hydrated = hydrateSearchOutput(record.output, { items });
     if (!hydrated.compatible) {
       return { hit: false, reason: 'missing-items', fingerprint, output: null, missingItemIds: hydrated.missingItemIds };
