@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { DEFAULT_CONSTRAINTS, SLOT_RULES } from '../js/config.js';
+import { APP_VERSION, DEFAULT_CONSTRAINTS, SLOT_RULES } from '../js/config.js';
 import { createOptimizerV2Request } from '../js/optimizer-v2-orchestrator.js';
 import { prefilterItems } from '../js/candidate-prefilter.js';
 import { searchArchitecturesV2 } from '../js/architecture-search-v2.js';
 import { preferCompanionVitalityOnTies } from '../js/combat-feedback.js';
+import { mergeSearchOutputs } from '../js/search-memory/search-result-merge.js';
+import { MemorySearchStore, SearchMemoryRepository } from '../js/search-memory/search-repository.js';
+import { createSearchVersions, normalizeSearchQuery } from '../js/search-memory/search-query.js';
 
 const dataset = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
 const spellData = JSON.parse(readFileSync(new URL('../data/normalized/spell-data.json', import.meta.url), 'utf8'));
@@ -122,7 +125,10 @@ function searchDiagnostics(output = {}) {
     rejected: diagnostics.rejected || {},
     pruneReasons: diagnostics.pruneReasons || {},
     evaluatedByOrigin: diagnostics.evaluatedByOrigin || {},
-    validByOrigin: diagnostics.validByOrigin || {}
+    validByOrigin: diagnostics.validByOrigin || {},
+    fallbackUsed: Boolean(diagnostics.fallbackUsed),
+    fallbackValid: Number(diagnostics.fallbackValid || 0),
+    fallbackEvaluated: Number(diagnostics.fallbackEvaluated || 0)
   };
 }
 
@@ -140,7 +146,6 @@ function workerProgress(messages = []) {
 }
 
 function productDefaultRequest() {
-  // These are the values rendered by the real V2 UI before any user edits.
   return createOptimizerV2Request({
     dataset,
     spellData,
@@ -174,7 +179,33 @@ function certifiedControlRequest() {
   });
 }
 
-test('diagnose canonical V2 zero-build regression through the real request and Worker pipeline', (t) => {
+async function exactZeroCacheDiagnostic(request) {
+  const versions = createSearchVersions({ dataset, spellData, rulesVersion: APP_VERSION });
+  const query = normalizeSearchQuery({ payload: request, versions });
+  const cleanRepository = new SearchMemoryRepository({ store: new MemorySearchStore() });
+  const clean = await cleanRepository.recallExact(query, { items: dataset.items });
+
+  const zeroRepository = new SearchMemoryRepository({
+    store: new MemorySearchStore(),
+    now: () => '2026-08-28T12:00:00.000Z'
+  });
+  await zeroRepository.remember(query, { results: [], diagnostics: { diagnosticZero: true } });
+  const exactZero = await zeroRepository.recallExact(query, { items: dataset.items });
+  const appSource = readFileSync(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
+  const exactHitBranchBypassesWorker = appSource.includes('if (exact.hit && !workshopSeeds.length)')
+    && appSource.includes('renderResults(output.results || []);')
+    && appSource.includes('setIdle();\n        return;');
+
+  return {
+    appVersion: APP_VERSION,
+    cleanMemoryHit: clean.hit,
+    exactZeroHit: exactZero.hit,
+    exactZeroResults: exactZero.output?.results?.length || 0,
+    exactHitBranchBypassesWorker
+  };
+}
+
+test('diagnose canonical V2 zero-build regression through the real request and Worker pipeline', async (t) => {
   const request = productDefaultRequest();
   const normalized = workerSearchInput(request);
 
@@ -197,6 +228,12 @@ test('diagnose canonical V2 zero-build regression through the real request and W
 
   const worker = runRealWorker(request, 7001);
   const workerResults = worker.output?.results || [];
+  const postWorkerMerge = mergeSearchOutputs(
+    worker.output || { results: [], diagnostics: {} },
+    { results: [], diagnostics: { seedEvaluation: { attempted: 0, valid: 0, rejected: {} } } },
+    { topN: request.topN, diversityMode: request.diversityMode }
+  );
+  const memory = await exactZeroCacheDiagnostic(request);
 
   let control = null;
   if (!workerResults.length) {
@@ -239,6 +276,11 @@ test('diagnose canonical V2 zero-build regression through the real request and W
       candidatePools: poolSummary(normalized.items, worker.output?.candidatePools),
       progress: workerProgress(worker.messages)
     },
+    postWorker: {
+      mergedResults: postWorkerMerge.results?.length || 0,
+      searchMemory: postWorkerMerge.diagnostics?.searchMemory || {}
+    },
+    exactSearchMemory: memory,
     control12Ap6MpInitiative0: control
   };
 
@@ -246,4 +288,9 @@ test('diagnose canonical V2 zero-build regression through the real request and W
 
   assert.equal(worker.error, null, `Worker must not fail: ${worker.error || ''}`);
   assert.ok(workerResults.length > 0, 'canonical product-default Iop Terre T1 request must produce at least one Worker result');
+  assert.ok(postWorkerMerge.results.length > 0, 'post-Worker result merge must preserve canonical Worker results');
+  assert.equal(memory.cleanMemoryHit, false, 'a clean search memory must miss before the Worker runs');
+  assert.equal(memory.exactZeroHit, true, 'an exact zero-result search record is considered a compatible cache hit');
+  assert.equal(memory.exactZeroResults, 0, 'the exact zero-result cache hit rehydrates as zero results');
+  assert.equal(memory.exactHitBranchBypassesWorker, true, 'the product exact-hit branch renders cached results and returns before Worker dispatch');
 });
