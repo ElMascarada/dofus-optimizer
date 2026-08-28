@@ -113,9 +113,9 @@ test('a compatible non-empty exact record still hits and rehydrates current cata
   assert.equal(recalled.output.results[0].items[0], canonicalItem);
 });
 
-test('optimizer-search-v2-memory-1 records are incompatible with the bumped search algorithm version', async () => {
-  assert.equal(SEARCH_ALGORITHM_VERSION, 'optimizer-search-v2-memory-2');
-  const oldQuery = query('optimizer-search-v2-memory-1');
+test('older search algorithm records are incompatible with search algorithm v3', async () => {
+  assert.equal(SEARCH_ALGORITHM_VERSION, 'optimizer-search-v2-memory-3');
+  const oldQuery = query('optimizer-search-v2-memory-2');
   const currentQuery = query();
   assert.equal(searchVersionsCompatible(oldQuery.versions, currentQuery.versions), false);
   assert.notEqual(searchFingerprint(oldQuery), searchFingerprint(currentQuery));
