@@ -131,3 +131,35 @@ test('setBonus < 3 remains unresolved and retainable beside conditionless choice
   );
   assert.ok(choices.length <= 2, 'unresolved diversity must consume, not enlarge, the existing beam');
 });
+
+test('conditionless reserve keeps a strong representative for a weak-isolation Pareto specialist', () => {
+  const specialist = {
+    ...item('melee-specialist', 10),
+    stats: { power: 10, meleeDamagePct: 6 }
+  };
+  const safeA = item('safe-a', 120);
+  const safeB = item('safe-b', 119);
+  const base = context();
+  const specialistContext = {
+    ...base,
+    profile: {
+      ...base.profile,
+      search: {
+        ...base.profile.search,
+        groupSpecialistReservePerStat: 1,
+        groupOffenseReserve: 2
+      }
+    },
+    policy: {
+      ...base.policy,
+      paretoKeys: ['meleeDamagePct', 'power']
+    }
+  };
+
+  const choices = buildGroupChoices([safeA, safeB, specialist].map(profileItem), 2, specialistContext);
+  assert.ok(
+    choices.some((choice) => choiceIds(choice).join('|') === 'melee-specialist|safe-a'),
+    'the fixed conditionless lane must represent the melee specialist instead of filling only by aggregate score'
+  );
+  assert.ok(choices.length <= 2, 'specialist diversity must stay inside the existing beam width');
+});
