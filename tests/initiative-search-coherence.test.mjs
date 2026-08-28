@@ -246,9 +246,11 @@ test('Iop Terre T1 12/6 with inactive Initiative no longer returns pure Initiati
     const names = new Set((build.items || []).map((item) => item?.name));
     assert.ok(!names.has('Initiateur'), 'Initiateur must not survive solely for inactive Initiative');
     assert.ok(!names.has('Initiateur mineur'), 'Initiateur mineur must not survive solely for inactive Initiative');
+    assert.ok(Number(build.stats?.initiative ?? 0) >= 0, 'Worker-exposed Initiative must never be negative');
   }
 
   const best = results[0];
+  assert.equal(Number(best.stats?.initiative ?? 0), 0, 'the canonical best build must expose effective Initiative 0');
   assert.ok(Number(best.score || 0) >= 4285.1832 - 1e-6, 'the targeted coherence fix must not lower the certified combat score floor');
   t.diagnostic(`INITIATIVE_COHERENCE_RESULT ${JSON.stringify({
     score: best.score,
