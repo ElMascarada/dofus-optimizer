@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateNormalizedCondition } from '../js/build-legality.js';
+import { evaluateCondition as evaluateNormalizedSourceCondition } from '../js/dofusdude-normalizer.js';
 import {
   constraintDeficits,
   effectiveStat,
@@ -44,16 +45,25 @@ test('Initiative constraints are checked against the effective Dofus value', () 
 test('all Initiative equipment-condition operators use effective Initiative', () => {
   const stats = { initiative: -1000 };
   const condition = (operator, value) => ({ kind: 'condition', stat: 'initiative', operator, value });
+  const cases = [
+    ['eq', 0, true],
+    ['neq', 0, false],
+    ['gt', 0, false],
+    ['gte', 0, true],
+    ['lt', 0, false],
+    ['lte', 0, true]
+  ];
 
-  assert.equal(evaluateNormalizedCondition(condition('eq', 0), stats), true);
-  assert.equal(evaluateNormalizedCondition(condition('neq', 0), stats), false);
-  assert.equal(evaluateNormalizedCondition(condition('gt', 0), stats), false);
-  assert.equal(evaluateNormalizedCondition(condition('gte', 0), stats), true);
-  assert.equal(evaluateNormalizedCondition(condition('lt', 0), stats), false);
-  assert.equal(evaluateNormalizedCondition(condition('lte', 0), stats), true);
+  for (const [operator, value, expected] of cases) {
+    const node = condition(operator, value);
+    assert.equal(evaluateNormalizedCondition(node, stats), expected);
+    assert.equal(evaluateNormalizedSourceCondition(node, stats), expected);
+  }
 
-  assert.equal(evaluateNormalizedCondition(condition('gte', 1000), { initiative: 999 }), false);
-  assert.equal(evaluateNormalizedCondition(condition('gte', 1000), { initiative: 1000 }), true);
+  for (const evaluator of [evaluateNormalizedCondition, evaluateNormalizedSourceCondition]) {
+    assert.equal(evaluator(condition('gte', 1000), { initiative: 999 }), false);
+    assert.equal(evaluator(condition('gte', 1000), { initiative: 1000 }), true);
+  }
 });
 
 test('effectiveStats normalizes product-facing Initiative without mutating raw aggregation', () => {
