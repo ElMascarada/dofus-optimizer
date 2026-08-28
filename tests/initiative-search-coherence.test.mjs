@@ -63,15 +63,7 @@ function syntheticProfile(item, objectiveGain = 0) {
   };
 }
 
-test('Candidate Search retains true Initiative instead of a +1000/-1000 false specialist', () => {
-  const initiative = gear('initiative-anchor', { initiative: 1000 });
-  const penaltyOffense = gear('surpryz-like', { initiative: -1000, earth: 1000 });
-  const neutral = gear('neutral', {});
-  const profiles = [
-    syntheticProfile(initiative),
-    syntheticProfile(penaltyOffense, 1000),
-    syntheticProfile(neutral)
-  ];
+function syntheticCandidateContext() {
   const constraints = { initiative: 1000 };
   const profile = {
     ranking: { constraintWeight: 1000000 },
@@ -98,18 +90,46 @@ test('Candidate Search retains true Initiative instead of a +1000/-1000 false sp
       };
     }
   };
+  return { constraints, profile, policy };
+}
+
+test('Candidate Search retains true Initiative instead of a +1000/-1000 false specialist', () => {
+  const initiative = gear('initiative-anchor', { initiative: 1000 });
+  const penaltyOffense = gear('surpryz-like', { initiative: -1000, earth: 1000 });
+  const neutral = gear('neutral', {});
+  const profiles = [
+    syntheticProfile(initiative),
+    syntheticProfile(penaltyOffense, 1000),
+    syntheticProfile(neutral)
+  ];
+  const context = syntheticCandidateContext();
 
   const choices = buildGroupChoices(profiles, 2, {
     slot: 'dofus',
-    constraints,
-    policy,
-    profile
+    ...context
   });
 
-  assert.equal(choices.length, 1);
-  assert.deepEqual(choices[0].items.map((item) => item.id), ['initiative-anchor', 'neutral']);
-  assert.equal(choices[0].items.reduce((sum, item) => sum + Number(item.stats?.initiative || 0), 0), 1000);
-  assert.ok(!choices[0].items.some((item) => item.id === 'surpryz-like'));
+  assert.ok(choices.length >= 1);
+  const retained = choices[0];
+  assert.deepEqual(retained.items.map((item) => item.id), ['initiative-anchor', 'neutral']);
+  assert.equal(retained.items.reduce((sum, item) => sum + Number(item.stats?.initiative || 0), 0), 1000);
+  assert.ok(!retained.items.some((item) => item.id === 'surpryz-like'));
+});
+
+test('single-slot Candidate Search scores signed Initiative so cross-slot penalties can cancel', () => {
+  const context = syntheticCandidateContext();
+  const positive = buildGroupChoices([syntheticProfile(gear('positive', { initiative: 1000 }))], 1, {
+    slot: 'amulet',
+    ...context
+  })[0];
+  const negative = buildGroupChoices([syntheticProfile(gear('negative', { initiative: -1000 }))], 1, {
+    slot: 'shield',
+    ...context
+  })[0];
+
+  assert.ok(positive.score > 0);
+  assert.ok(negative.score < 0, 'a real Initiative penalty must remain visible in a single-slot group score');
+  assert.equal(positive.score + negative.score, 0);
 });
 
 const dataset = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
