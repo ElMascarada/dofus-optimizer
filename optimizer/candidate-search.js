@@ -4,7 +4,11 @@ import { optimisticItemStats } from '../js/search-space.js';
 import { evaluateObjectiveUpperBound } from '../js/spells.js';
 import { addStats, emptyStats } from '../js/stats.js';
 import { applySetBonuses } from '../js/sets.js';
-import { isPrysmaradite } from '../js/build-legality.js';
+import {
+  CONDITION_FEASIBILITY,
+  analyzeNormalizedConditionFeasibility,
+  isPrysmaradite
+} from '../js/build-legality.js';
 import { GENERIC_OFFENSE_KEYS, positiveConstraintKeys } from './candidate-policy.js';
 
 const branchEnvelopeCache = new WeakMap();
@@ -64,6 +68,36 @@ function choiceKey(items) {
   return (items || []).map((item) => String(item.id)).sort().join('|');
 }
 
+function classifyProfileCondition(entry, context) {
+  const analysis = analyzeNormalizedConditionFeasibility(entry?.item?.conditions, {
+    minimums: context.constraints || {},
+    exactStats: { level: Number(BASE_CHARACTER.level || 0) }
+  });
+  return {
+    ...entry,
+    conditionClass: analysis.classification,
+    conditionSignature: analysis.signature
+  };
+}
+
+function conditionSignature(state) {
+  if (state.conditionClass === CONDITION_FEASIBILITY.COMPATIBLE) return 'compatible';
+  return (state.conditionSignatures || []).join('&') || 'unresolved';
+}
+
+function extendConditionState(state, candidate) {
+  const unresolved = candidate.conditionClass === CONDITION_FEASIBILITY.UNRESOLVED;
+  const signatures = unresolved
+    ? [...new Set([...(state.conditionSignatures || []), candidate.conditionSignature])].sort()
+    : [...(state.conditionSignatures || [])];
+  return {
+    conditionClass: state.conditionClass === CONDITION_FEASIBILITY.UNRESOLVED || unresolved
+      ? CONDITION_FEASIBILITY.UNRESOLVED
+      : CONDITION_FEASIBILITY.COMPATIBLE,
+    conditionSignatures: signatures
+  };
+}
+
 function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
@@ -72,7 +106,7 @@ function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = ne
     if (target > 0) return `${key}:${Math.min(4, Math.floor((value / target) * 4))}`;
     return `${key}:${Math.min(4, Math.round(value))}`;
   });
-  return `${parts.join(',')}:p${prysma}`;
+  return `${parts.join(',')}:p${prysma}:c${conditionSignature(state)}`;
 }
 
 function keepChoiceDiversity(states, limit, context) {
@@ -92,6 +126,41 @@ function keepChoiceDiversity(states, limit, context) {
     perBucket.set(bucket, used + 1);
     output.push(state);
     return true;
+  }
+
+  // A fixed-size lane protects choices whose item conditions are already known
+  // compatible with hard search minima. It consumes the existing beam; it does
+  // not increase any beam width or choice limit.
+  const compatibleReserve = Math.min(
+    limit,
+    Math.max(0, Number(context.profile.search.groupOffenseReserve || 0))
+  );
+  const compatibleTarget = output.length + compatibleReserve;
+  const compatibleStates = [...states]
+    .filter((state) => state.conditionClass === CONDITION_FEASIBILITY.COMPATIBLE)
+    .sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore);
+  for (const state of compatibleStates) {
+    if (output.length >= compatibleTarget) break;
+    tryKeep(state, { enforceBucket: true });
+  }
+
+  // Unresolved conditions are not treated as bad. Preserve distinct normalized
+  // condition signatures so one attractive family (for example setBonus < 3)
+  // cannot monopolize every retained multi-pick state.
+  const unresolvedReserve = Math.min(
+    Math.max(0, limit - output.length),
+    Math.max(0, Number(context.profile.search.groupBucketLimit || 0))
+  );
+  const unresolvedTarget = output.length + unresolvedReserve;
+  const unresolvedSignatures = new Set();
+  const unresolvedStates = [...states]
+    .filter((state) => state.conditionClass === CONDITION_FEASIBILITY.UNRESOLVED)
+    .sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore);
+  for (const state of unresolvedStates) {
+    if (output.length >= unresolvedTarget) break;
+    const signature = conditionSignature(state);
+    if (unresolvedSignatures.has(signature)) continue;
+    if (tryKeep(state, { enforceBucket: false })) unresolvedSignatures.add(signature);
   }
 
   // Preserve a tiny lane for each context-relevant Pareto dimension. This is
@@ -134,10 +203,13 @@ function keepChoiceDiversity(states, limit, context) {
 
 export function buildGroupChoices(profiles = [], count = 1, context = {}) {
   if (count <= 0) return [{ items: [], score: 0, objectiveScore: 0, optimisticStats: {}, bounded: true, prysma: 0 }];
-  if (profiles.length < count) return [];
+  const conditionAwareProfiles = profiles
+    .map((entry) => classifyProfileCondition(entry, context))
+    .filter((entry) => entry.conditionClass !== CONDITION_FEASIBILITY.IMPOSSIBLE);
+  if (conditionAwareProfiles.length < count) return [];
   const constrainedKeys = positiveConstraintKeys(context.constraints);
   if (count === 1) {
-    return profiles
+    return conditionAwareProfiles
       .map((entry) => {
         const constraintStats = {};
         addSignedConstraintStats(constraintStats, entry, constrainedKeys);
@@ -166,15 +238,17 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     prysma: 0,
     optimisticStats: {},
     constraintStats: {},
-    bounded: true
+    bounded: true,
+    conditionClass: CONDITION_FEASIBILITY.COMPATIBLE,
+    conditionSignatures: []
   }];
   for (let pick = 0; pick < count; pick++) {
     const next = [];
     const leftAfter = count - pick - 1;
     for (const state of states) {
-      const last = profiles.length - leftAfter;
+      const last = conditionAwareProfiles.length - leftAfter;
       for (let index = state.next; index < last; index++) {
-        const candidate = profiles[index];
+        const candidate = conditionAwareProfiles[index];
         const prysma = state.prysma + (isPrysmaradite(candidate.item) ? 1 : 0);
         if (prysma > 1) continue;
         const stats = { ...state.optimisticStats };
@@ -182,6 +256,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         const constraintStats = { ...state.constraintStats };
         addSignedConstraintStats(constraintStats, candidate, constrainedKeys);
         const combinedRank = rankGroupState(stats, constraintStats, context);
+        const conditionState = extendConditionState(state, candidate);
         next.push({
           items: [...state.items, candidate.item],
           score: combinedRank.rankScore,
@@ -190,7 +265,8 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
           prysma,
           optimisticStats: stats,
           constraintStats,
-          bounded: state.bounded && candidate.bounded
+          bounded: state.bounded && candidate.bounded,
+          ...conditionState
         });
       }
     }
