@@ -1,3 +1,5 @@
+import { effectiveStat } from './stats.js';
+
 function normalizeType(value = '') {
   return String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
@@ -31,7 +33,7 @@ export function evaluateNormalizedCondition(node, stats = {}) {
     return false;
   }
 
-  const actual = Number(stats?.[node.stat] || 0);
+  const actual = effectiveStat(stats, node.stat);
   if (node.operator === 'eq') return actual === node.value;
   if (node.operator === 'neq') return actual !== node.value;
   if (node.operator === 'gt') return actual > node.value;

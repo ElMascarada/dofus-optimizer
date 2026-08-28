@@ -1,5 +1,5 @@
 import { BASE_CHARACTER } from './config.js';
-import { addStats, constraintDeficits, emptyStats } from './stats.js';
+import { addStats, constraintDeficits, effectiveStats, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
 import {
   estimateElementValues,
@@ -151,7 +151,9 @@ export function evaluateCompleteBuild({
   if (fm.objective.unresolvedPassiveContexts?.length) warnings.push('unresolved-passive');
 
   const effectiveStatsByTurn = {};
-  for (const turn of [1, 2, 3]) effectiveStatsByTurn[turn] = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
+  for (const turn of [1, 2, 3]) {
+    effectiveStatsByTurn[turn] = effectiveStats(statsForTurnDetailed(fm.stats, items, turn, scenario).stats);
+  }
   const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
 
   return {
@@ -159,7 +161,7 @@ export function evaluateCompleteBuild({
       score: fm.objective.score,
       perTurn: fm.objective.perTurn,
       items: [...items],
-      stats: fm.stats,
+      stats: effectiveStats(fm.stats),
       effectiveStatsByTurn,
       spellBreakdowns,
       characteristics: charResult.allocation,

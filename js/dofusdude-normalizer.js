@@ -1,4 +1,4 @@
-import { addStats, emptyStats } from './stats.js';
+import { addStats, effectiveStat, emptyStats } from './stats.js';
 
 const EFFECT_STAT_ALIASES = new Map([
   ['AP', 'ap'],
@@ -237,7 +237,7 @@ export function evaluateCondition(node, stats = {}) {
     if (node.relation === 'or') return node.children.some((child) => evaluateCondition(child, stats));
     return false;
   }
-  const actual = Number(stats?.[node.stat] || 0);
+  const actual = effectiveStat(stats, node.stat);
   if (node.operator === 'eq') return actual === node.value;
   if (node.operator === 'neq') return actual !== node.value;
   if (node.operator === 'gt') return actual > node.value;
