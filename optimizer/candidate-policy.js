@@ -87,7 +87,7 @@ function hasUniqueMechanic(item = {}) {
 }
 
 function specialistDefinitions(policy) {
-  const definitions = STRUCTURAL_SPECIALIST_KEYS.map((key) => ({ id: key, keys: [key] }));
+  const definitions = policy.structuralSpecialistKeys.map((key) => ({ id: key, keys: [key] }));
   for (const key of GENERIC_OFFENSE_KEYS) {
     if (!definitions.some((definition) => definition.id === key)) definitions.push({ id: key, keys: [key] });
   }
@@ -127,7 +127,7 @@ function profileIsContextRelevant(entry, policy) {
   if (genericOffenseSignal(stats) > 0) return true;
   if (constraintOrderingSignal(stats, policy.constraints) > 0) return true;
   if (entry.item?.setId || hasUniqueMechanic(entry.item)) return true;
-  if (STRUCTURAL_SPECIALIST_KEYS.some((key) => num(stats, key) > 0)) return true;
+  if (policy.structuralSpecialistKeys.some((key) => num(stats, key) > 0)) return true;
   return policy.conditionKeys.some((key) => num(stats, key) > 0);
 }
 
@@ -163,9 +163,15 @@ export function createCandidatePolicy({
   const targetElement = elements.length === 1 ? elements[0] : null;
   const relevance = relevantStatKeys({ items, selections, constraints });
   const conditionInfo = collectConditionStatInfo(items);
+  const initiativeRelevant = positiveConstraintKeys(constraints).includes('initiative')
+    || conditionInfo.all.has('initiative');
+  const structuralSpecialistKeys = STRUCTURAL_SPECIALIST_KEYS
+    .filter((key) => key !== 'initiative' || initiativeRelevant);
+  const relevanceKeys = relevance.keys
+    .filter((key) => key !== 'initiative' || initiativeRelevant);
   const paretoKeys = new Set([
-    ...relevance.keys,
-    ...STRUCTURAL_SPECIALIST_KEYS,
+    ...relevanceKeys,
+    ...structuralSpecialistKeys,
     ...GENERIC_OFFENSE_KEYS,
     'ap', 'mp', 'range'
   ]);
@@ -187,6 +193,7 @@ export function createCandidatePolicy({
     targetElement,
     elements,
     conditionKeys: [...conditionInfo.all].sort(),
+    structuralSpecialistKeys,
     paretoKeys: [...paretoKeys].sort(),
     nonMonotoneKeys: relevance.nonMonotoneKeys,
     slotRules,

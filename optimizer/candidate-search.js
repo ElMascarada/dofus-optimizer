@@ -24,14 +24,50 @@ function addPositive(target, source = {}) {
   return target;
 }
 
+function signedConstraintOrderingSignal(stats, constraints = {}) {
+  let signal = 0;
+  for (const key of positiveConstraintKeys(constraints)) {
+    const target = Math.max(1, Number(constraints[key] || 0));
+    signal += num(stats, key) / target;
+  }
+  return signal;
+}
+
+function addSignedConstraintStats(target, candidate, keys = []) {
+  for (const key of keys) {
+    const optimistic = num(candidate?.optimisticStats, key);
+    const fixedPenalty = Math.min(0, num(candidate?.item?.stats, key));
+    target[key] = num(target, key) + optimistic + fixedPenalty;
+  }
+  return target;
+}
+
+function retentionStat(state, key, constraintKeys) {
+  return constraintKeys.has(key)
+    ? num(state.constraintStats, key)
+    : num(state.optimisticStats, key);
+}
+
+function rankGroupState(optimisticStats, constraintStats, context) {
+  const ranked = context.policy.rankStats(optimisticStats);
+  const signedConstraintSignal = signedConstraintOrderingSignal(constraintStats, context.constraints);
+  const constraintWeight = Number(context.profile?.ranking?.constraintWeight || 0);
+  return {
+    ...ranked,
+    constraintSignal: signedConstraintSignal,
+    rankScore: ranked.rankScore
+      + (signedConstraintSignal - ranked.constraintSignal) * constraintWeight
+  };
+}
+
 function choiceKey(items) {
   return (items || []).map((item) => String(item.id)).sort().join('|');
 }
 
-function resourceBucket(stats, constraints = {}, prysma = 0) {
+function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
-    const value = Math.max(0, num(stats, key));
+    const value = Math.max(0, retentionStat(state, key, constraintKeys));
     const target = Math.max(0, Number(constraints?.[key] || 0));
     if (target > 0) return `${key}:${Math.min(4, Math.floor((value / target) * 4))}`;
     return `${key}:${Math.min(4, Math.round(value))}`;
@@ -43,12 +79,13 @@ function keepChoiceDiversity(states, limit, context) {
   const seen = new Set();
   const output = [];
   const perBucket = new Map();
+  const constraintKeys = new Set(positiveConstraintKeys(context.constraints));
 
   function tryKeep(state, { enforceBucket = true } = {}) {
     if (output.length >= limit) return false;
     const key = choiceKey(state.items);
     if (!key || seen.has(key)) return false;
-    const bucket = resourceBucket(state.optimisticStats, context.constraints, state.prysma);
+    const bucket = resourceBucket(state, context.constraints, state.prysma, constraintKeys);
     const used = perBucket.get(bucket) || 0;
     if (enforceBucket && used >= context.profile.search.groupBucketLimit) return false;
     seen.add(key);
@@ -65,8 +102,8 @@ function keepChoiceDiversity(states, limit, context) {
   for (const key of context.policy.paretoKeys || []) {
     if (output.length >= limit || specialistReserve <= 0) break;
     const bySpecialist = [...states]
-      .filter((state) => num(state.optimisticStats, key) > 0)
-      .sort((a, b) => num(b.optimisticStats, key) - num(a.optimisticStats, key)
+      .filter((state) => retentionStat(state, key, constraintKeys) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys) - retentionStat(a, key, constraintKeys)
         || b.objectiveScore - a.objectiveScore
         || b.score - a.score);
     let kept = 0;
@@ -98,24 +135,39 @@ function keepChoiceDiversity(states, limit, context) {
 export function buildGroupChoices(profiles = [], count = 1, context = {}) {
   if (count <= 0) return [{ items: [], score: 0, objectiveScore: 0, optimisticStats: {}, bounded: true, prysma: 0 }];
   if (profiles.length < count) return [];
+  const constrainedKeys = positiveConstraintKeys(context.constraints);
   if (count === 1) {
-    return [...profiles]
-      .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)))
-      .map((entry) => ({
-        items: [entry.item],
-        score: entry.rankScore,
-        objectiveScore: entry.objectiveGain,
-        optimisticStats: { ...entry.optimisticStats },
-        bounded: entry.bounded,
-        prysma: isPrysmaradite(entry.item) ? 1 : 0
-      }));
+    return profiles
+      .map((entry) => {
+        const constraintStats = {};
+        addSignedConstraintStats(constraintStats, entry, constrainedKeys);
+        const ranked = rankGroupState(entry.optimisticStats, constraintStats, context);
+        return {
+          items: [entry.item],
+          score: ranked.rankScore,
+          objectiveScore: ranked.objectiveGain,
+          optimisticStats: { ...entry.optimisticStats },
+          bounded: entry.bounded,
+          prysma: isPrysmaradite(entry.item) ? 1 : 0
+        };
+      })
+      .sort((a, b) => b.score - a.score || String(a.items[0].id).localeCompare(String(b.items[0].id)));
   }
 
   const profile = context.profile;
   const beamWidth = context.slot === 'dofus'
     ? profile.search.dofusGroupBeamWidth
     : count >= 5 ? profile.search.multiPickBeamWidth : profile.search.groupBeamWidth;
-  let states = [{ items: [], score: 0, objectiveScore: 0, next: 0, prysma: 0, optimisticStats: {}, bounded: true }];
+  let states = [{
+    items: [],
+    score: 0,
+    objectiveScore: 0,
+    next: 0,
+    prysma: 0,
+    optimisticStats: {},
+    constraintStats: {},
+    bounded: true
+  }];
   for (let pick = 0; pick < count; pick++) {
     const next = [];
     const leftAfter = count - pick - 1;
@@ -127,7 +179,9 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         if (prysma > 1) continue;
         const stats = { ...state.optimisticStats };
         addPositive(stats, candidate.optimisticStats);
-        const combinedRank = context.policy.rankStats(stats);
+        const constraintStats = { ...state.constraintStats };
+        addSignedConstraintStats(constraintStats, candidate, constrainedKeys);
+        const combinedRank = rankGroupState(stats, constraintStats, context);
         next.push({
           items: [...state.items, candidate.item],
           score: combinedRank.rankScore,
@@ -135,6 +189,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
           next: index + 1,
           prysma,
           optimisticStats: stats,
+          constraintStats,
           bounded: state.bounded && candidate.bounded
         });
       }
