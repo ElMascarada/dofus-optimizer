@@ -1,6 +1,6 @@
 const QUERY_SCHEMA_VERSION = 2;
 export const SEARCH_QUERY_SCHEMA_VERSION = QUERY_SCHEMA_VERSION;
-export const SEARCH_ALGORITHM_VERSION = 'optimizer-search-v2-memory-2';
+export const SEARCH_ALGORITHM_VERSION = 'optimizer-search-v2-memory-3';
 
 function finiteNumber(value, fallback = 0) {
   const number = Number(value);
