@@ -54,13 +54,17 @@ let queuedFindBetterBuild = null;
 const searchMemory = new SearchMemoryRepository();
 
 function escapeHtml(value = '') {
-  return String(value).replace(/[&<>'"]/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  return String(value).replace(/[&<>'\"]/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;'
   }[char]));
 }
 
 function fmt(value) {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(Number(value || 0));
+}
+
+function fmtDamage(value) {
+  return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 
 function readNumber(id) {
@@ -77,6 +81,54 @@ function activeTurns(turnMode) {
   if (turnMode === 't2') return [2];
   if (turnMode === 't3') return [3];
   return [1, 2, 3];
+}
+
+function combatPreviewMarkup(build, turnMode) {
+  const sequence = Array.isArray(build?.combatPlan?.sequence) ? build.combatPlan.sequence : null;
+  if (!sequence) return '<p class="optimizer-v2-combat-unavailable">Rotation détaillée indisponible</p>';
+
+  const turns = activeTurns(turnMode).flatMap((turn) => {
+    const turnDamage = Number(build?.perTurn?.[turn]);
+    const actions = sequence.filter((entry) => Number(entry?.turn) === turn);
+    if (!Number.isFinite(turnDamage) || !actions.length) return [];
+
+    const rotation = [];
+    const damageBySpell = new Map();
+    for (const action of actions) {
+      const name = String(action?.name || action?.spellId || '').trim();
+      if (name) {
+        const previous = rotation.at(-1);
+        if (previous?.name === name) previous.count += 1;
+        else rotation.push({ name, count: 1 });
+      }
+
+      const damage = Number(action?.expectedDamage);
+      if (!Number.isFinite(damage) || damage === 0) continue;
+      const key = String(action?.spellId || action?.name || '').trim();
+      if (!key || !name) continue;
+      const current = damageBySpell.get(key) || { name, damage: 0 };
+      current.damage += damage;
+      damageBySpell.set(key, current);
+    }
+    if (!rotation.length || !damageBySpell.size) return [];
+
+    const rotationText = rotation
+      .map(({ name, count }) => `${escapeHtml(name)} ×${count}`)
+      .join(' → ');
+    const breakdown = [...damageBySpell.values()]
+      .map(({ name, damage }) => `<div><dt>${escapeHtml(name)}</dt><dd>${fmtDamage(damage)}</dd></div>`)
+      .join('');
+
+    return [`
+      <section class="optimizer-v2-combat-turn">
+        <strong>T${turn} — ${fmtDamage(turnDamage)} dégâts</strong>
+        <div class="optimizer-v2-rotation">${rotationText}</div>
+        <div class="optimizer-v2-breakdown"><small>Dégâts par sort</small><dl>${breakdown}</dl></div>
+      </section>`];
+  });
+
+  if (!turns.length) return '<p class="optimizer-v2-combat-unavailable">Rotation détaillée indisponible</p>';
+  return `<div class="optimizer-v2-combat-preview" aria-label="Aperçu combat">${turns.join('')}</div>`;
 }
 
 function stateMarkup(kind, title, message) {
@@ -119,13 +171,11 @@ function setSearchingUi(searching, label = '') {
 
 function renderBuild(build, index) {
   const itemRows = (build.items || []).map((item) => `<li>${escapeHtml(item.name)}</li>`).join('');
-  const turns = activeTurns(currentPayload?.turnMode || turnSelect.value)
-    .map((turn) => `<span>T${turn} <b>${fmt(build.perTurn?.[turn])}</b></span>`)
-    .join('');
+  const combatPreview = combatPreviewMarkup(build, currentPayload?.turnMode || turnSelect.value);
   return `
     <article class="optimizer-v2-result-card">
-      <header><span class="rank">#${index + 1}</span><div><strong>${fmt(build.score)}</strong><small>score de l’objectif sélectionné</small></div></header>
-      <div class="optimizer-v2-turns">${turns}</div>
+      <header><span class="rank">#${index + 1}</span><div><strong>${fmt(build.score)}</strong><small>score de l’objectif</small></div></header>
+      ${combatPreview}
       <div class="optimizer-v2-stats">
         <span>PA <b>${fmt(build.stats?.ap)}</b></span>
         <span>PM <b>${fmt(build.stats?.mp)}</b></span>
