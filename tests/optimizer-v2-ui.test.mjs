@@ -62,9 +62,9 @@ test('une carte avec plan de combat affiche dégâts du tour, rotation et dégâ
   }, 't1');
   const text = textFromMarkup(markup);
 
-  assert.match(text, /T1 — 4 663 dégâts/);
+  assert.match(text, /T1 — 4 663 dégâts estimés/);
   assert.match(text, /Épée de Iop ×2 → Fureur ×1/);
-  assert.match(text, /Dégâts par sort/);
+  assert.match(text, /Dégâts estimés par sort/);
   assert.match(text, /Épée de Iop 3 483/);
   assert.match(text, /Fureur 1 180/);
 });
@@ -72,7 +72,7 @@ test('une carte avec plan de combat affiche dégâts du tour, rotation et dégâ
 test('le score reste explicitement distingué des dégâts réels', async () => {
   const { source } = await combatPreviewRenderer();
   assert.match(source, /<small>score de l’objectif<\/small>/);
-  assert.match(source, /<strong>T\$\{turn\} — \$\{fmtDamage\(turnDamage\)\} dégâts<\/strong>/);
+  assert.match(source, /<strong>T\$\{turn\} — \$\{fmtDamage\(turnDamage\)\} dégâts estimés<\/strong>/);
 });
 
 test('un résultat sans plan détaillé reste rendu sans erreur', async () => {
@@ -94,7 +94,7 @@ test('le mode multi-tour affiche chaque tour de combat disponible', async () => 
     }
   }, 'sum');
   const text = textFromMarkup(markup);
-  assert.match(text, /T1 — 1 000 dégâts/);
-  assert.match(text, /T2 — 1 200 dégâts/);
-  assert.match(text, /T3 — 1 400 dégâts/);
+  assert.match(text, /T1 — 1 000 dégâts estimés/);
+  assert.match(text, /T2 — 1 200 dégâts estimés/);
+  assert.match(text, /T3 — 1 400 dégâts estimés/);
 });

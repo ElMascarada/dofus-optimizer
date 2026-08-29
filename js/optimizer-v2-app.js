@@ -121,9 +121,9 @@ function combatPreviewMarkup(build, turnMode) {
 
     return [`
       <section class="optimizer-v2-combat-turn">
-        <strong>T${turn} — ${fmtDamage(turnDamage)} dégâts</strong>
+        <strong>T${turn} — ${fmtDamage(turnDamage)} dégâts estimés</strong>
         <div class="optimizer-v2-rotation">${rotationText}</div>
-        <div class="optimizer-v2-breakdown"><small>Dégâts par sort</small><dl>${breakdown}</dl></div>
+        <div class="optimizer-v2-breakdown"><small>Dégâts estimés par sort</small><dl>${breakdown}</dl></div>
       </section>`];
   });
 
