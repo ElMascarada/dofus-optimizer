@@ -9,6 +9,7 @@ import {
   workshopItems
 } from '../js/workshop/workshop-build.js';
 import { evaluateWorkshopBuild } from '../js/workshop/workshop-evaluator.js';
+import { analyzeWorkshopTurns } from '../js/workshop/workshop-turn-analysis.js';
 import { WorkshopController } from '../js/workshop/workshop-controller.js';
 
 function item(id, slot, stats = {}, extra = {}) {
@@ -39,11 +40,29 @@ const spellData = {
   breeds: [{ id: 'breed-test', name: 'Classe test', spellIds: [spell.id] }],
   spells: [spell]
 };
+const overBudgetSpells = ['a', 'b', 'c'].map((suffix) => ({
+  ...spell,
+  id: `spell-over-budget-${suffix}`,
+  name: `Sort ${suffix}`,
+  breedId: 'breed-over-budget'
+}));
+const overBudgetSpellData = {
+  breeds: [{
+    id: 'breed-over-budget',
+    name: 'Classe budget test',
+    spellIds: overBudgetSpells.map((entry) => entry.id)
+  }],
+  spells: overBudgetSpells
+};
 const set = { id: 'set-a', name: 'Panoplie A', bonuses: { '2': { power: 20, vit: 50 } } };
 const dataset = { sets: [set] };
 
 function evaluate(build) {
   return evaluateWorkshopBuild({ build, dataset, spellData, character });
+}
+
+function completeEquipment() {
+  return Object.fromEntries(WORKSHOP_SLOTS.map(({ key, slot }) => [key, item(`complete-${key}`, slot)]));
 }
 
 test('équipe, remplace et retire un item sans muter l’état précédent', () => {
@@ -131,6 +150,48 @@ test('la probabilité critique affichée vient du moteur de sorts', () => {
   const result = evaluate(build);
   assert.equal(result.spells[0].evaluation.critChancePct, 30);
   assert.deepEqual(result.spells[0].evaluation.criticalDamage, [12, 24]);
+});
+
+test('les sorts sélectionnés ne sont pas un plan PA obligatoire', () => {
+  const selectedSpells = overBudgetSpells.map((entry) => entry.id);
+  const selectedApCost = overBudgetSpells.reduce((sum, entry) => sum + entry.apCost, 0);
+  assert.ok(selectedApCost > character.baseStats.ap);
+
+  const build = createWorkshopBuild({ classId: 'breed-over-budget', selectedSpells });
+  const result = evaluateWorkshopBuild({
+    build,
+    dataset: { sets: [] },
+    spellData: overBudgetSpellData,
+    character
+  });
+
+  assert.equal(result.valid, true);
+  assert.equal(result.reason, null);
+});
+
+test('la vraie rotation Workshop reste bornée par les PA disponibles', () => {
+  const selectedSpells = overBudgetSpells.map((entry) => entry.id);
+  const build = createWorkshopBuild({
+    classId: 'breed-over-budget',
+    equipmentBySlot: completeEquipment(),
+    selectedSpells
+  });
+  const evaluation = evaluateWorkshopBuild({
+    build,
+    dataset: { sets: [] },
+    spellData: overBudgetSpellData,
+    character
+  });
+  assert.equal(evaluation.valid, true);
+  assert.equal(evaluation.complete, true);
+
+  const analysis = analyzeWorkshopTurns(evaluation);
+  assert.ok(analysis);
+  for (const turn of analysis.turns) {
+    const spentAp = turn.actions.reduce((sum, action) => sum + Number(action.apCost || 0), 0);
+    assert.ok(spentAp <= turn.startAp, `T${turn.turn}: ${spentAp} PA dépensés pour ${turn.startAp} disponibles`);
+    assert.ok(turn.actions.every((action) => Number(action.apRemainingAfterCast) >= 0));
+  }
 });
 
 test('changer un item dans WorkshopController ne crée aucun optimizer Worker', () => {
