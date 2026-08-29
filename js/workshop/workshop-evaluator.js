@@ -69,7 +69,10 @@ export function evaluateWorkshopBuild({
     character,
     // Workshop selections describe spells to evaluate, not a mandatory cast plan.
     // Executable rotations are solved later by analyzeWorkshopTurns().
-    scenario: { ...scenario, requiredApByTurn: {} }
+    scenario: {
+      ...(canonical?.context?.scenario || scenario),
+      requiredApByTurn: {}
+    }
   });
 
   if (!evaluation.result) {
