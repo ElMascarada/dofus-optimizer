@@ -50,7 +50,8 @@ function cloneCanonicalCombatContext(context = null) {
     stats: { ...(context.stats || {}) },
     effectiveStatsByTurn: Object.fromEntries(Object.entries(context.effectiveStatsByTurn || {})
       .map(([turn, stats]) => [turn, { ...(stats || {}) }])),
-    fm: context.fm ? { ...context.fm } : null
+    fm: context.fm ? { ...context.fm } : null,
+    plan: context.plan ? JSON.parse(JSON.stringify(context.plan)) : null
   };
 }
 
@@ -177,15 +178,24 @@ export function createWorkshopBuildFromOptimizerResult({
     throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');
   }
 
-  const optimizerTurnMode = String(combatObjective?.turnMode || result?.combatPlan?.objective?.turnMode || '');
-  const canonicalSpellIds = [...new Set((spellIds || []).map(String).filter(Boolean))];
-  if (optimizerTurnMode === 't1' && canonicalSpellIds.length) {
+  const sourcePlan = result?.combatPlan || null;
+  const optimizerTurnMode = String(combatObjective?.turnMode || sourcePlan?.objective?.turnMode || '');
+  const canonicalSpellIds = [...new Set([
+    ...(spellIds || []).map(String).filter(Boolean),
+    ...selectedSpells
+  ])];
+  const damageElements = [...new Set((sourcePlan?.sequence || [])
+    .map((entry) => entry?.element)
+    .filter(Boolean)
+    .map(String))];
+  const resolvedElement = combatObjective?.element ?? (damageElements.length === 1 ? damageElements[0] : null);
+  if (optimizerTurnMode === 't1' && sourcePlan && canonicalSpellIds.length) {
     const canonicalCombatContext = createCanonicalT1CombatContext({
       classId,
-      element: combatObjective?.element ?? null,
+      element: resolvedElement,
       combatObjective: {
         ...(combatObjective || {}),
-        ...(result?.combatPlan?.objective || {}),
+        ...(sourcePlan.objective || {}),
         turnMode: 't1'
       },
       scenario,
@@ -193,7 +203,8 @@ export function createWorkshopBuildFromOptimizerResult({
       stats: result?.stats || {},
       effectiveStatsByTurn: result?.effectiveStatsByTurn || {},
       fm: result?.fm || null,
-      searchProfile
+      searchProfile,
+      plan: sourcePlan
     });
     build = createWorkshopBuild({
       ...build,
