@@ -110,7 +110,7 @@ if (best) {
   }
 }
 
-const finalStats = workshop?.stats || best?.stats || {};
+const finalStats = workshop?.stats || {};
 const workshopTurns = workshopStatus === 'PASS' ? analyzeWorkshopTurns(workshop) : null;
 const t1 = workshopTurns?.turns?.find((entry) => Number(entry?.turn) === 1) || null;
 const t1Sequence = t1?.actions || [];
