@@ -1,4 +1,5 @@
 import { optimizeCombatSequence } from './turn-optimizer.js';
+import { createCanonicalT1CombatContext } from './combat-evaluation-context.js';
 import { combatPlanIsComplete } from './final-result-validator.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
 
@@ -76,7 +77,7 @@ function shortlistMultiTurnInputs(results, limit, preservePrysmaradites, combatB
   return output;
 }
 
-function candidateWithPlan(build, plan) {
+function candidateWithPlan(build, plan, canonicalCombatContext = null) {
   const activeTurns = Array.isArray(plan?.objective?.activeTurns) ? plan.objective.activeTurns : [];
   const perTurn = {};
   for (const turn of activeTurns) perTurn[turn] = Number(plan?.perTurn?.[turn] || 0);
@@ -86,7 +87,8 @@ function candidateWithPlan(build, plan) {
     equipmentScore: Number.isFinite(Number(build.equipmentScore)) ? Number(build.equipmentScore) : Number(build.score || 0),
     score: normalizedPlan.score,
     perTurn,
-    combatPlan: normalizedPlan
+    combatPlan: normalizedPlan,
+    ...(canonicalCombatContext ? { canonicalCombatContext } : {})
   };
 }
 
@@ -140,7 +142,20 @@ export function refineCombatTurns({
   let incompletePlansRejected = 0;
 
   function makeCandidate(build, plan) {
-    const candidate = candidateWithPlan(build, plan);
+    const canonicalCombatContext = turnMode === 't1'
+      ? createCanonicalT1CombatContext({
+          classId: spells[0]?.breedId ?? null,
+          element: combatObjective?.element ?? null,
+          combatObjective,
+          scenario: { requiredApByTurn: {} },
+          spellIds: spells.map((spell) => String(spell?.id)).filter(Boolean),
+          stats: build?.stats || {},
+          effectiveStatsByTurn: turnStats(build),
+          fm: build?.fm || null,
+          searchProfile
+        })
+      : null;
+    const candidate = candidateWithPlan(build, plan, canonicalCombatContext);
     if (!combatPlanIsComplete(candidate, turnMode)) {
       incompletePlansRejected++;
       return null;
