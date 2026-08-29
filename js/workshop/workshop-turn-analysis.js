@@ -1,4 +1,5 @@
 import { optimizeCombatSequence } from '../turn-optimizer.js';
+import { evaluateCanonicalT1Combat } from '../combat-evaluation-context.js';
 import { temporalObjectiveMetrics } from '../temporal-objectives.js';
 import { getSearchProfile } from '../../optimizer/search-profiles.js';
 
@@ -31,7 +32,11 @@ export function analyzeWorkshopTurns(evaluation) {
   }
 
   if (evaluation.canonicalCombatContext?.turnMode === 't1') {
-    const analysis = analysisFromPlan(evaluation.canonicalCombatContext.plan, [1]);
+    const plan = evaluateCanonicalT1Combat({
+      context: evaluation.canonicalCombatContext,
+      spells: evaluation.combatSpells
+    });
+    const analysis = analysisFromPlan(plan, [1]);
     analysisCache.set(evaluation, analysis);
     return analysis;
   }
