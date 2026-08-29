@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { optimizeCombatSequence } from '../js/turn-optimizer.js';
+import { refineCombatTurns } from '../js/combat-turn-refiner.js';
 import {
   WORKSHOP_SLOTS,
   createWorkshopBuildFromOptimizerResult,
@@ -65,53 +65,46 @@ const combatObjective = {
   metric: 'total-damage'
 };
 const scenario = { requiredApByTurn: {} };
+const fm = { spellDamagePct: 0, structuralExos: false };
 
 function canonicalOptimizerResult() {
-  const combatPlan = optimizeCombatSequence({
-    baseStats: stats,
-    baseStatsByTurn: { 1: stats },
+  const refined = refineCombatTurns({
+    results: [{
+      items: completeItems(),
+      stats,
+      effectiveStatsByTurn: { 1: stats },
+      fm,
+      score: 0
+    }],
     spells: [spell],
-    objective: combatObjective,
-    beamWidth: 1400,
-    interTurnWidth: 24,
-    maxActionsPerTurn: 12
+    combatObjective,
+    topN: 1,
+    searchProfile: 'BALANCED'
   });
-  return {
-    items: completeItems(),
-    stats,
-    effectiveStatsByTurn: { 1: stats },
-    fm: { spellDamagePct: 0, structuralExos: false },
-    score: combatPlan.score,
-    perTurn: combatPlan.perTurn,
-    combatPlan
-  };
+  assert.equal(refined.results.length, 1);
+  return refined.results[0];
 }
 
-test('un résultat Optimizer T1 inchangé conserve exactement sa vérité combat dans Workshop', () => {
+test('un résultat Optimizer T1 inchangé produit exactement la même évaluation canonique dans Workshop', () => {
   const result = canonicalOptimizerResult();
   assert.equal(result.combatPlan.objective.turnMode, 't1');
   assert.ok(result.combatPlan.sequence.length > 1, 'le fixture doit certifier la multiplicité des casts');
   assert.equal(new Set(result.combatPlan.sequence.map((entry) => String(entry.spellId))).size, 1);
+  assert.equal(result.canonicalCombatContext.turnMode, 't1');
+  assert.equal(result.canonicalCombatContext.element, 'earth');
+  assert.deepEqual(result.canonicalCombatContext.scenario, scenario);
+  assert.deepEqual(result.canonicalCombatContext.spellIds, [spell.id]);
+  assert.deepEqual(result.canonicalCombatContext.stats, stats);
+  assert.deepEqual(result.canonicalCombatContext.effectiveStatsByTurn[1], stats);
 
   const build = createWorkshopBuildFromOptimizerResult({
     result,
     classId,
-    fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, structuralExos: false },
-    combatObjective,
-    scenario,
-    spellIds: [spell.id],
-    searchProfile: 'BALANCED'
+    fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, structuralExos: false }
   });
 
   assert.equal(build.canonicalCombatContext.turnMode, 't1');
-  assert.equal(build.canonicalCombatContext.element, 'earth');
-  assert.deepEqual(build.canonicalCombatContext.scenario, scenario);
-  assert.deepEqual(build.canonicalCombatContext.stats, stats);
-  assert.deepEqual(build.canonicalCombatContext.effectiveStatsByTurn[1], stats);
-  assert.deepEqual(
-    build.canonicalCombatContext.plan.sequence.map((entry) => String(entry.spellId)),
-    result.combatPlan.sequence.map((entry) => String(entry.spellId))
-  );
+  assert.deepEqual(build.canonicalCombatContext, result.canonicalCombatContext);
   assert.equal(build.canonicalCombatSignature, workshopCombatSignature(build));
 
   const evaluation = evaluateWorkshopBuild({
@@ -141,10 +134,7 @@ test('une modification combat dans Workshop invalide la vérité T1 importée', 
   const imported = createWorkshopBuildFromOptimizerResult({
     result,
     classId,
-    fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, structuralExos: false },
-    combatObjective,
-    scenario,
-    spellIds: [spell.id]
+    fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, structuralExos: false }
   });
   const changed = equipWorkshopItem(imported, 'hat', item('changed-hat', 'hat', { earth: 50 }));
   assert.equal(changed.accepted, true);
