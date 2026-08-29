@@ -8,6 +8,7 @@ import {
   workshopBuildIsComplete
 } from '../js/workshop/workshop-build.js';
 import { evaluateWorkshopBuild } from '../js/workshop/workshop-evaluator.js';
+import { analyzeWorkshopTurns } from '../js/workshop/workshop-turn-analysis.js';
 
 const rawItems = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
 const rawSpells = JSON.parse(readFileSync(new URL('../data/normalized/spell-data.json', import.meta.url), 'utf8'));
@@ -109,9 +110,11 @@ if (best) {
   }
 }
 
-const finalStats = workshop?.effectiveStats || best?.effectiveStatsByTurn?.[1] || best?.stats || {};
-const t1Sequence = (best?.combatPlan?.sequence || []).filter((entry) => Number(entry?.turn || 1) === 1);
-const t1Damage = Number(best?.combatPlan?.perTurn?.[1] ?? best?.perTurn?.[1] ?? 0);
+const finalStats = workshop?.stats || best?.stats || {};
+const workshopTurns = workshopStatus === 'PASS' ? analyzeWorkshopTurns(workshop) : null;
+const t1 = workshopTurns?.turns?.find((entry) => Number(entry?.turn) === 1) || null;
+const t1Sequence = t1?.actions || [];
+const t1Damage = Number(t1?.damage || 0);
 const damageBySpell = new Map();
 for (const entry of t1Sequence) {
   const damage = Number(entry?.expectedDamage || 0);
