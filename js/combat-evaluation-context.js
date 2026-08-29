@@ -1,3 +1,6 @@
+import { optimizeCombatSequence } from './turn-optimizer.js';
+import { getSearchProfile } from '../optimizer/search-profiles.js';
+
 export const CANONICAL_T1_CONTEXT_VERSION = 1;
 export const CANONICAL_T1_INITIAL_STATE = 'default-empty';
 
@@ -9,28 +12,6 @@ function cloneScenario(scenario = {}) {
   return {
     ...(scenario || {}),
     requiredApByTurn: { ...(scenario?.requiredApByTurn || {}) }
-  };
-}
-
-function clonePlan(plan = null) {
-  if (!plan || typeof plan !== 'object') return null;
-  return {
-    ...plan,
-    objective: { ...(plan.objective || {}) },
-    perTurn: { ...(plan.perTurn || {}) },
-    turnStartAp: { ...(plan.turnStartAp || {}) },
-    sequence: (plan.sequence || []).map((entry) => ({
-      ...entry,
-      appliedModifiers: (entry.appliedModifiers || []).map((modifier) => ({
-        ...modifier,
-        stats: { ...(modifier.stats || {}) }
-      })),
-      scheduledModifiers: (entry.scheduledModifiers || []).map((modifier) => ({
-        ...modifier,
-        stats: { ...(modifier.stats || {}) }
-      })),
-      chargeApplied: entry.chargeApplied ? { ...entry.chargeApplied } : entry.chargeApplied
-    }))
   };
 }
 
@@ -58,8 +39,7 @@ export function createCanonicalT1CombatContext({
   stats = {},
   effectiveStatsByTurn = {},
   fm = null,
-  searchProfile = 'BALANCED',
-  plan = null
+  searchProfile = 'BALANCED'
 } = {}) {
   const t1Stats = effectiveStatsByTurn?.[1] || effectiveStatsByTurn?.['1'] || stats || {};
   return {
@@ -74,8 +54,7 @@ export function createCanonicalT1CombatContext({
     effectiveStatsByTurn: { 1: cloneStats(t1Stats) },
     fm: fm ? { ...fm } : null,
     searchProfile: String(searchProfile || 'BALANCED').toUpperCase(),
-    initialCombatState: CANONICAL_T1_INITIAL_STATE,
-    plan: clonePlan(plan)
+    initialCombatState: CANONICAL_T1_INITIAL_STATE
   };
 }
 
@@ -86,10 +65,7 @@ export function canonicalT1ContextIsUsable(context = {}) {
     && context?.initialCombatState === CANONICAL_T1_INITIAL_STATE
     && Array.isArray(context?.spellIds)
     && context.spellIds.length > 0
-    && context?.effectiveStatsByTurn?.[1]
-    && context?.plan?.objective?.turnMode === 't1'
-    && Array.isArray(context?.plan?.sequence)
-    && Number.isFinite(Number(context?.plan?.perTurn?.[1]));
+    && context?.effectiveStatsByTurn?.[1];
 }
 
 export function spellsForCanonicalT1Context(context = {}, spellData = {}) {
@@ -97,4 +73,23 @@ export function spellsForCanonicalT1Context(context = {}, spellData = {}) {
   const byId = new Map((spellData?.spells || []).map((spell) => [String(spell?.id), spell]));
   const spells = context.spellIds.map((id) => byId.get(String(id))).filter(Boolean);
   return spells.length === context.spellIds.length ? spells : [];
+}
+
+export function evaluateCanonicalT1Combat({ context, spells = [] } = {}) {
+  if (!canonicalT1ContextIsUsable(context)) {
+    throw new Error('Contexte combat T1 canonique invalide.');
+  }
+  if (spells.length !== context.spellIds.length) {
+    throw new Error('Pool de sorts T1 canonique incomplet.');
+  }
+  const combatBudget = getSearchProfile(context.searchProfile).combat;
+  return optimizeCombatSequence({
+    baseStats: context.stats || {},
+    baseStatsByTurn: context.effectiveStatsByTurn || null,
+    spells,
+    objective: context.combatObjective,
+    beamWidth: combatBudget.singleTurnBeamWidth,
+    interTurnWidth: combatBudget.singleTurnInterTurnWidth,
+    maxActionsPerTurn: combatBudget.maxActionsPerTurn
+  });
 }
