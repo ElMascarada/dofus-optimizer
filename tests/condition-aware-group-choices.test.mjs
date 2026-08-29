@@ -132,13 +132,15 @@ test('setBonus < 3 remains unresolved and retainable beside conditionless choice
   assert.ok(choices.length <= 2, 'unresolved diversity must consume, not enlarge, the existing beam');
 });
 
-test('conditionless reserve keeps a strong representative for a weak-isolation Pareto specialist', () => {
+test('conditionless specialist reserve activates only when conditional states compete for the beam', () => {
   const specialist = {
     ...item('melee-specialist', 10),
     stats: { power: 10, meleeDamagePct: 6 }
   };
   const safeA = item('safe-a', 120);
   const safeB = item('safe-b', 119);
+  const safeC = item('safe-c', 118);
+  const conditional = item('set-bonus-trophy', 119, unresolvedSetBonusCondition);
   const base = context();
   const specialistContext = {
     ...base,
@@ -156,10 +158,24 @@ test('conditionless reserve keeps a strong representative for a weak-isolation P
     }
   };
 
-  const choices = buildGroupChoices([safeA, safeB, specialist].map(profileItem), 2, specialistContext);
-  assert.ok(
-    choices.some((choice) => choiceIds(choice).join('|') === 'melee-specialist|safe-a'),
-    'the fixed conditionless lane must represent the melee specialist instead of filling only by aggregate score'
+  const conditionFreeChoices = buildGroupChoices(
+    [safeA, safeB, safeC, specialist].map(profileItem),
+    2,
+    specialistContext
   );
-  assert.ok(choices.length <= 2, 'specialist diversity must stay inside the existing beam width');
+  assert.ok(
+    conditionFreeChoices.every((choice) => !choice.items.some((entry) => entry.id === 'melee-specialist')),
+    'a condition-free pool must retain the legacy score-first conditionless lane'
+  );
+
+  const contestedChoices = buildGroupChoices(
+    [safeA, conditional, specialist].map(profileItem),
+    2,
+    specialistContext
+  );
+  assert.ok(
+    contestedChoices.some((choice) => choiceIds(choice).join('|') === 'melee-specialist|safe-a'),
+    'the conditionless lane must protect a Pareto specialist when conditional alternatives compete for capacity'
+  );
+  assert.ok(contestedChoices.length <= 2, 'specialist diversity must stay inside the existing beam width');
 });
