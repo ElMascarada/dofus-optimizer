@@ -1,5 +1,5 @@
 import { specialSlotRulesAreValid } from '../build-legality.js';
-import { createCanonicalT1CombatContext } from '../combat-evaluation-context.js';
+import { canonicalT1ContextIsUsable } from '../combat-evaluation-context.js';
 
 export const WORKSHOP_FM_POLICY = Object.freeze({
   spellDamagePct: 0,
@@ -50,8 +50,7 @@ function cloneCanonicalCombatContext(context = null) {
     stats: { ...(context.stats || {}) },
     effectiveStatsByTurn: Object.fromEntries(Object.entries(context.effectiveStatsByTurn || {})
       .map(([turn, stats]) => [turn, { ...(stats || {}) }])),
-    fm: context.fm ? { ...context.fm } : null,
-    plan: context.plan ? JSON.parse(JSON.stringify(context.plan)) : null
+    fm: context.fm ? { ...context.fm } : null
   };
 }
 
@@ -128,11 +127,7 @@ export function createWorkshopBuildFromOptimizerResult({
   classId = null,
   fmPolicy = WORKSHOP_FM_POLICY,
   lockedItemsBySlot = {},
-  rejectedItemIds = [],
-  combatObjective = null,
-  scenario = {},
-  spellIds = [],
-  searchProfile = 'BALANCED'
+  rejectedItemIds = []
 } = {}) {
   const equipmentBySlot = {};
   const resultItems = [...(result?.items || [])];
@@ -178,37 +173,12 @@ export function createWorkshopBuildFromOptimizerResult({
     throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');
   }
 
-  const sourcePlan = result?.combatPlan || null;
-  const optimizerTurnMode = String(combatObjective?.turnMode || sourcePlan?.objective?.turnMode || '');
-  const canonicalSpellIds = [...new Set([
-    ...(spellIds || []).map(String).filter(Boolean),
-    ...selectedSpells
-  ])];
-  const damageElements = [...new Set((sourcePlan?.sequence || [])
-    .map((entry) => entry?.element)
-    .filter(Boolean)
-    .map(String))];
-  const resolvedElement = combatObjective?.element ?? (damageElements.length === 1 ? damageElements[0] : null);
-  if (optimizerTurnMode === 't1' && sourcePlan && canonicalSpellIds.length) {
-    const canonicalCombatContext = createCanonicalT1CombatContext({
-      classId,
-      element: resolvedElement,
-      combatObjective: {
-        ...(combatObjective || {}),
-        ...(sourcePlan.objective || {}),
-        turnMode: 't1'
-      },
-      scenario,
-      spellIds: canonicalSpellIds,
-      stats: result?.stats || {},
-      effectiveStatsByTurn: result?.effectiveStatsByTurn || {},
-      fm: result?.fm || null,
-      searchProfile,
-      plan: sourcePlan
-    });
+  const sourceContext = cloneCanonicalCombatContext(result?.canonicalCombatContext);
+  const sameClass = !sourceContext?.classId || !build.classId || String(sourceContext.classId) === String(build.classId);
+  if (canonicalT1ContextIsUsable(sourceContext) && sameClass) {
     build = createWorkshopBuild({
       ...build,
-      canonicalCombatContext,
+      canonicalCombatContext: sourceContext,
       canonicalCombatSignature: workshopCombatSignature(build)
     });
   }
