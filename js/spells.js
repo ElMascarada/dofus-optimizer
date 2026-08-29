@@ -243,8 +243,7 @@ export function evaluateTurnConstraints({ stats, items = [], constraints = {}, s
 
   return {
     meets: Object.keys(baseApMpMismatches).length === 0
-      && Object.keys(deficitsByTurn).length === 0
-      && unresolvedPassiveContexts.size === 0,
+      && Object.keys(deficitsByTurn).length === 0,
     perTurn,
     deficitsByTurn,
     baseApMpMismatches,
