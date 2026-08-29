@@ -5,6 +5,7 @@
   "scripts": {
     "test": "node --test",
     "check": "node --check js/*.js && node --check js/workshop/*.js && node --check js/search-memory/*.js && node --check optimizer/*.js && node --check scripts/*.mjs",
+    "smoke:product": "node scripts/smoke-product.mjs",
     "recipe:v2": "node --test tests/v2-polish-recipe.test.mjs",
     "recipe:browser": "node scripts/recipe-v2-browser-smoke.mjs",
     "benchmark:v2": "node scripts/benchmark-v2-baseline.mjs",
