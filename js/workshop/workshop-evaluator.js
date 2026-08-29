@@ -33,7 +33,9 @@ export function evaluateWorkshopBuild({
     fmPolicy: build?.fmPolicy || {},
     turnMode: 't1',
     character,
-    scenario
+    // Workshop selections describe spells to evaluate, not a mandatory cast plan.
+    // Executable rotations are solved later by analyzeWorkshopTurns().
+    scenario: { ...scenario, requiredApByTurn: {} }
   });
 
   if (!evaluation.result) {
