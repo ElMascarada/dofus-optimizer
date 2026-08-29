@@ -95,20 +95,41 @@ if (best) {
 }
 
 let workshop = null;
-let workshopStatus = best ? 'FAIL' : 'UNKNOWN';
+let workshopBuild = null;
+let workshopConversion = 'UNKNOWN';
+let workshopComplete = 'UNKNOWN';
+let workshopEvaluation = 'UNKNOWN';
+let workshopReason = 'NONE';
 if (best) {
   try {
-    const workshopBuild = createWorkshopBuildFromOptimizerResult({
+    workshopBuild = createWorkshopBuildFromOptimizerResult({
       result: best,
       classId: request.classId,
       fmPolicy: request.fmPolicy
     });
-    workshop = evaluateWorkshopBuild({ build: workshopBuild, dataset, spellData });
-    workshopStatus = workshop.valid && workshopBuildIsComplete(workshopBuild) ? 'PASS' : 'FAIL';
-  } catch {
-    workshopStatus = 'FAIL';
+    workshopConversion = 'PASS';
+    workshopComplete = workshopBuildIsComplete(workshopBuild) ? 'PASS' : 'FAIL';
+  } catch (error) {
+    workshopConversion = 'FAIL';
+    workshopReason = error instanceof Error ? error.message : String(error);
+  }
+
+  if (workshopBuild) {
+    try {
+      workshop = evaluateWorkshopBuild({ build: workshopBuild, dataset, spellData });
+      workshopEvaluation = workshop.valid ? 'PASS' : 'FAIL';
+      if (!workshop.valid) workshopReason = workshop.reason ?? 'NONE';
+    } catch (error) {
+      workshopEvaluation = 'FAIL';
+      workshopReason = error instanceof Error ? error.message : String(error);
+    }
   }
 }
+const workshopStatus = !best
+  ? 'UNKNOWN'
+  : workshopConversion === 'PASS' && workshopComplete === 'PASS' && workshopEvaluation === 'PASS'
+    ? 'PASS'
+    : 'FAIL';
 
 const finalStats = workshop?.stats || {};
 const workshopTurns = workshopStatus === 'PASS' ? analyzeWorkshopTurns(workshop) : null;
@@ -150,6 +171,10 @@ console.log(`bestScore=${best ? number(best.score) : 'UNKNOWN'}`);
 console.log('');
 console.log(`buildLegal=${buildLegal ? 'PASS' : 'FAIL'}`);
 console.log(`workshopLegal=${workshopStatus}`);
+console.log(`workshopConversion=${workshopConversion}`);
+console.log(`workshopComplete=${workshopComplete}`);
+console.log(`workshopEvaluation=${workshopEvaluation}`);
+console.log(`workshopReason=${workshopReason}`);
 console.log('');
 console.log(`ap=${number(finalStats?.ap)}`);
 console.log(`mp=${number(finalStats?.mp)}`);
