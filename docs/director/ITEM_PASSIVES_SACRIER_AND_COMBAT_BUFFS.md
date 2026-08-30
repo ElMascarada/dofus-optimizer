@@ -44,6 +44,62 @@ Status: `CONFIRMED_BY_DIRECTOR` + `PRODUCT_ASSUMPTION`.
 - extra damage can depend on erosion suffered by Sacrier;
 - canonical perfect-turn benchmark ignores the erosion-dependent extra damage.
 
+### Nervosité
+
+Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+
+- grants `+7% Crit` per stack;
+- stacks up to `2` times;
+- therefore can provide up to `+14% Crit` when fully stacked.
+
+Exact PA cost, duration, refresh/reset and whether both stacks can be acquired within the same turn must come from current spell data/description before implementation.
+
+### Douleur Cuisante
+
+Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+
+- grants `+60 Puissance` per stack;
+- stacks up to `2` times;
+- therefore can provide up to `+120 Puissance` when fully stacked.
+
+Exact PA cost, duration, refresh/reset and acquisition timing must come from current spell data/description before implementation.
+
+### Furie
+
+Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+
+- grants the caster `+3% final damage` per stack;
+- stacks up to `2` times;
+- therefore can provide up to `+6% final damage` to the caster.
+
+Exact PA cost, duration and whether the triggering cast benefits from the newly-created stack or only later casts remain data/description-specific until verified.
+
+### Décimation
+
+Status: `CONFIRMED_BY_DIRECTOR` for the target amplification value.
+
+- makes the target take `+3% damage` per stack;
+- stacks up to `2` times;
+- therefore can make the affected target take up to `+6% damage` when fully stacked.
+
+This is target-side amplification and must be distinguished from caster final-damage bonuses such as Furie.
+
+Exact PA cost, duration, application timing and whether the cast establishing a new stack benefits from that same new stack remain data/description-specific until verified.
+
+### Sacrier perfect-turn consequence
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+A canonical Sacrier damage turn may need to compare combinations of:
+- Berserk / Souffrance;
+- Crit gained from Nervosité;
+- Power gained from Douleur Cuisante;
+- caster final-damage stacking from Furie;
+- target-side damage-taken stacking from Décimation;
+- other direct-damage casts.
+
+These effects must be applied in real cast order. Search must not rank gear only from pre-combat Crit/Power because the class can materially alter both during the executable rotation.
+
 ---
 
 ## Dofus Pourpre
