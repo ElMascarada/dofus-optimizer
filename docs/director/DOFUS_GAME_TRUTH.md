@@ -19,19 +19,20 @@ Last Director interview update: 2026-08-30.
 
 Status: `PRODUCT_ASSUMPTION`
 
-The default offensive benchmark is a stationary Poutch-style target. The optimizer is trying to maximize damage on that fixed target rather than solve movement/placement gameplay.
+The default offensive benchmark is a stationary Poutch-style target:
+- one target;
+- immobile;
+- always considered accessible/attackable;
+- `0%` resistance in all four elements;
+- does not attack the player;
+- therefore enemy-originated damage is absent unless a scenario explicitly introduces it;
+- self-generated states, HP costs and other self-effects still matter whenever the corresponding mechanic cares about them.
 
-Current intended baseline from Director discussion:
-- single stationary target;
-- target considered available/attackable;
-- no enemy attack is assumed during the preparation sequence unless a scenario explicitly says otherwise;
-- self-generated state changes and self-costs still matter when the corresponding game mechanic considers them relevant.
-
-Exact target resistance baseline is still to be written explicitly if needed.
+The optimizer is maximizing theoretical damage into this target, not solving movement/placement gameplay.
 
 ---
 
-## 2. Dofus / companion / passive resource rules
+## 2. Dofus / Prysmaradite / passive resource rules
 
 ### Dofus Ocre
 
@@ -39,17 +40,22 @@ Status: `CONFIRMED_BY_DIRECTOR`
 
 - Ocre gives `+1 PA` unconditionally as its base effect.
 - Starting from T2, it can provide one additional PA when the character has not been hit.
-- For the optimizer's default T2 benchmark, the "not hit" condition is considered satisfied because no enemy attack is assumed during T1.
+- For the optimizer's default T2 benchmark, the "not hit" condition is considered satisfied because the Poutch does not attack during T1.
 - Losing HP due to Sacrier's own passive does **not** count as being hit for this condition.
 - The additional conditional PA is not constrained by the normal 12 PA equipment cap.
 
 Director example:
 - a build at 11 PA before Ocre becomes 12 PA from Ocre's base PA;
-- Ocre's conditional bonus can then make the turn reach 13 PA.
+- Ocre's conditional bonus can then make the executable turn reach 13 PA.
 
-Important distinction:
-- equipment/static-resource cap and temporary in-combat PA are not the same thing;
-- temporary/passive PA can push the executable turn above 12 PA.
+### Dofus Vulbis
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+- T1: no conditional final-damage bonus.
+- Starting from T2, if the character has not been hit, Vulbis grants `+10% final damage`.
+- For the canonical Poutch T2 benchmark, this condition is considered satisfied because no enemy hits the player during T1.
+- Sacrier self-HP loss/passive does **not** invalidate this condition.
 
 ### Ganymède
 
@@ -64,6 +70,17 @@ Director example:
 - a static 12 PA setup with Ganymède executes T1 at 11 PA;
 - the corresponding T2 can execute at 14 PA.
 
+### Mate Prysmaradite
+
+Status: `CONFIRMED_BY_DIRECTOR` for the described variant; exact naming/timing of the larger variants remains open.
+
+For the Mate variant described by the Director:
+- base/static effect includes `+1 PA` and `-1 PM`;
+- on T1 it provides an additional `+2 PA` combat effect;
+- like Ocre/Ganymède temporary PA, this can push effective PA above the normal 12 PA equipment cap.
+
+Director noted a broader family following the same principle, with stronger variants capable of temporary `+3 PA` / `+4 PA` effects while removing PM. Exact variant names, PM penalties and turn semantics must be confirmed separately before encoding them.
+
 ### Temporary PA above 12
 
 Status: `CONFIRMED_BY_DIRECTOR`
@@ -73,17 +90,9 @@ The normal 12 PA limit must not clamp temporary combat PA granted by conditional
 Known examples from Director discussion:
 - Ocre conditional PA can reach 13 effective PA;
 - Ganymède can reach 14 effective PA in the described T2 setup;
-- Mate Prysmaradite can also produce effective PA above the static cap in applicable conditions.
+- Mate Prysmaradite can reach 14 effective PA in the described T1 setup.
 
-Exact Mate Prysmaradite rule remains to be documented separately.
-
-### Dofus Vulbis
-
-Status: `OPEN`
-
-Director confirmed that its relevant trigger behavior is analogous to Ocre with respect to "not being hit" and the default T2 assumption, but the exact bonus value/timing still needs to be written explicitly before this file treats it as fully specified.
-
-Do not invent missing details.
+Static/equipment PA and temporary in-combat PA must therefore be represented separately.
 
 ### Dofus Nébuleux
 
@@ -96,11 +105,36 @@ Therefore:
 - T1 = `+20% final damage`;
 - T2 = `-10% final damage`.
 
-This applies to the damage dealt generally; no additional restriction was identified by the Director for the current optimizer contract.
+This applies to damage dealt generally for the current optimizer contract.
 
 ---
 
-## 3. Multiple damage lines and conditional spell damage
+## 3. Set-bonus rules
+
+### No universal three-piece bonus
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+Set bonuses must be read from the actual set data. There is no universal rule saying every three-piece set grants exactly the same resource bonus.
+
+Typical high-level pattern observed by the Director:
+- many three-item sets grant around `+1 PA`;
+- some grant `+1 PM` instead;
+- individual sets can deliberately deviate substantially.
+
+Do **not** normalize all three-piece sets to a generic PA/PM template.
+
+### Harpinoplie
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+Harpinoplie is deliberately exceptional. Its unusually large three-piece resource/stat bonus is a real specificity of the set, resulting from a later buff to the set, not evidence of corrupt normalization merely because it exceeds the common pattern.
+
+Therefore its actual set-bonus data must be evaluated as-is unless a source/version mismatch is independently proven.
+
+---
+
+## 4. Multiple damage lines and conditional spell damage
 
 ### General rule
 
@@ -131,13 +165,36 @@ Unknown lines must not simply be assumed to apply simultaneously.
 Status: `CONFIRMED_BY_DIRECTOR` for mechanic family; exact numeric thresholds remain data-specific unless separately confirmed.
 
 - **Concentration**: has additional damage relevant against summons.
-- **Accumulation**: charges on self once, then has increased damage.
-- **Fureur**: charges with each cast.
+- **Accumulation**: uses a self-cast setup/buff before its damaging state.
+- **Fureur**: one cast increases the damage of the following cast.
 - **Colère de Iop**: charged/delayed damage three turns after its cast.
 - **Zénith**: damage depends on remaining MP.
 - **Tempête de Puissance**: damage charging depends on repeated casts on a target and then a target change mechanic.
 - **Tumulte**: damage increases with entities in the area.
 - **Pugilat**: damage increases with casts.
+
+### Accumulation — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+- Setup is a self-cast boost.
+- Setup costs `3 PA`.
+- The setup cast deals `0` damage.
+- From the following relevant cast/use onward, Accumulation's damage is increased.
+- The setup/buff lasts `2 turns`.
+- It can therefore be cast on T1 specifically to prepare increased T2 damage.
+- The charge/buff is **not consumed** by the damaging use.
+
+This is a canonical example of why T2 must be able to spend T1 PA on zero-damage preparation.
+
+### Fureur — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR` for sequencing; exact expiry/reset details remain open.
+
+- Casting Fureur once increases the damage of the following Fureur cast.
+- The intended rotation therefore wants to use Fureur every turn when possible in order to maintain/access its increased next-cast damage.
+
+Do not apply the increased damage to the same cast that creates the charge.
 
 ### Zénith and Cra Jugement baseline
 
@@ -151,7 +208,7 @@ This is an explicit product assumption, not a generic rule that all unknown cond
 
 ---
 
-## 4. Common conditional-damage mechanic families
+## 5. Common conditional-damage mechanic families
 
 Status: `CONFIRMED_BY_DIRECTOR`
 
@@ -171,7 +228,7 @@ Do not collapse all of these into one boolean `condition=true` mechanism.
 
 ---
 
-## 5. Buff semantics
+## 6. Buff semantics
 
 ### General damage buffs
 
@@ -192,7 +249,7 @@ Each mechanic still needs its own duration/state/removal semantics; "persistent"
 
 ---
 
-## 6. Director rule for uncertainty
+## 7. Director rule for uncertainty
 
 Status: `CONFIRMED_BY_DIRECTOR`
 
