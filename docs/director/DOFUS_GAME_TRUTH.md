@@ -169,9 +169,9 @@ Status: `CONFIRMED_BY_DIRECTOR` for mechanic family; exact numeric thresholds re
 - **Fureur**: one cast increases the damage of the following cast.
 - **Colère de Iop**: charged/delayed damage three turns after its cast.
 - **Zénith**: damage depends on remaining MP.
-- **Tempête de Puissance**: damage charging depends on repeated casts on a target and then a target change mechanic.
-- **Tumulte**: damage increases with entities in the area.
-- **Pugilat**: damage increases with casts.
+- **Tempête de Puissance**: two casts build states on one target; a later cast on another target can consume those states for improved damage on the first target.
+- **Tumulte**: damage increases with the number of enemy entities in the area.
+- **Pugilat**: damage scales through casts within the turn and resets each turn.
 
 ### Accumulation — Iop
 
@@ -196,6 +196,62 @@ Status: `CONFIRMED_BY_DIRECTOR` for sequencing; exact expiry/reset details remai
 
 Do not apply the increased damage to the same cast that creates the charge.
 
+### Colère de Iop
+
+Status: `CONFIRMED_BY_DIRECTOR` for the core timing.
+
+- A T1 cast deals the normal/base damage.
+- The charged high-damage version becomes available on T4, three turns after the initial cast.
+
+The exact charged values and reset/recast window should come from current spell data/description rather than being guessed.
+
+### Tempête de Puissance — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+Sequence confirmed by the Director:
+1. cast 1 on target A: base damage and applies state 1 to A;
+2. cast 2 on target A: base damage and advances A to state 2;
+3. cast 3 on a **different target B**: base damage on B, applies state 1 to B, and consumes the two states on A to deal the improved damage associated with the mechanic to A.
+
+Consequence for the strict canonical single-Poutch benchmark: the target-switch proc cannot be produced if there is literally no second enemy target available.
+
+### Pugilat — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR` for reset/cast-cap semantics.
+
+- The damage mechanic scales through repeated casts during the current turn.
+- The progression resets each turn.
+- Base cast limit is `4 casts per turn`.
+
+Exact damage increment/tier values should be read from the current spell description/data.
+
+### Tumulte — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+- Damage scaling counts **enemy entities** in the area.
+- The canonical single-Poutch benchmark therefore uses the `1 enemy` damage tier.
+- The optimizer may represent the spell as an explicit tier table (`1 enemy = ...`, `2 enemies = ...`, etc.) using current spell data for the numerical values.
+
+Do not count the player or allied entities as enemy-entity scaling for Tumulte.
+
+### Concentration — Iop
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+- The additional summon-specific damage line applies against summons.
+- The canonical Poutch is not a summon target for this purpose.
+- Therefore the summon-specific line is ignored for the canonical Poutch benchmark; only the ordinary applicable damage is counted.
+
+### Erosion-dependent extra damage
+
+Status: `PRODUCT_ASSUMPTION`
+
+For the current canonical optimizer benchmark, erosion-dependent bonus damage is ignored rather than requiring the planner to build an erosion setup sequence.
+
+Examples mentioned earlier include Destin / Punition style erosion-related extra damage. This is a deliberate optimizer simplification and must not be generalized into a claim about the real game's mechanics.
+
 ### Zénith and Cra Jugement baseline
 
 Status: `PRODUCT_ASSUMPTION`
@@ -208,7 +264,31 @@ This is an explicit product assumption, not a generic rule that all unknown cond
 
 ---
 
-## 5. Common conditional-damage mechanic families
+## 5. Iop damage-amplification / entity mechanics
+
+### Massacre
+
+Status: `CONFIRMED_BY_DIRECTOR` for the core effect; exact duration/application timing remains open.
+
+Massacre makes the affected enemy take `+15% damage`.
+
+This is a target-side damage amplification and must be considered by a perfect-turn planner when the state can be applied in the modeled sequence.
+
+### Conquête
+
+Status: `CONFIRMED_BY_DIRECTOR` for the core effect; exact placement/trigger semantics remain open.
+
+Conquête interacts with area damage:
+- when an area-damage spell or qualifying area-damage weapon hits Conquête,
+- Conquête sends back/deals an area effect around itself equal to `50%` of the damage it received.
+
+Examples of source attacks mentioned by the Director include Tumulte, Zénith and some weapons.
+
+This interaction is relevant to "perfect turn" damage and must not be omitted merely because Conquête itself is not a normal direct-damage spell. Exact positioning, target eligibility, recursion/exclusion and cast/timing details remain to be confirmed before implementation.
+
+---
+
+## 6. Common conditional-damage mechanic families
 
 Status: `CONFIRMED_BY_DIRECTOR`
 
@@ -218,7 +298,7 @@ The optimizer must be prepared to represent at least these recurring mechanic fa
 2. damage increased by the number of entities in an area;
 3. additional/increased damage from remaining MP;
 4. delayed/charged damage after `X` turns — examples include Punitive, Expiation, Colère;
-5. additional damage related to erosion — examples include Destin / Punition;
+5. additional damage related to erosion — although the current canonical benchmark deliberately ignores erosion-dependent bonus damage;
 6. proc-driven damage where a setup spell enables later spell procs — notably Enutrof patterns where setup and proc spells belong to the same elemental route;
 7. Huppermage element/state dependent damage — e.g. Drain / Runification using the relevant opponent elemental state, requiring an elemental setup first;
 8. Huppermage elemental combinations that grant caster power and/or target vulnerability — e.g. Earth+Fire combination making the target take `+15%` damage according to the Director;
@@ -228,7 +308,7 @@ Do not collapse all of these into one boolean `condition=true` mechanism.
 
 ---
 
-## 6. Buff semantics
+## 7. Buff semantics
 
 ### General damage buffs
 
@@ -249,7 +329,7 @@ Each mechanic still needs its own duration/state/removal semantics; "persistent"
 
 ---
 
-## 7. Director rule for uncertainty
+## 8. Director rule for uncertainty
 
 Status: `CONFIRMED_BY_DIRECTOR`
 
@@ -259,7 +339,7 @@ The correct behavior depends on the mechanic:
 - model preparation/state when the condition is mechanically achievable and relevant;
 - model delayed charges across turns when required;
 - model counters/stacks/procs when required;
-- use an explicit product assumption only where the Director has chosen one (for example max Zénith/Jugement baseline);
+- use an explicit product assumption only where the Director has chosen one (for example max Zénith/Jugement baseline or ignoring erosion-dependent bonus damage);
 - do not blindly enable an unknown condition merely because it gives more damage.
 
 Every unresolved condition should remain visible in `OPEN_RULE_QUESTIONS.md` until its semantics are confirmed.
