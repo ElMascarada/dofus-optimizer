@@ -44,3 +44,5 @@ jobs:
 
       - name: Syntax checks
         run: npm run check
+
+# Temporary validation-only workflow; excluded from the final PR tree.
