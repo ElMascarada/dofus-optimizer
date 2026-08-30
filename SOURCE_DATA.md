@@ -16,11 +16,16 @@ Pour les sorts, le pipeline lit le numéro de version renvoyé par `/meta/versio
 
 - `spells.json`
 - `spell_levels.json`
+- `spell_variants.json`
 - `breeds.json`
 - `effects.json`
 - `fr.json`
+- `spell_pairs.json`
+- `spell_scripts.json`
+- `spell_states.json`
+- `spell_types.json`
 
-Ainsi, équipements et sorts ne peuvent pas provenir silencieusement de deux versions différentes du jeu.
+Tous ces assets de sorts proviennent donc de la même version Dofusdude et de la même version du jeu. Ils ne sont jamais assemblés depuis plusieurs releases.
 
 Le navigateur ne charge jamais les endpoints `/all` ni la base brute. La synchronisation est une opération de build/maintenance ; seules les données normalisées sont publiées.
 
@@ -36,9 +41,36 @@ Le snapshot normalisé conserve :
 
 Les jets d'équipement sont normalisés au **maximum du jet naturel** (`int_maximum`) pour comparer les stuffs à qualité égale. Les résistances fixes et les résistances en pourcentage sont des statistiques distinctes.
 
+## Sorts : SOURCE TRUTH vs RUNTIME COMBAT CATALOG
+
+Le pipeline sorts maintient désormais deux artefacts aux responsabilités différentes.
+
+### SOURCE TRUTH
+
+`data/normalized/spell-source-truth.json` est un catalogue d'inspection, d'audit et de future interprétation sémantique. Il conserve, lorsque la source les expose, l'identité et les niveaux des sorts, leurs textes FR, paramètres de lancer, instances d'effets normales et critiques, métadonnées brutes utiles, relations de sorts/états et références vers `spell_pairs`, `spell_scripts`, `spell_states` et `spell_types`.
+
+Chaque instance d'effet reçoit un statut sémantique :
+
+- `known-runtime` : la mécanique individuelle est déjà comprise par le runtime actuel ;
+- `structural` : une relation structurelle explicite est conservée mais n'est pas exécutée comme mécanique de combat ;
+- `unresolved` : la donnée existe dans la source mais le moteur ne sait pas encore comment la jouer.
+
+Un effet `unresolved` reste une donnée. Il ne devient ni bonus, ni malus, ni dommage, ni déclencheur actif par défaut. Aucun script, trigger ou texte descriptif n'est interprété silencieusement pour inventer une sémantique de combat.
+
+`scripts/normalize-spells.mjs` produit également :
+
+- `data/normalized/spell-source-truth-coverage.json` : couverture machine de la vérité source ;
+- `data/normalized/spell-source-truth-coverage.md` : couverture lisible, incluant les compteurs d'effets et la distinction `ABSENT_FROM_SOURCE` / `PRESENT_BUT_UNRESOLVED`.
+
+### RUNTIME COMBAT CATALOG
+
+`data/normalized/spell-data.json` reste le catalogue combat certifié actuel. Le runtime continue de ne consommer que les mécaniques explicitement supportées et ne lit pas automatiquement `spell-source-truth.json`.
+
+Le contrat est donc : **IMPORTER != ACTIVER**. Enrichir la vérité source ne change pas, à lui seul, le comportement du combat.
+
 ## Périmètre sorts V0.10
 
-Le catalogue de sorts certifié conserve uniquement les sorts de classe offensifs que le moteur sait calculer sans approximation :
+Le catalogue de sorts combat certifié conserve uniquement les sorts de classe offensifs que le moteur sait calculer sans approximation :
 
 - niveau de sort le plus élevé disponible à un personnage niveau 200 ;
 - coût PA, taux critique, portée et limites de lancer ;
@@ -46,9 +78,9 @@ Le catalogue de sorts certifié conserve uniquement les sorts de classe offensif
 - vols de vie de ces éléments pour leur composante dégâts ;
 - jets normaux et critiques appariés strictement.
 
-Les familles d'effets élémentaires sont auditées contre `effects.json` et leurs libellés français avant normalisation. Les dégâts « meilleur élément », différés, déclenchés ou conditionnels sont exclus du catalogue plutôt que transformés par heuristique.
+Les familles d'effets élémentaires sont auditées contre `effects.json` et leurs libellés français avant normalisation. Les dégâts « meilleur élément », différés, déclenchés ou conditionnels sont exclus du catalogue combat plutôt que transformés par heuristique.
 
-`scripts/normalize-spells.mjs` produit :
+`scripts/normalize-spells.mjs` continue de produire pour le runtime :
 
 - `data/normalized/spell-data.json` : classes et sorts offensifs certifiés ;
 - `data/normalized/spell-coverage-report.json` : couverture machine ;
