@@ -26,12 +26,6 @@ Still needed before encoding the whole family:
 
 The mechanic family is confirmed; exact values/thresholds should come from reliable spell descriptions/data or Director clarification.
 
-### Concentration
-
-Still needed:
-- exact extra-damage-vs-summon line semantics;
-- whether the normal Poutch receives only the ordinary line.
-
 ### Fureur
 
 Confirmed:
@@ -46,39 +40,50 @@ Still needed:
 
 ### Colère de Iop
 
-Still needed:
-- exact delayed-charge timing from cast to charged cast;
-- whether the charged state has a validity window;
-- reset/recast/consumption semantics.
+Confirmed:
+- T1 cast deals base damage;
+- charged high-damage state is available on T4.
+
+Still needed only for exact implementation:
+- charged-state validity window;
+- reset/recast/consumption semantics;
+- exact numerical lines from current spell data.
 
 ### Tempête de Puissance
 
-Still needed:
-- exact number of casts required;
-- exact same-target requirement;
-- exact target-change condition;
-- resulting damage tier(s);
-- reset semantics.
+Core sequence is resolved:
+- casts 1 and 2 on target A build states 1 then 2;
+- cast 3 on target B applies state 1 to B and consumes A's states for improved damage on A;
+- strict one-target Poutch cannot execute the target-switch proc.
+
+Still useful only if exact implementation needs it:
+- exact improved damage values;
+- exact reset/expiry duration of stored target states.
 
 ### Tumulte
 
-Still needed:
-- exact entity-count scaling;
-- what counts as an entity;
-- maximum/cap if any;
-- canonical Poutch assumption to use for entity count.
+Resolved at rule level:
+- counts enemy entities in the area;
+- canonical Poutch = one enemy tier;
+- allies/player do not count.
+
+Still needed only for exact implementation:
+- numerical tier table;
+- maximum/cap, if not explicit in current spell data.
 
 ### Pugilat
 
-Still needed:
-- exact per-cast scaling;
-- whether scaling applies immediately or to following casts;
-- maximum/cap;
-- per-turn vs persistent reset semantics.
+Resolved at rule level:
+- repeated-cast progression is per turn;
+- progression resets each turn;
+- base limit = 4 casts/turn.
+
+Still needed only for exact implementation:
+- numerical damage progression for casts 1–4.
 
 ### Accumulation
 
-Core sequencing is now confirmed and documented:
+Core sequencing is confirmed and documented:
 - `3 PA`, self-cast, `0` damage setup;
 - following use has increased damage;
 - lasts `2 turns`;
@@ -91,6 +96,39 @@ Still useful if needed for exact implementation:
 ### Zénith
 
 Real MP-to-damage curve remains open, but current product assumption intentionally uses maximum damage.
+
+### Massacre
+
+Confirmed core rule:
+- affected enemy takes `+15% damage`.
+
+Still needed:
+- exact PA cost / application method if not obvious in data;
+- exact duration;
+- whether the +15% applies immediately to the cast that establishes the state or only afterward;
+- refresh/stack/removal semantics.
+
+### Conquête
+
+Confirmed core rule:
+- area-damage spells or qualifying area-damage weapons can hit Conquête;
+- Conquête then produces an area effect around itself for `50%` of the damage it received;
+- this is relevant to perfect-turn optimization.
+
+Still needed before canonical implementation:
+- whether Conquête can always be assumed positioned next to the canonical Poutch in a perfect-turn benchmark;
+- whether the echoed 50% can hit the same Poutch that was also hit by the source AoE;
+- whether source damage to Conquête is included in objective score or only the echoed enemy damage;
+- whether Conquête echo can recursively trigger itself/another Conquête, or whether recursion is excluded;
+- summon lifetime/cooldown/PA/setup requirements relevant to T1/T2;
+- whether all area weapons qualify identically.
+
+### Erosion-dependent damage
+
+Resolved as a product assumption for the current canonical optimizer:
+- ignore erosion-dependent bonus damage.
+
+Do not spend planner effort on erosion setup unless this contract is later changed.
 
 ---
 
