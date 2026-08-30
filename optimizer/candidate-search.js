@@ -24,13 +24,14 @@ function addPositive(target, source = {}) {
   return target;
 }
 
-export function signedConstraintOrderingSignal(stats, constraints = {}) {
+export function signedConstraintOrderingSignal(stats, constraints = {}, baselineStats = {}) {
   let signal = 0;
   for (const key of positiveConstraintKeys(constraints)) {
     const target = Math.max(1, Number(constraints[key] || 0));
+    const value = num(baselineStats, key) + num(stats, key);
     // Constraint progress is useful only until the admissibility floor is met.
     // Preserve signed deficits/penalties, but never reward surplus resources.
-    signal += Math.min(1, num(stats, key) / target);
+    signal += Math.min(1, value / target);
   }
   return signal;
 }
@@ -52,7 +53,11 @@ function retentionStat(state, key, constraintKeys) {
 
 function rankGroupState(optimisticStats, constraintStats, context) {
   const ranked = context.policy.rankStats(optimisticStats);
-  const signedConstraintSignal = signedConstraintOrderingSignal(constraintStats, context.constraints);
+  const signedConstraintSignal = signedConstraintOrderingSignal(
+    constraintStats,
+    context.constraints,
+    BASE_CHARACTER.baseStats || {}
+  );
   const constraintWeight = Number(context.profile?.ranking?.constraintWeight || 0);
   return {
     ...ranked,
