@@ -42,7 +42,7 @@ function profileItem(entry) {
 }
 
 function generatorContext() {
-  const generatorConstraints = { ap: 2, mp: 1 };
+  const generatorConstraints = { ap: 12, mp: 5 };
   const profile = {
     ranking: { constraintWeight: 1_000_000 },
     search: {
@@ -60,8 +60,8 @@ function generatorContext() {
     paretoKeys: [],
     rankStats(stats = {}) {
       const objectiveGain = Math.max(0, Number(stats.earth || 0));
-      const constraintSignal = Math.min(1, Math.max(0, Number(stats.ap || 0)) / 2)
-        + Math.min(1, Math.max(0, Number(stats.mp || 0)));
+      const constraintSignal = Math.min(1, Math.max(0, Number(stats.ap || 0)) / 12)
+        + Math.min(1, Math.max(0, Number(stats.mp || 0)) / 5);
       return {
         objectiveGain,
         constraintSignal,
@@ -75,9 +75,9 @@ function generatorContext() {
 test('Dofus group beam keeps an Ocre damage lane instead of preferring useless PA/PM surplus', () => {
   const profiles = [
     profileItem(item('ocre', { ap: 1 })),
-    profileItem(item('damage', { ap: 1, mp: 1, earth: 200 }, { prysma: true })),
-    profileItem(item('surplus-a', { ap: 2 })),
-    profileItem(item('surplus-b', { ap: 1, mp: 2 }, { prysma: true }))
+    profileItem(item('damage', { ap: 3, mp: 1, earth: 200 }, { prysma: true })),
+    profileItem(item('surplus-a', { ap: 5 })),
+    profileItem(item('surplus-b', { ap: 4, mp: 2 }, { prysma: true }))
   ];
 
   const choices = buildGroupChoices(profiles, 2, generatorContext());
