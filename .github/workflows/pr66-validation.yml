@@ -1,0 +1,46 @@
+name: PR66 source truth validation
+
+on:
+  push:
+    branches:
+      - tmp/pr66-source-truth-validation
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Sync spell source assets
+        run: npm run sync:spells
+
+      - name: Normalize runtime and source truth catalogs
+        run: npm run normalize:spells
+
+      - name: Preserve generated source-truth artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/normalized/spell-source-truth.json data/normalized/spell-source-truth-coverage.json data/normalized/spell-source-truth-coverage.md
+          if ! git diff --cached --quiet; then
+            git commit -m "data: materialize spell source truth [skip ci]"
+            git push
+          fi
+
+      - name: Targeted source-truth tests
+        run: node --test tests/spell-source-truth.test.mjs
+
+      - name: Full test suite
+        run: npm test
+
+      - name: Syntax checks
+        run: npm run check
