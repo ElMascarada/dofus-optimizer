@@ -276,15 +276,18 @@ This is a target-side damage amplification and must be considered by a perfect-t
 
 ### Conquête
 
-Status: `CONFIRMED_BY_DIRECTOR` for the core effect; exact placement/trigger semantics remain open.
+Status: `CONFIRMED_BY_DIRECTOR`
 
 Conquête interacts with area damage:
-- when an area-damage spell or qualifying area-damage weapon hits Conquête,
-- Conquête sends back/deals an area effect around itself equal to `50%` of the damage it received.
+- Conquête must be placed on the **same damage turn** where its reflection is exploited; placing it on the preceding turn does not preserve the desired reflection for the next turn;
+- for the perfect-turn benchmark, Conquête may be considered positioned next to the Poutch when the rotation chooses to exploit it;
+- when an area-damage spell or qualifying area-damage weapon hits both Conquête and the Poutch, direct damage to the Poutch counts normally;
+- Conquête additionally sends back/deals an area effect around itself equal to `50%` of the damage it received;
+- that echoed `50%` can also hit the nearby Poutch and therefore adds to objective damage.
 
 Examples of source attacks mentioned by the Director include Tumulte, Zénith and some weapons.
 
-This interaction is relevant to "perfect turn" damage and must not be omitted merely because Conquête itself is not a normal direct-damage spell. Exact positioning, target eligibility, recursion/exclusion and cast/timing details remain to be confirmed before implementation.
+Exact recursion/exclusion and weapon-eligibility edge cases remain open; do not invent them.
 
 ---
 
@@ -329,7 +332,69 @@ Each mechanic still needs its own duration/state/removal semantics; "persistent"
 
 ---
 
-## 8. Director rule for uncertainty
+## 8. Sacrier combat-state rules
+
+### Souffrance / HP-loss scaling
+
+Status: `CONFIRMED_BY_DIRECTOR` for the state mechanics; exact numerical tier table remains `OPEN`.
+
+- Sacrier gains **Souffrance levels** as HP is lost.
+- The state changes by HP-loss thresholds/paliers rather than being a purely static build stat.
+- Souffrance updates **in real time during combat**.
+- Therefore if Sacrier loses enough HP from one action to cross a threshold, later actions in the **same turn** must use the new Souffrance state.
+- HP can be lost from enemy damage or deliberately through Sacrier's own spells/mechanics.
+- A perfect-turn planner may intentionally spend HP / use self-damage in order to improve later damage if the sequence is executable.
+
+The Director recalls values around `+10% damage` and around `20% damage reduction received` from Souffrance, but could not certify the exact current values/tiers. These numbers must **not** be encoded from memory without a reliable current source or later Director confirmation.
+
+### Berserk
+
+Status: `CONFIRMED_BY_DIRECTOR` for the core offensive behavior.
+
+- Berserk is usable on T1.
+- It sets Sacrier directly to `30%` HP.
+- It grants an additional `+10% spell damage` bonus.
+- Because Souffrance updates in real time with HP loss, Berserk is highly relevant to a perfect-damage turn and can immediately change the offensive state for following actions.
+
+Exact PA cost/duration/removal semantics should come from current spell data/description before implementation if not already represented.
+
+### Mutilation
+
+Status: `CONFIRMED_BY_DIRECTOR` for the mechanic family; exact values remain open.
+
+- Mutilation grants Power.
+- It causes Sacrier to lose HP each turn.
+- That HP loss can interact with real-time Souffrance progression.
+
+Exact Power, HP-loss amount, duration and timing need current spell data/description.
+
+### Sacrier self-damage and perfect-turn planning
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+The optimizer must be allowed to search sequences of the form:
+
+`self-HP loss / self-damage → higher Souffrance → stronger later attacks`
+
+when all casts and state changes are legal/executable.
+
+This self-inflicted HP loss does **not** count as an enemy hit for unrelated Ocre/Vulbis "not hit" conditions in the canonical benchmark.
+
+The Director expects Berserk to be very common in ideal Sacrier damage turns, but this is an optimization expectation, **not a hardcoded requirement**. The planner must still choose it because it wins, not because the item/spell is forced.
+
+### Punition — Sacrier
+
+Status: `CONFIRMED_BY_DIRECTOR` for core semantics plus `PRODUCT_ASSUMPTION` for the benchmark.
+
+- Punition deals its normal/base damage.
+- It can deal additional damage depending on erosion suffered by the Sacrier.
+- For the current canonical perfect-turn benchmark, the erosion-dependent additional damage is ignored.
+
+Do not invent pre-existing erosion on the Sacrier merely to maximize Punition.
+
+---
+
+## 9. Director rule for uncertainty
 
 Status: `CONFIRMED_BY_DIRECTOR`
 
