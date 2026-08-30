@@ -1,0 +1,41 @@
+{
+  "spellCount": 836,
+  "spellLevelCount": 1729,
+  "effectInstanceCount": 13254,
+  "runtimeKnownEffectCount": 2952,
+  "structuralOnlyEffectCount": 0,
+  "unresolvedEffectCount": 10302,
+  "additionalAssetsLoaded": {
+    "spell_pairs": 726,
+    "spell_scripts": 14929,
+    "spell_states": 6375,
+    "spell_types": 3260
+  },
+  "sourcePresenceStates": [
+    "ABSENT_FROM_SOURCE",
+    "PRESENT_FROM_SOURCE",
+    "PRESENT_BUT_UNRESOLVED"
+  ],
+  "requiredProbes": [
+    {
+      "name": "Tirs Puissants",
+      "spellId": 32466,
+      "status": "PRESENT_BUT_UNRESOLVED"
+    },
+    {
+      "name": "Sentinelle",
+      "spellId": 32475,
+      "status": "PRESENT_BUT_UNRESOLVED"
+    },
+    {
+      "name": "Tir Perçant",
+      "spellId": 32471,
+      "status": "PRESENT_BUT_UNRESOLVED"
+    },
+    {
+      "name": "Représailles",
+      "spellId": 32472,
+      "status": "PRESENT_BUT_UNRESOLVED"
+    }
+  ]
+}
