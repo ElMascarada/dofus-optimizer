@@ -24,11 +24,13 @@ function addPositive(target, source = {}) {
   return target;
 }
 
-function signedConstraintOrderingSignal(stats, constraints = {}) {
+export function signedConstraintOrderingSignal(stats, constraints = {}) {
   let signal = 0;
   for (const key of positiveConstraintKeys(constraints)) {
     const target = Math.max(1, Number(constraints[key] || 0));
-    signal += num(stats, key) / target;
+    // Constraint progress is useful only until the admissibility floor is met.
+    // Preserve signed deficits/penalties, but never reward surplus resources.
+    signal += Math.min(1, num(stats, key) / target);
   }
   return signal;
 }
