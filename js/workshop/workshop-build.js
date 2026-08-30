@@ -1,4 +1,5 @@
 import { specialSlotRulesAreValid } from '../build-legality.js';
+import { canonicalT1ContextIsUsable } from '../combat-evaluation-context.js';
 
 export const WORKSHOP_FM_POLICY = Object.freeze({
   spellDamagePct: 0,
@@ -36,6 +37,23 @@ function cloneEquipment(equipmentBySlot = {}) {
   return Object.fromEntries(Object.entries(equipmentBySlot).filter(([, item]) => Boolean(item)));
 }
 
+function cloneCanonicalCombatContext(context = null) {
+  if (!context || typeof context !== 'object') return null;
+  return {
+    ...context,
+    combatObjective: { ...(context.combatObjective || {}) },
+    scenario: {
+      ...(context.scenario || {}),
+      requiredApByTurn: { ...(context.scenario?.requiredApByTurn || {}) }
+    },
+    spellIds: [...(context.spellIds || [])],
+    stats: { ...(context.stats || {}) },
+    effectiveStatsByTurn: Object.fromEntries(Object.entries(context.effectiveStatsByTurn || {})
+      .map(([turn, stats]) => [turn, { ...(stats || {}) }])),
+    fm: context.fm ? { ...context.fm } : null
+  };
+}
+
 function normalizeRejectedItemIds(ids = []) {
   return [...new Set((ids || []).map(String).filter(Boolean))].sort();
 }
@@ -47,13 +65,28 @@ function normalizeLockedSlots(lockedSlots = [], equipmentBySlot = {}) {
     .sort();
 }
 
+export function workshopCombatSignature(build = {}) {
+  const equipment = WORKSHOP_SLOTS.map(({ key }) => `${key}:${String(build?.equipmentBySlot?.[key]?.id || '')}`);
+  const fmPolicy = Object.entries(build?.fmPolicy || {})
+    .sort(([left], [right]) => left.localeCompare(right));
+  const selectedSpells = [...new Set((build?.selectedSpells || []).map(String).filter(Boolean))].sort();
+  return JSON.stringify({
+    classId: build?.classId ? String(build.classId) : null,
+    equipment,
+    fmPolicy,
+    selectedSpells
+  });
+}
+
 export function createWorkshopBuild({
   classId = null,
   equipmentBySlot = {},
   fmPolicy = WORKSHOP_FM_POLICY,
   selectedSpells = [],
   lockedSlots = [],
-  rejectedItemIds = []
+  rejectedItemIds = [],
+  canonicalCombatContext = null,
+  canonicalCombatSignature = null
 } = {}) {
   const equipment = cloneEquipment(equipmentBySlot);
   return {
@@ -62,7 +95,9 @@ export function createWorkshopBuild({
     fmPolicy: { ...WORKSHOP_FM_POLICY, ...(fmPolicy || {}) },
     selectedSpells: [...new Set((selectedSpells || []).map(String))],
     lockedSlots: normalizeLockedSlots(lockedSlots, equipment),
-    rejectedItemIds: normalizeRejectedItemIds(rejectedItemIds)
+    rejectedItemIds: normalizeRejectedItemIds(rejectedItemIds),
+    canonicalCombatContext: cloneCanonicalCombatContext(canonicalCombatContext),
+    canonicalCombatSignature: canonicalCombatSignature ? String(canonicalCombatSignature) : null
   };
 }
 
@@ -126,7 +161,7 @@ export function createWorkshopBuildFromOptimizerResult({
       .filter(Boolean)
       .map(String)
   )];
-  const build = createWorkshopBuild({
+  let build = createWorkshopBuild({
     classId,
     equipmentBySlot,
     fmPolicy,
@@ -136,6 +171,16 @@ export function createWorkshopBuildFromOptimizerResult({
   });
   if (!specialSlotRulesAreValid(workshopItems(build))) {
     throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');
+  }
+
+  const sourceContext = cloneCanonicalCombatContext(result?.canonicalCombatContext);
+  const sameClass = !sourceContext?.classId || !build.classId || String(sourceContext.classId) === String(build.classId);
+  if (canonicalT1ContextIsUsable(sourceContext) && sameClass) {
+    build = createWorkshopBuild({
+      ...build,
+      canonicalCombatContext: sourceContext,
+      canonicalCombatSignature: workshopCombatSignature(build)
+    });
   }
   return build;
 }

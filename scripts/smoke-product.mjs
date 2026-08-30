@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
 
 import { evaluateCompleteBuild } from '../js/complete-build-evaluator.js';
+import { canonicalT1ContextIsUsable } from '../js/combat-evaluation-context.js';
 import { createOptimizerV2Request } from '../js/optimizer-v2-orchestrator.js';
 import { validateDofusSnapshot, validateSpellSnapshot } from '../js/data-loader.js';
 import {
   createWorkshopBuildFromOptimizerResult,
-  workshopBuildIsComplete
+  workshopBuildIsComplete,
+  workshopCombatSignature
 } from '../js/workshop/workshop-build.js';
 import { evaluateWorkshopBuild } from '../js/workshop/workshop-evaluator.js';
 import { analyzeWorkshopTurns } from '../js/workshop/workshop-turn-analysis.js';
@@ -105,7 +107,11 @@ if (best) {
     workshopBuild = createWorkshopBuildFromOptimizerResult({
       result: best,
       classId: request.classId,
-      fmPolicy: request.fmPolicy
+      fmPolicy: request.fmPolicy,
+      combatObjective: request.combatObjective,
+      scenario: request.scenario,
+      spellIds: request.classSpells.map((spell) => String(spell.id)),
+      searchProfile: request.searchProfile
     });
     workshopConversion = 'PASS';
     workshopComplete = workshopBuildIsComplete(workshopBuild) ? 'PASS' : 'FAIL';
@@ -136,6 +142,30 @@ const workshopTurns = workshopStatus === 'PASS' ? analyzeWorkshopTurns(workshop)
 const t1 = workshopTurns?.turns?.find((entry) => Number(entry?.turn) === 1) || null;
 const t1Sequence = t1?.actions || [];
 const t1Damage = Number(t1?.damage || 0);
+const optimizerT1Damage = Number(best?.combatPlan?.perTurn?.[1] ?? best?.perTurn?.[1] ?? 0);
+const optimizerTurnMode = String(best?.combatPlan?.objective?.turnMode || 'UNKNOWN');
+const workshopTurnMode = String(workshopTurns?.plan?.objective?.turnMode || 'UNKNOWN');
+const canonicalContext = workshopBuild?.canonicalCombatContext || null;
+const canonicalT1ContextPass = canonicalT1ContextIsUsable(canonicalContext)
+  && workshop?.combatEvaluationSource === 'optimizer-canonical-t1';
+const sameBuild = Boolean(workshopBuild?.canonicalCombatSignature)
+  && workshopBuild.canonicalCombatSignature === workshopCombatSignature(workshopBuild);
+const sameScenario = JSON.stringify(canonicalContext?.scenario || null) === JSON.stringify(best?.canonicalCombatContext?.scenario || null);
+const sameResolvedCombatContext = JSON.stringify(canonicalContext?.stats || null) === JSON.stringify(best?.stats || null)
+  && JSON.stringify(canonicalContext?.effectiveStatsByTurn?.[1] || null) === JSON.stringify(best?.effectiveStatsByTurn?.[1] || null)
+  && JSON.stringify(canonicalContext?.fm || null) === JSON.stringify(best?.fm || null)
+  && canonicalContext?.initialCombatState === 'default-empty';
+const t1Delta = t1Damage - optimizerT1Damage;
+const canonicalTruth = canonicalT1ContextPass
+  && optimizerTurnMode === 't1'
+  && workshopTurnMode === 't1'
+  && sameBuild
+  && sameScenario
+  && sameResolvedCombatContext
+  && Number.isFinite(optimizerT1Damage)
+  && Number.isFinite(t1Damage)
+  && Math.abs(t1Delta) <= 1e-9;
+
 const damageBySpell = new Map();
 for (const entry of t1Sequence) {
   const damage = Number(entry?.expectedDamage || 0);
@@ -161,7 +191,8 @@ const pass = !errorMessage
   && statsPresent
   && t1PlanPass
   && t1Damage > 0
-  && spellBreakdownPass;
+  && spellBreakdownPass
+  && canonicalTruth;
 
 console.log('PRODUCT_SMOKE');
 console.log('scenario=Iop/Earth/T1/12AP/6MP/0Initiative');
@@ -184,6 +215,17 @@ console.log('');
 console.log(`t1Plan=${t1PlanPass ? 'PASS' : 'FAIL'}`);
 console.log(`t1Damage=${number(t1Damage)}`);
 console.log(`spellBreakdown=${spellBreakdownPass ? 'PASS' : 'FAIL'}${spellBreakdownPass ? ` ${spellBreakdown.map(([id, damage]) => `${id}:${number(damage)}`).join(',')}` : ''}`);
+console.log('');
+console.log(`canonicalT1Context=${canonicalT1ContextPass ? 'PASS' : 'FAIL'}`);
+console.log(`optimizerTurnMode=${optimizerTurnMode === 't1' ? 'T1' : optimizerTurnMode}`);
+console.log(`workshopTurnMode=${workshopTurnMode === 't1' ? 'T1' : workshopTurnMode}`);
+console.log(`sameBuild=${sameBuild ? 'YES' : 'NO'}`);
+console.log(`sameScenario=${sameScenario ? 'YES' : 'NO'}`);
+console.log(`sameResolvedCombatContext=${sameResolvedCombatContext ? 'YES' : 'NO'}`);
+console.log(`optimizerT1Damage=${number(optimizerT1Damage)}`);
+console.log(`workshopT1Damage=${number(t1Damage)}`);
+console.log(`delta=${number(t1Delta)}`);
+console.log(`canonicalTruth=${canonicalTruth ? 'PASS' : 'FAIL'}`);
 console.log('');
 console.log(`primaryValid=${number(diagnostics.valid || 0)}`);
 console.log(`fallbackValid=${number(diagnostics.fallbackValid || 0)}`);

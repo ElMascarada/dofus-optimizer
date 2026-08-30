@@ -1,4 +1,5 @@
 import { optimizeCombatSequence } from '../turn-optimizer.js';
+import { evaluateCanonicalT1Combat } from '../combat-evaluation-context.js';
 import { temporalObjectiveMetrics } from '../temporal-objectives.js';
 import { getSearchProfile } from '../../optimizer/search-profiles.js';
 
@@ -8,12 +9,36 @@ function actionsForTurn(sequence = [], turn) {
   return sequence.filter((entry) => Number(entry?.turn) === Number(turn));
 }
 
+function analysisFromPlan(plan, turns) {
+  const turnRows = turns.map((turn) => ({
+    turn,
+    damage: Number(plan.perTurn?.[turn] || 0),
+    startAp: Number(plan.turnStartAp?.[turn] || 0),
+    actions: actionsForTurn(plan.sequence, turn)
+  }));
+  return {
+    plan,
+    turns: turnRows,
+    metrics: temporalObjectiveMetrics(plan.perTurn, turns)
+  };
+}
+
 export function analyzeWorkshopTurns(evaluation) {
   if (!evaluation || typeof evaluation !== 'object') return null;
   if (analysisCache.has(evaluation)) return analysisCache.get(evaluation);
   if (!evaluation.valid || !evaluation.complete || !(evaluation.combatSpells || []).length) {
     analysisCache.set(evaluation, null);
     return null;
+  }
+
+  if (evaluation.canonicalCombatContext?.turnMode === 't1') {
+    const plan = evaluateCanonicalT1Combat({
+      context: evaluation.canonicalCombatContext,
+      spells: evaluation.combatSpells
+    });
+    const analysis = analysisFromPlan(plan, [1]);
+    analysisCache.set(evaluation, analysis);
+    return analysis;
   }
 
   const combatBudget = getSearchProfile('BALANCED').combat;
@@ -33,17 +58,7 @@ export function analyzeWorkshopTurns(evaluation) {
     maxActionsPerTurn: combatBudget.maxActionsPerTurn
   });
 
-  const turns = [1, 2, 3].map((turn) => ({
-    turn,
-    damage: Number(plan.perTurn?.[turn] || 0),
-    startAp: Number(plan.turnStartAp?.[turn] || 0),
-    actions: actionsForTurn(plan.sequence, turn)
-  }));
-  const analysis = {
-    plan,
-    turns,
-    metrics: temporalObjectiveMetrics(plan.perTurn, [1, 2, 3])
-  };
+  const analysis = analysisFromPlan(plan, [1, 2, 3]);
   analysisCache.set(evaluation, analysis);
   return analysis;
 }
