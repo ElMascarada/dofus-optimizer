@@ -46,18 +46,18 @@ function generatorContext() {
   const profile = {
     ranking: { constraintWeight: 1_000_000 },
     search: {
-      dofusGroupBeamWidth: 3,
-      multiPickBeamWidth: 3,
-      groupBeamWidth: 3,
-      groupBucketLimit: 4,
+      dofusGroupBeamWidth: 10,
+      multiPickBeamWidth: 10,
+      groupBeamWidth: 10,
+      groupBucketLimit: 1,
       groupDiversityMultiplier: 1,
-      groupSpecialistReservePerStat: 0,
+      groupSpecialistReservePerStat: 1,
       groupOffenseReserve: 0,
       groupChoiceLimits: { dofus: 2 }
     }
   };
   const policy = {
-    paretoKeys: [],
+    paretoKeys: ['ap', 'mp'],
     rankStats(stats = {}) {
       const objectiveGain = Math.max(0, Number(stats.earth || 0));
       const constraintSignal = Math.min(1, Math.max(0, Number(stats.ap || 0)) / 12)
@@ -76,8 +76,9 @@ test('Dofus group beam keeps an Ocre damage lane instead of preferring useless P
   const profiles = [
     profileItem(item('ocre', { ap: 1 })),
     profileItem(item('damage', { ap: 3, mp: 1, earth: 200 }, { prysma: true })),
-    profileItem(item('surplus-a', { ap: 5 })),
-    profileItem(item('surplus-b', { ap: 4, mp: 2 }, { prysma: true }))
+    profileItem(item('surplus-a', { ap: 5 }, { prysma: true })),
+    profileItem(item('surplus-b', { ap: 4, mp: 2 }, { prysma: true })),
+    profileItem(item('neutral', {}))
   ];
 
   const choices = buildGroupChoices(profiles, 2, generatorContext());
