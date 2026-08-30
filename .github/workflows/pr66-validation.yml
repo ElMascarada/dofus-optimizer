@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: 20
 
+      - name: Sync item source/version prerequisite
+        run: npm run sync:item-source
+
       - name: Sync spell source assets
         run: npm run sync:spells
 
