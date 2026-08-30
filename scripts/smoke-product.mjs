@@ -150,7 +150,7 @@ const canonicalT1ContextPass = canonicalT1ContextIsUsable(canonicalContext)
   && workshop?.combatEvaluationSource === 'optimizer-canonical-t1';
 const sameBuild = Boolean(workshopBuild?.canonicalCombatSignature)
   && workshopBuild.canonicalCombatSignature === workshopCombatSignature(workshopBuild);
-const sameScenario = JSON.stringify(canonicalContext?.scenario || null) === JSON.stringify(request.scenario || null);
+const sameScenario = JSON.stringify(canonicalContext?.scenario || null) === JSON.stringify(best?.canonicalCombatContext?.scenario || null);
 const sameResolvedCombatContext = JSON.stringify(canonicalContext?.stats || null) === JSON.stringify(best?.stats || null)
   && JSON.stringify(canonicalContext?.effectiveStatsByTurn?.[1] || null) === JSON.stringify(best?.effectiveStatsByTurn?.[1] || null)
   && JSON.stringify(canonicalContext?.fm || null) === JSON.stringify(best?.fm || null)
