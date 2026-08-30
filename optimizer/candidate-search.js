@@ -91,7 +91,7 @@ function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = ne
   return `${parts.join(',')}:p${prysma}`;
 }
 
-function keepChoiceDiversity(states, limit, context) {
+function keepChoiceDiversity(states, limit, context, { preserveStructuralContributors = false } = {}) {
   const seen = new Set();
   const output = [];
   const perBucket = new Map();
@@ -110,6 +110,44 @@ function keepChoiceDiversity(states, limit, context) {
     return true;
   }
 
+  if (preserveStructuralContributors) {
+    const structuralKeys = positiveConstraintKeys(context.constraints)
+      .filter((key) => ['ap', 'mp', 'range'].includes(key));
+    const optimisticByItem = new Map();
+    const bestByContributor = new Map();
+    for (const state of states) {
+      for (const item of state.items || []) {
+        let optimistic = optimisticByItem.get(item);
+        if (!optimistic) {
+          optimistic = optimisticItemStats(item, {
+            includePassives: true,
+            turnMode: context.turnMode,
+            scenario: context.scenario
+          }).stats;
+          optimisticByItem.set(item, optimistic);
+        }
+        for (const key of structuralKeys) {
+          if (!(num(optimistic, key) > 0)) continue;
+          const contributorKey = `${key}:${String(item.id)}`;
+          const previous = bestByContributor.get(contributorKey);
+          if (!previous
+            || state.objectiveScore > previous.objectiveScore
+            || (state.objectiveScore === previous.objectiveScore && state.score > previous.score)) {
+            bestByContributor.set(contributorKey, state);
+          }
+        }
+      }
+    }
+    const representatives = [...new Set(bestByContributor.values())]
+      .sort((a, b) => b.objectiveScore - a.objectiveScore
+        || b.score - a.score
+        || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    for (const state of representatives) {
+      if (output.length >= limit) break;
+      tryKeep(state, { enforceBucket: false });
+    }
+  }
+
   // Preserve a tiny lane for each context-relevant Pareto dimension. This is
   // especially important for multiplicative specialists (for example % spell
   // damage): they can look weak in isolation but become optimal once combined
@@ -119,8 +157,7 @@ function keepChoiceDiversity(states, limit, context) {
     if (output.length >= limit || specialistReserve <= 0) break;
     const bySpecialist = [...states]
       .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
-      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints)
-        - retentionStat(a, key, constraintKeys, context.constraints)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints) - retentionStat(a, key, constraintKeys, context.constraints)
         || b.objectiveScore - a.objectiveScore
         || b.score - a.score);
     let kept = 0;
@@ -220,7 +257,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     softLimit,
     Math.min(states.length, profile.search.groupBucketLimit * profile.search.groupDiversityMultiplier)
   );
-  return keepChoiceDiversity(states, diversityLimit, context)
+  return keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true })
     .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
       items, score, objectiveScore, optimisticStats, bounded, prysma
     }));
