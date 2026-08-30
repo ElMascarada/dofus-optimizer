@@ -111,17 +111,18 @@ Still needed:
 ### Conquête
 
 Confirmed core rule:
-- area-damage spells or qualifying area-damage weapons can hit Conquête;
-- Conquête then produces an area effect around itself for `50%` of the damage it received;
-- this is relevant to perfect-turn optimization.
+- Conquête must be placed on the same damage turn where its reflection is exploited;
+- perfect-turn benchmark may position it next to the Poutch;
+- an AoE may damage both Conquête and Poutch;
+- direct Poutch damage counts normally;
+- Conquête echoes `50%` of the damage it received around itself;
+- that echo can hit and damage the nearby Poutch.
 
-Still needed before canonical implementation:
-- whether Conquête can always be assumed positioned next to the canonical Poutch in a perfect-turn benchmark;
-- whether the echoed 50% can hit the same Poutch that was also hit by the source AoE;
-- whether source damage to Conquête is included in objective score or only the echoed enemy damage;
-- whether Conquête echo can recursively trigger itself/another Conquête, or whether recursion is excluded;
-- summon lifetime/cooldown/PA/setup requirements relevant to T1/T2;
-- whether all area weapons qualify identically.
+Still needed before exact canonical implementation:
+- recursion/exclusion behavior (Conquête echo triggering itself/another Conquête or not);
+- exact PA/cooldown/summon-lifetime constraints if not obvious in spell data;
+- whether every area weapon qualifies under the same rule;
+- any source-type exclusions.
 
 ### Erosion-dependent damage
 
@@ -129,6 +130,63 @@ Resolved as a product assumption for the current canonical optimizer:
 - ignore erosion-dependent bonus damage.
 
 Do not spend planner effort on erosion setup unless this contract is later changed.
+
+---
+
+## Priority A — Sacrier combat details
+
+### Souffrance
+
+Confirmed:
+- Souffrance progresses by HP-loss thresholds/paliers;
+- it updates in real time;
+- self-inflicted HP loss can cross a threshold;
+- later spells in the same turn use the updated Souffrance;
+- perfect-turn planner may intentionally lose HP to increase later damage.
+
+Still needed:
+- exact number of Souffrance levels/paliers;
+- exact HP thresholds;
+- exact damage bonus per level or total maximum;
+- exact damage-reduction values.
+
+Director memory suggests values around `+10% damage` and around `20% damage reduction`, but these values are **not certified** and must not be encoded from memory.
+
+### Berserk
+
+Confirmed:
+- usable T1;
+- sets Sacrier to `30%` HP;
+- grants `+10% spell damage`;
+- can immediately change Souffrance for following actions.
+
+Still needed if not already explicit in current spell data:
+- PA cost;
+- exact duration of the `+10% spell damage` buff;
+- refresh/removal/cooldown semantics.
+
+### Mutilation
+
+Confirmed mechanic family:
+- grants Power;
+- removes HP each turn;
+- HP loss can feed Souffrance progression.
+
+Still needed:
+- exact Power value;
+- exact HP-loss amount/percentage;
+- first tick timing;
+- duration;
+- stacking/refresh behavior.
+
+### Punition
+
+Core rule resolved:
+- base damage always applies;
+- extra damage can depend on erosion suffered by Sacrier;
+- current canonical benchmark ignores the erosion-dependent extra damage.
+
+Exact base/erosion lines should come from spell data rather than Director memory.
 
 ---
 
@@ -194,7 +252,6 @@ Still needed:
 Need exact values/durations for examples already confirmed as stateful rather than one-cast modifiers:
 
 - Zobal masks: exact bonuses by mask, mutual exclusivity, transition/removal timing.
-- Sacrier Berserk/passive: exact damage scaling/state inputs and interaction with unrelated "being hit" conditions where relevant.
 - Pandawa Brassage: exact damage bonus/duration/state requirements.
 - Cra Sentinelle: exact values/duration.
 
