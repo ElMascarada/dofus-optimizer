@@ -44,47 +44,76 @@ Status: `CONFIRMED_BY_DIRECTOR` + `PRODUCT_ASSUMPTION`.
 - extra damage can depend on erosion suffered by Sacrier;
 - canonical perfect-turn benchmark ignores the erosion-dependent extra damage.
 
+### General Sacrier stacking timing
+
+Status: `CONFIRMED_BY_DIRECTOR`
+
+For the offensive stacking spells discussed below, the new stack/effect is applied **after** the cast that creates it.
+
+Therefore:
+- cast #1 uses the state that existed before cast #1, then grants stack #1;
+- cast #2 benefits from stack #1, then grants stack #2;
+- later casts benefit from both stacks when the effect is capped at two stacks.
+
+The confirmed duration for Nervosité, Douleur Cuisante, Furie and Décimation is `2 turns`.
+
 ### Nervosité
 
-Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+Status: `CONFIRMED_BY_DIRECTOR`.
 
 - grants `+7% Crit` per stack;
 - stacks up to `2` times;
-- therefore can provide up to `+14% Crit` when fully stacked.
+- therefore can provide up to `+14% Crit` when fully stacked;
+- duration: `2 turns`;
+- the first cast does **not** benefit from the +7% it creates;
+- the second Nervosité benefits from the first +7% stack, then creates the second stack;
+- subsequent eligible casts benefit from the fully stacked value.
 
-Exact PA cost, duration, refresh/reset and whether both stacks can be acquired within the same turn must come from current spell data/description before implementation.
+Exact PA cost should come from current spell data/description.
 
 ### Douleur Cuisante
 
-Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+Status: `CONFIRMED_BY_DIRECTOR`.
 
 - grants `+60 Puissance` per stack;
 - stacks up to `2` times;
-- therefore can provide up to `+120 Puissance` when fully stacked.
+- therefore can provide up to `+120 Puissance` when fully stacked;
+- duration: `2 turns`;
+- the first cast uses the pre-buff Power state, then grants +60 Power;
+- the second cast benefits from the first +60 Power, then raises the state to +120 Power;
+- subsequent eligible casts benefit from the fully stacked value.
 
-Exact PA cost, duration, refresh/reset and acquisition timing must come from current spell data/description before implementation.
+Exact PA cost should come from current spell data/description.
 
 ### Furie
 
-Status: `CONFIRMED_BY_DIRECTOR` for the offensive stack value.
+Status: `CONFIRMED_BY_DIRECTOR`.
 
 - grants the caster `+3% final damage` per stack;
 - stacks up to `2` times;
-- therefore can provide up to `+6% final damage` to the caster.
+- therefore can provide up to `+6% final damage` to the caster;
+- duration: `2 turns`;
+- the newly-created stack applies **after** the damaging cast that created it;
+- Furie #2 therefore benefits from the +3% created by Furie #1, then creates the second +3% stack;
+- subsequent casts can benefit from the full +6% caster-side final-damage state.
 
-Exact PA cost, duration and whether the triggering cast benefits from the newly-created stack or only later casts remain data/description-specific until verified.
+Exact PA cost should come from current spell data/description.
 
 ### Décimation
 
-Status: `CONFIRMED_BY_DIRECTOR` for the target amplification value.
+Status: `CONFIRMED_BY_DIRECTOR`.
 
 - makes the target take `+3% damage` per stack;
 - stacks up to `2` times;
-- therefore can make the affected target take up to `+6% damage` when fully stacked.
+- therefore can make the affected target take up to `+6% damage` when fully stacked;
+- duration: `2 turns`;
+- the target-side amplification created by a cast applies **after** that cast;
+- Décimation #2 therefore benefits from the target's +3% state created by Décimation #1, then raises the target state to +6%;
+- later damaging actions can benefit from the full +6% target-side amplification.
 
-This is target-side amplification and must be distinguished from caster final-damage bonuses such as Furie.
+This is target-side amplification and must remain distinct from caster final-damage bonuses such as Furie.
 
-Exact PA cost, duration, application timing and whether the cast establishing a new stack benefits from that same new stack remain data/description-specific until verified.
+Exact PA cost should come from current spell data/description.
 
 ### Sacrier perfect-turn consequence
 
@@ -200,10 +229,9 @@ Status: `CONFIRMED_BY_DIRECTOR`
 The optimizer must treat offensive self-buffs/setup spells as real candidate actions even when they deal zero direct damage.
 
 Examples include:
-- Sacrier `Douleur Cuisante` and other self-buffs;
-- Sacrier `Nervosité`, which can grant critical chance;
-- Ecaflip spells that grant critical chance;
-- a Cra spell that grants critical chance;
+- Sacrier `Douleur Cuisante`, `Nervosité` and other self-buffs;
+- Ecaflip card/state-driven critical chance buffs;
+- Cra `Tir Puissant`, `Tir Perçant`, `Sentinelle` as offensive-buff spells whose exact current effects/timings must be interpreted from spell data/description;
 - other class buffs that grant Power, final/spell damage, critical chance or another offensive state.
 
 Core product rule:
@@ -228,4 +256,25 @@ Consequences:
 - Search heuristics must not require a build to look like a coherent `crit build` before canonical combat evaluates the class buffs;
 - this can materially change the ranking of gear such as crit/non-crit items, Do Crit sources, and items with negative Crit but stronger Power/other stats.
 
-Exact values, PA costs and durations of each class crit-buff spell remain data/description-specific and must be verified individually rather than guessed.
+### Ecaflip card-state critical scaling
+
+Status: `CONFIRMED_BY_DIRECTOR` for the mechanic family; exact card arithmetic remains open.
+
+- Ecaflip has offensive effects driven by a card/hand state;
+- spell casts build cards, with the build-up related to spell PA costs (`2 / 3 / 4 / 5 PA` costs were explicitly cited by the Director);
+- critical chance granted by the relevant state/effects ranges from about `+3% Crit` with no/very few cards to `+18% Crit` at maximum hand;
+- therefore Ecaflip's effective Crit is stateful and can materially evolve through the rotation;
+- Search must not use only static equipment Crit when evaluating Ecaflip structures.
+
+Before exact implementation, the precise mapping `spell PA cost -> cards gained`, maximum hand size, exact crit tiers and reset/consumption rules must be read from current descriptions/data or confirmed separately.
+
+### Cra offensive buffs to inspect
+
+Status: `CONFIRMED_BY_DIRECTOR` for relevance, `OPEN` for exact mechanics.
+
+The Director explicitly identified these Cra spells as relevant offensive buffs/setup to inspect rather than ignore:
+- `Tir Puissant`;
+- `Tir Perçant`;
+- `Sentinelle`.
+
+Do not guess which exact stat each grants, its numerical value, duration or stacking until current spell semantics are checked/confirmed.
