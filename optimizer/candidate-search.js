@@ -24,11 +24,14 @@ function addPositive(target, source = {}) {
   return target;
 }
 
-function signedConstraintOrderingSignal(stats, constraints = {}) {
+export function signedConstraintOrderingSignal(stats, constraints = {}, baselineStats = {}) {
   let signal = 0;
   for (const key of positiveConstraintKeys(constraints)) {
     const target = Math.max(1, Number(constraints[key] || 0));
-    signal += num(stats, key) / target;
+    const value = num(baselineStats, key) + num(stats, key);
+    // Constraint progress is useful only until the admissibility floor is met.
+    // Preserve signed deficits/penalties, but never reward surplus resources.
+    signal += Math.min(1, value / target);
   }
   return signal;
 }
@@ -42,15 +45,26 @@ function addSignedConstraintStats(target, candidate, keys = []) {
   return target;
 }
 
-function retentionStat(state, key, constraintKeys) {
-  return constraintKeys.has(key)
-    ? num(state.constraintStats, key)
-    : num(state.optimisticStats, key);
+function constraintContributionTarget(key, constraints = {}) {
+  const target = Math.max(0, Number(constraints?.[key] || 0));
+  return Math.max(0, target - Math.max(0, num(BASE_CHARACTER.baseStats, key)));
+}
+
+function retentionStat(state, key, constraintKeys, constraints = {}) {
+  if (!constraintKeys.has(key)) return num(state.optimisticStats, key);
+  const value = num(state.constraintStats, key);
+  const target = constraintContributionTarget(key, constraints);
+  if (!(target > 0)) return Math.min(0, value);
+  return Math.min(target, value);
 }
 
 function rankGroupState(optimisticStats, constraintStats, context) {
   const ranked = context.policy.rankStats(optimisticStats);
-  const signedConstraintSignal = signedConstraintOrderingSignal(constraintStats, context.constraints);
+  const signedConstraintSignal = signedConstraintOrderingSignal(
+    constraintStats,
+    context.constraints,
+    BASE_CHARACTER.baseStats || {}
+  );
   const constraintWeight = Number(context.profile?.ranking?.constraintWeight || 0);
   return {
     ...ranked,
@@ -67,15 +81,17 @@ function choiceKey(items) {
 function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
-    const value = Math.max(0, retentionStat(state, key, constraintKeys));
-    const target = Math.max(0, Number(constraints?.[key] || 0));
+    const value = Math.max(0, retentionStat(state, key, constraintKeys, constraints));
+    const target = constraintKeys.has(key)
+      ? constraintContributionTarget(key, constraints)
+      : Math.max(0, Number(constraints?.[key] || 0));
     if (target > 0) return `${key}:${Math.min(4, Math.floor((value / target) * 4))}`;
     return `${key}:${Math.min(4, Math.round(value))}`;
   });
   return `${parts.join(',')}:p${prysma}`;
 }
 
-function keepChoiceDiversity(states, limit, context) {
+function keepChoiceDiversity(states, limit, context, { preserveStructuralContributors = false } = {}) {
   const seen = new Set();
   const output = [];
   const perBucket = new Map();
@@ -94,6 +110,44 @@ function keepChoiceDiversity(states, limit, context) {
     return true;
   }
 
+  if (preserveStructuralContributors) {
+    const structuralKeys = positiveConstraintKeys(context.constraints)
+      .filter((key) => ['ap', 'mp', 'range'].includes(key));
+    const optimisticByItem = new Map();
+    const bestByContributor = new Map();
+    for (const state of states) {
+      for (const item of state.items || []) {
+        let optimistic = optimisticByItem.get(item);
+        if (!optimistic) {
+          optimistic = optimisticItemStats(item, {
+            includePassives: true,
+            turnMode: context.turnMode,
+            scenario: context.scenario
+          }).stats;
+          optimisticByItem.set(item, optimistic);
+        }
+        for (const key of structuralKeys) {
+          if (!(num(optimistic, key) > 0)) continue;
+          const contributorKey = `${key}:${String(item.id)}`;
+          const previous = bestByContributor.get(contributorKey);
+          if (!previous
+            || state.objectiveScore > previous.objectiveScore
+            || (state.objectiveScore === previous.objectiveScore && state.score > previous.score)) {
+            bestByContributor.set(contributorKey, state);
+          }
+        }
+      }
+    }
+    const representatives = [...new Set(bestByContributor.values())]
+      .sort((a, b) => b.objectiveScore - a.objectiveScore
+        || b.score - a.score
+        || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    for (const state of representatives) {
+      if (output.length >= limit) break;
+      tryKeep(state, { enforceBucket: false });
+    }
+  }
+
   // Preserve a tiny lane for each context-relevant Pareto dimension. This is
   // especially important for multiplicative specialists (for example % spell
   // damage): they can look weak in isolation but become optimal once combined
@@ -102,8 +156,8 @@ function keepChoiceDiversity(states, limit, context) {
   for (const key of context.policy.paretoKeys || []) {
     if (output.length >= limit || specialistReserve <= 0) break;
     const bySpecialist = [...states]
-      .filter((state) => retentionStat(state, key, constraintKeys) > 0)
-      .sort((a, b) => retentionStat(b, key, constraintKeys) - retentionStat(a, key, constraintKeys)
+      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints) - retentionStat(a, key, constraintKeys, context.constraints)
         || b.objectiveScore - a.objectiveScore
         || b.score - a.score);
     let kept = 0;
@@ -203,7 +257,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     softLimit,
     Math.min(states.length, profile.search.groupBucketLimit * profile.search.groupDiversityMultiplier)
   );
-  return keepChoiceDiversity(states, diversityLimit, context)
+  return keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true })
     .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
       items, score, objectiveScore, optimisticStats, bounded, prysma
     }));
