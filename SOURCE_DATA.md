@@ -12,10 +12,15 @@ Endpoints synchronisés hors navigateur pour l'équipement :
 - `/dofus3/v1/meta/elements`
 - `/dofus3/v1/meta/version`
 
-Pour les sorts, le pipeline lit le numéro de version renvoyé par `/meta/version`, puis télécharge dans la **release GitHub Dofusdude exactement correspondante** :
+Pour les sorts, le pipeline lit le numéro de version renvoyé par `/meta/version`, puis télécharge dans la **release GitHub Dofusdude exactement correspondante**. La snapshot actuellement épinglée est Dofus `3.6.10.11` et conserve notamment :
 
 - `spells.json`
 - `spell_levels.json`
+- `spell_variants.json`
+- `spell_pairs.json`
+- `spell_scripts.json`
+- `spell_states.json`
+- `spell_types.json`
 - `breeds.json`
 - `effects.json`
 - `fr.json`
@@ -23,6 +28,25 @@ Pour les sorts, le pipeline lit le numéro de version renvoyé par `/meta/versio
 Ainsi, équipements et sorts ne peuvent pas provenir silencieusement de deux versions différentes du jeu.
 
 Le navigateur ne charge jamais les endpoints `/all` ni la base brute. La synchronisation est une opération de build/maintenance ; seules les données normalisées sont publiées.
+
+## Deux catalogues de sorts, deux responsabilités
+
+Le principe est **IMPORTER != ACTIVER**.
+
+`data/normalized/spell-data.json` reste le **catalogue combat runtime**. Il contient seulement les dégâts immédiats et effets déterministes déjà certifiés par le moteur. Search, Workshop, planner et calcul de dégâts continuent de consommer cette vérité runtime ; la fondation source-truth ne modifie pas ce chemin.
+
+`data/normalized/spell-source-truth.json` est un **catalogue documentaire de vérité source** produit par `scripts/normalize-spell-source-truth.mjs`. Il conserve, pour les sorts de classe pertinents au niveau 200, les identités et ordres d'effets, triggers, durées, délais, masques/ciblage, relations variantes/paires explicitement joignables, références de scripts liées au sort et références d'états explicitement nommées dans la source.
+
+Le catalogue source-truth n'est consommé par aucun chemin de combat. Une information peut y être correctement importée tout en restant volontairement inactive.
+
+Chaque entrée expose `semanticStatus` :
+
+- `runtime-supported` : la forme sémantique source sélectionnée est entièrement représentée par le catalogue combat existant ;
+- `source-unresolved` : la donnée riche est préservée mais une partie de sa sémantique n'est pas certifiée par le runtime et reste inactive.
+
+Un script lié, un trigger non immédiat, un délai, une relation d'état non certifiée ou tout autre mécanisme non compris ne doit jamais être interprété par ressemblance. La référence est conservée et l'entrée reste `source-unresolved`.
+
+Les références `boundScriptUsageData.scriptId` de `spells.json` sont préservées telles quelles. La snapshot contient aussi `spell_scripts.json`, mais aucun join numérique direct vers ce dataset autonome n'est certifié dans cette tranche : `standaloneScriptMetadataJoin` reste donc explicitement `source-unresolved` au lieu d'inventer une correspondance.
 
 ## Périmètre équipement
 
@@ -53,6 +77,10 @@ Les familles d'effets élémentaires sont auditées contre `effects.json` et leu
 - `data/normalized/spell-data.json` : classes et sorts offensifs certifiés ;
 - `data/normalized/spell-coverage-report.json` : couverture machine ;
 - `data/normalized/spell-coverage-report.md` : couverture lisible et raisons d'exclusion.
+
+`scripts/normalize-spell-source-truth.mjs` produit séparément :
+
+- `data/normalized/spell-source-truth.json` : vérité source riche, documentaire et inactive par défaut lorsque la sémantique complète n'est pas certifiée.
 
 ## Certification équipement
 

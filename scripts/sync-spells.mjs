@@ -13,8 +13,21 @@ async function getJson(url) {
   return response.json();
 }
 
+const spellSourceAssets = [
+  'spells',
+  'spell_levels',
+  'spell_variants',
+  'breeds',
+  'effects',
+  'fr',
+  'spell_pairs',
+  'spell_scripts',
+  'spell_states',
+  'spell_types',
+];
+
 const releaseBase = `https://github.com/dofusdude/dofus3-main/releases/download/${encodeURIComponent(version)}`;
-for (const name of ['spells', 'spell_levels', 'spell_variants', 'breeds', 'effects', 'fr']) {
+for (const name of spellSourceAssets) {
   console.log(`Fetching spell source ${name} for Dofus ${version}…`);
   const payload = await getJson(`${releaseBase}/${name}.json`);
   await writeFile(new URL(`${name}.json`, rawDir), JSON.stringify(payload));
