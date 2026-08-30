@@ -66,7 +66,18 @@ test('Tirs Puissants preserves rich source truth without activating script seman
   assert.equal(spell.level.minPlayerLevel, 169);
   assert.equal(spell.level.apCost, 1);
   assert.deepEqual(scriptIds(spell), [18962]);
-  assert.deepEqual([116, 138, 414, 115].map((id, order) => effect(spell, id, order).value), [3, 250, 150, 15]);
+  assert.deepEqual(
+    [116, 138, 414, 115].map((id, order) => {
+      const row = effect(spell, id, order);
+      return { diceNum: row.diceNum, value: row.value };
+    }),
+    [
+      { diceNum: 3, value: 0 },
+      { diceNum: 250, value: 0 },
+      { diceNum: 150, value: 0 },
+      { diceNum: 15, value: 0 },
+    ],
+  );
   assert.equal(spell.semanticStatus, 'source-unresolved');
   assert.ok(spell.unresolvedReasons.includes('bound-script-semantics-not-certified'));
   assert.equal(spell.runtimeRepresentation.sourceTruthConsumedByRuntime, false);
