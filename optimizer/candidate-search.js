@@ -78,6 +78,136 @@ function choiceKey(items) {
   return (items || []).map((item) => String(item.id)).sort().join('|');
 }
 
+function oneSwapCoreKeys(items = []) {
+  const ids = (items || []).map((item) => String(item.id)).sort();
+  if (ids.length < 2) return [];
+  return ids.map((_, removedIndex) => ids
+    .filter((__, index) => index !== removedIndex)
+    .join('|'));
+}
+
+function preserveDofusOneSwapNeighborhood(states, retained, limit) {
+  const targetCount = Math.min(Math.max(0, Number(limit || 0)), retained.length);
+  if (targetCount <= 1 || !states.length || !retained.length) return retained.slice(0, targetCount);
+
+  const reserveLimit = Math.min(72, Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
+  if (reserveLimit <= 0) return retained.slice(0, targetCount);
+
+  const byCore = new Map();
+  for (const state of states) {
+    for (const core of oneSwapCoreKeys(state.items)) {
+      const bucket = byCore.get(core) || [];
+      bucket.push(state);
+      byCore.set(core, bucket);
+    }
+  }
+  for (const bucket of byCore.values()) {
+    bucket.sort((a, b) => b.objectiveScore - a.objectiveScore
+      || b.score - a.score
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  }
+
+  const seedLimit = Math.min(12, retained.length);
+  const byObjective = [...retained].sort((a, b) => b.objectiveScore - a.objectiveScore
+    || b.score - a.score
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const byScore = [...retained].sort((a, b) => b.score - a.score
+    || b.objectiveScore - a.objectiveScore
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const seeds = [];
+  const seedKeys = new Set();
+  for (let index = 0; seeds.length < seedLimit && index < retained.length; index++) {
+    for (const source of [byObjective, byScore, retained]) {
+      const state = source[index];
+      if (!state) continue;
+      const key = choiceKey(state.items);
+      if (!key || seedKeys.has(key)) continue;
+      seedKeys.add(key);
+      seeds.push(state);
+      if (seeds.length >= seedLimit) break;
+    }
+  }
+
+  const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
+  const candidatesBySeed = new Map();
+  for (const seed of seeds) {
+    const seedKey = choiceKey(seed.items);
+    const representatives = [];
+    const representativeKeys = new Set();
+    for (const core of oneSwapCoreKeys(seed.items)) {
+      const alternative = (byCore.get(core) || []).find((state) => {
+        const key = choiceKey(state.items);
+        return key && key !== seedKey && !retainedKeys.has(key) && !representativeKeys.has(key);
+      });
+      if (!alternative) continue;
+      representativeKeys.add(choiceKey(alternative.items));
+      representatives.push(alternative);
+    }
+    representatives.sort((a, b) => b.objectiveScore - a.objectiveScore
+      || b.score - a.score
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    candidatesBySeed.set(seedKey, representatives);
+  }
+
+  const selectedNeighbors = [];
+  const selectedNeighborKeys = new Set();
+  let round = 0;
+  while (selectedNeighbors.length < reserveLimit) {
+    let added = false;
+    for (const seed of seeds) {
+      const seedKey = choiceKey(seed.items);
+      const candidate = candidatesBySeed.get(seedKey)?.[round];
+      if (!candidate) continue;
+      const key = choiceKey(candidate.items);
+      if (!key || retainedKeys.has(key) || selectedNeighborKeys.has(key)) continue;
+      selectedNeighborKeys.add(key);
+      selectedNeighbors.push({ seedKey, state: candidate });
+      added = true;
+      if (selectedNeighbors.length >= reserveLimit) break;
+    }
+    if (!added) break;
+    round++;
+  }
+  if (!selectedNeighbors.length) return retained.slice(0, targetCount);
+
+  const primaryBudget = Math.max(seedKeys.size, targetCount - selectedNeighbors.length);
+  const keptPrimaryKeys = new Set(seedKeys);
+  let optionalPrimary = Math.max(0, primaryBudget - keptPrimaryKeys.size);
+  for (const state of retained) {
+    const key = choiceKey(state.items);
+    if (keptPrimaryKeys.has(key)) continue;
+    if (optionalPrimary <= 0) break;
+    keptPrimaryKeys.add(key);
+    optionalPrimary--;
+  }
+
+  const neighborsBySeed = new Map();
+  for (const entry of selectedNeighbors) {
+    const bucket = neighborsBySeed.get(entry.seedKey) || [];
+    bucket.push(entry.state);
+    neighborsBySeed.set(entry.seedKey, bucket);
+  }
+
+  const output = [];
+  const outputKeys = new Set();
+  function push(state) {
+    if (output.length >= targetCount) return;
+    const key = choiceKey(state.items);
+    if (!key || outputKeys.has(key)) return;
+    outputKeys.add(key);
+    output.push(state);
+  }
+
+  for (const state of retained) {
+    const key = choiceKey(state.items);
+    if (!keptPrimaryKeys.has(key)) continue;
+    push(state);
+    for (const neighbor of neighborsBySeed.get(key) || []) push(neighbor);
+  }
+  for (const state of retained) push(state);
+  return output;
+}
+
 function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
@@ -257,10 +387,20 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     softLimit,
     Math.min(states.length, profile.search.groupBucketLimit * profile.search.groupDiversityMultiplier)
   );
-  return keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true })
-    .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
-      items, score, objectiveScore, optimisticStats, bounded, prysma
-    }));
+  const primaryChoices = keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true });
+  const retainedChoices = context.slot === 'dofus'
+    ? preserveDofusOneSwapNeighborhood(states, primaryChoices, diversityLimit)
+    : primaryChoices;
+  if (typeof context.onGroupChoiceFinalReduction === 'function') {
+    context.onGroupChoiceFinalReduction({
+      candidateKeys: states.map((state) => choiceKey(state.items)),
+      primaryKeys: primaryChoices.map((state) => choiceKey(state.items)),
+      retainedKeys: retainedChoices.map((state) => choiceKey(state.items))
+    });
+  }
+  return retainedChoices.map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
+    items, score, objectiveScore, optimisticStats, bounded, prysma
+  }));
 }
 
 export function staticBuildStats(items = [], setsById = {}) {
