@@ -20,7 +20,7 @@ const prysma = {
   stats: {},
   passives: [{
     id: 'ap-burst',
-    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 3, finalDamagePct: 20 } }]
+    rules: [{ trigger: { type: 'turn_in', turns: [1] }, stats: { ap: 1, finalDamagePct: 20 } }]
   }],
   conditions: null
 };
@@ -48,10 +48,10 @@ const baseCharacter = {
 };
 const fmPolicy = { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8, structuralExos: false };
 
-test('permanent AP above the minimum is preserved while combat passives remain turn-aware', () => {
+test('12 permanent AP remains legal while a dynamic T1 bonus can raise usable AP above 12', () => {
   const evaluation = evaluateCompleteBuild({
     items: [
-      { id: 'hat', name: 'Hat', slot: 'hat', stats: { ap: 2, fire: 100 }, passives: [], conditions: null },
+      { id: 'hat', name: 'Hat', slot: 'hat', stats: { fire: 100 }, passives: [], conditions: null },
       prysma
     ],
     sets: [],
@@ -59,19 +59,14 @@ test('permanent AP above the minimum is preserved while combat passives remain t
     constraints: { ap: 12, mp: 6 },
     fmPolicy,
     turnMode: 't1',
-    scenario: { requiredApByTurn: { 1: 15 } },
-    character: {
-      level: 200,
-      characteristicPoints: 0,
-      scrolled: {},
-      baseStats: { ap: 11, mp: 6 }
-    }
+    scenario: { requiredApByTurn: { 1: 13 } },
+    character: baseCharacter
   });
 
   assert.ok(evaluation.result);
-  assert.equal(evaluation.result.stats.ap, 13);
-  assert.equal(evaluation.result.effectiveStatsByTurn[1].ap, 16);
-  assert.equal(evaluation.result.effectiveStatsByTurn[2].ap, 13);
+  assert.equal(evaluation.result.stats.ap, 12);
+  assert.equal(evaluation.result.effectiveStatsByTurn[1].ap, 13);
+  assert.equal(evaluation.result.effectiveStatsByTurn[2].ap, 12);
 
   const breakdown = evaluation.result.spellBreakdowns[0];
   assert.deepEqual(Object.keys(breakdown.perTurn), ['1', '2', '3']);
@@ -79,6 +74,41 @@ test('permanent AP above the minimum is preserved while combat passives remain t
   assert.equal(breakdown.perTurn[2].expected, breakdown.perTurn[3].expected);
   assert.ok(breakdown.averageDamage > breakdown.perTurn[2].expected);
   assert.ok(breakdown.averageDamage < breakdown.perTurn[1].expected);
+});
+
+test('13 permanent AP is illegal independently from the user AP minimum', () => {
+  const evaluation = evaluateCompleteBuild({
+    items: [
+      { id: 'hat', name: 'Hat', slot: 'hat', stats: { ap: 1, fire: 100 }, passives: [], conditions: null }
+    ],
+    sets: [],
+    selections: oneCastSelections,
+    constraints: { ap: 12, mp: 6 },
+    fmPolicy,
+    turnMode: 't1',
+    character: baseCharacter
+  });
+
+  assert.equal(evaluation.result, null);
+  assert.equal(evaluation.reason, 'permanent-stat-cap');
+  assert.deepEqual(evaluation.legalityDiagnostics?.permanentCapViolations, [
+    { stat: 'ap', actual: 13, maximum: 12 }
+  ]);
+});
+
+test('the requested AP value remains a lower-bound constraint below the permanent cap', () => {
+  const evaluation = evaluateCompleteBuild({
+    items: [],
+    sets: [],
+    selections: oneCastSelections,
+    constraints: { ap: 11, mp: 6 },
+    fmPolicy,
+    turnMode: 't1',
+    character: baseCharacter
+  });
+
+  assert.ok(evaluation.result);
+  assert.equal(evaluation.result.stats.ap, 12);
 });
 
 test('unresolved passive context stays observable without failing turn constraints', () => {

@@ -12,6 +12,7 @@ import { optimizeFm } from './fm.js';
 import {
   characteristicMinimumsForItems,
   itemConditionsAreValid,
+  permanentStatCapViolations,
   specialSlotRulesAreValid
 } from './build-legality.js';
 
@@ -92,8 +93,10 @@ export function evaluateCompleteBuild({
   });
   if (!charResult.requirementsSatisfied) return { result: null, reason: 'item-condition' };
 
-  // PA/PM constraints are minimums, never caps. A 12/6 build remains 12/6 when
-  // the user asks for 11/5, so its extra resources are still valued by rotations.
+  // User PA/PM constraints are lower bounds, not caps. Permanent build legality
+  // is enforced separately after all static equipment, set, characteristic and
+  // FM effects are resolved. Dynamic turn effects are intentionally not part of
+  // this gate and may raise usable combat AP above the permanent cap.
   const fm = optimizeFm({
     baseStats: charResult.stats,
     items,
@@ -103,6 +106,15 @@ export function evaluateCompleteBuild({
     scenario
   });
   if (!fm) return { result: null, reason: 'evaluation-failed' };
+
+  const permanentCapViolations = permanentStatCapViolations(fm.stats);
+  if (permanentCapViolations.length) {
+    return {
+      result: null,
+      reason: 'permanent-stat-cap',
+      legalityDiagnostics: { permanentCapViolations }
+    };
+  }
 
   if (!itemConditionsAreValid(items, fm.stats, character.level)) {
     return { result: null, reason: 'item-condition' };
