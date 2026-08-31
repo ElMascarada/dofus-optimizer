@@ -297,3 +297,42 @@ test('extra static crit has zero marginal damage once a support effect already r
   assert.deepEqual(withoutTurquoise.sequence.map((entry) => entry.spellId), ['surpriz', 'crit-hit']);
   assert.equal(withTurquoise.totalDamage, withoutTurquoise.totalDamage);
 });
+
+test('T2 can spend T1 on a zero-damage persistent setup and scores only T2 damage', () => {
+  const hit = damageSpell({ id: 'burst', apCost: 6, base: 100, maxCastPerTurn: 1 });
+  const setup = supportSpell({
+    id: 'setup',
+    apCost: 6,
+    modifiers: [{ id: 'setup-power', scope: 'self', stats: { power: 200 }, durationTurns: 2 }]
+  });
+
+  const baseline = optimizeCombatSequence({
+    baseStats: { ap: 6, air: 0 },
+    spells: [hit],
+    objective: { turnMode: 't2', allowSupport: true },
+    beamWidth: 100,
+    interTurnWidth: 16
+  });
+  const prepared = optimizeCombatSequence({
+    baseStats: { ap: 6, air: 0 },
+    spells: [hit, setup],
+    objective: { turnMode: 't2', allowSupport: true },
+    beamWidth: 100,
+    interTurnWidth: 16
+  });
+
+  assert.deepEqual(prepared.objective.simulationTurns, [1, 2]);
+  assert.deepEqual(prepared.objective.activeTurns, [2]);
+  assert.equal(baseline.perTurn[1], 100);
+  assert.equal(baseline.score, baseline.perTurn[2]);
+  assert.ok(baseline.totalDamage > baseline.score, 'T1 damage must be simulated but excluded from the T2 score');
+
+  assert.deepEqual(prepared.sequence.map(({ turn, spellId }) => ({ turn, spellId })), [
+    { turn: 1, spellId: 'setup' },
+    { turn: 2, spellId: 'burst' }
+  ]);
+  assert.equal(prepared.perTurn[1], 0);
+  assert.ok(prepared.perTurn[2] > baseline.perTurn[2], `expected T1 setup to increase T2 burst, got ${prepared.perTurn[2]} vs ${baseline.perTurn[2]}`);
+  assert.equal(prepared.score, prepared.perTurn[2]);
+  assert.equal(prepared.sequence[0].appliedModifiers[0]?.id, 'setup-power');
+});
