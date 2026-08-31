@@ -13,6 +13,12 @@ function build(score, ids, prysma = null) {
   return { score, items };
 }
 
+function assertScoresNonIncreasing(results) {
+  for (let index = 1; index < results.length; index++) {
+    assert.ok(results[index - 1].score >= results[index].score);
+  }
+}
+
 test('prysma mode returns different Prysmaradites before repeating one', () => {
   const builds = [
     build(1000, ['a','b','c'], 'prysma-a'),
@@ -32,6 +38,32 @@ test('gear mode skips tiny one-item variations when broader alternatives exist',
   assert.equal(results[0], base);
   assert.equal(results[1], different);
   assert.ok(coreDifferenceCount(base, different) >= 3);
+});
+
+test('diversity selects membership while score determines final rank', () => {
+  const base = build(1000, ['a','b','c','d','e','f']);
+  const excludedTiny = build(975, ['a','b','c','d','e','x']);
+  const selectedMid = build(950, ['a','b','c','d','x','y']);
+  const diverse = build(900, ['a','b','u','v','w','z']);
+
+  const results = diversifyBuilds([base, excludedTiny, selectedMid, diverse], 'gear', 3);
+
+  assert.deepEqual(new Set(results), new Set([base, selectedMid, diverse]));
+  assert.ok(!results.includes(excludedTiny));
+  assert.deepEqual(results.map((entry) => entry.score), [1000, 950, 900]);
+});
+
+test('all result modes return scores in monotonically non-increasing order', () => {
+  const builds = [
+    build(1000, ['a','b','c','d','e','f'], 'prysma-a'),
+    build(975, ['a','b','c','d','e','x'], 'prysma-a'),
+    build(950, ['a','b','c','d','x','y'], 'prysma-a'),
+    build(900, ['a','b','u','v','w','z'], 'prysma-b')
+  ];
+
+  for (const mode of ['score', 'prysma', 'gear', 'gear-4']) {
+    assertScoresNonIncreasing(diversifyBuilds(builds, mode, 3));
+  }
 });
 
 test('score mode preserves pure ranking', () => {
