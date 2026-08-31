@@ -8,8 +8,9 @@ import { evaluateObjective } from '../js/spells.js';
 import {
   aggregateTemporalScore,
   constantTemporalScore,
-  temporalObjectiveMetrics,
-  turnsForTemporalMode
+  scoredTurnsForTemporalMode,
+  simulationTurnsForTemporalMode,
+  temporalObjectiveMetrics
 } from '../js/temporal-objectives.js';
 import { optimizeCombatSequence } from '../js/turn-optimizer.js';
 import { combatPlanIsComplete } from '../js/final-result-validator.js';
@@ -45,10 +46,16 @@ function supportSpell({ id = 'setup', apCost = 8, power = 200 } = {}) {
   };
 }
 
-test('les objectifs temporels finaux ont une sémantique mathématique canonique', () => {
+test('les objectifs temporels séparent explicitement tours simulés et tours scorés', () => {
   const perTurn = { 1: 120, 2: 180, 3: 300 };
-  assert.deepEqual(turnsForTemporalMode('t1'), [1]);
-  assert.deepEqual(turnsForTemporalMode('constant'), [1, 2, 3]);
+  assert.deepEqual(simulationTurnsForTemporalMode('t1'), [1]);
+  assert.deepEqual(scoredTurnsForTemporalMode('t1'), [1]);
+  assert.deepEqual(simulationTurnsForTemporalMode('t2'), [1, 2]);
+  assert.deepEqual(scoredTurnsForTemporalMode('t2'), [2]);
+  assert.deepEqual(simulationTurnsForTemporalMode('t3'), [3]);
+  assert.deepEqual(scoredTurnsForTemporalMode('t3'), [3]);
+  assert.deepEqual(simulationTurnsForTemporalMode('constant'), [1, 2, 3]);
+  assert.deepEqual(scoredTurnsForTemporalMode('constant'), [1, 2, 3]);
   assert.equal(aggregateTemporalScore(perTurn, 't1'), 120);
   assert.equal(aggregateTemporalScore(perTurn, 't2'), 180);
   assert.equal(aggregateTemporalScore(perTurn, 't3'), 300);
