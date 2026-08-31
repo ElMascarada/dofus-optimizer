@@ -93,101 +93,26 @@ function preserveDofusOneSwapNeighborhood(states, retained, limit) {
   const reserveLimit = Math.min(72, Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
   if (reserveLimit <= 0) return retained.slice(0, targetCount);
 
-  const byCore = new Map();
-  for (const state of states) {
-    for (const core of oneSwapCoreKeys(state.items)) {
-      const bucket = byCore.get(core) || [];
-      bucket.push(state);
-      byCore.set(core, bucket);
-    }
-  }
-  for (const bucket of byCore.values()) {
-    bucket.sort((a, b) => b.objectiveScore - a.objectiveScore
-      || b.score - a.score
-      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  }
-
-  const seedLimit = Math.min(12, retained.length);
-  const byObjective = [...retained].sort((a, b) => b.objectiveScore - a.objectiveScore
-    || b.score - a.score
-    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  const byScore = [...retained].sort((a, b) => b.score - a.score
-    || b.objectiveScore - a.objectiveScore
-    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  const seeds = [];
-  const seedKeys = new Set();
-  for (let index = 0; seeds.length < seedLimit && index < retained.length; index++) {
-    for (const source of [byObjective, byScore, retained]) {
-      const state = source[index];
-      if (!state) continue;
-      const key = choiceKey(state.items);
-      if (!key || seedKeys.has(key)) continue;
-      seedKeys.add(key);
-      seeds.push(state);
-      if (seeds.length >= seedLimit) break;
-    }
-  }
-
   const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
-  const candidatesBySeed = new Map();
-  for (const seed of seeds) {
-    const seedKey = choiceKey(seed.items);
-    const representatives = [];
-    const representativeKeys = new Set();
-    for (const core of oneSwapCoreKeys(seed.items)) {
-      const alternative = (byCore.get(core) || []).find((state) => {
-        const key = choiceKey(state.items);
-        return key && key !== seedKey && !retainedKeys.has(key) && !representativeKeys.has(key);
-      });
-      if (!alternative) continue;
-      representativeKeys.add(choiceKey(alternative.items));
-      representatives.push(alternative);
-    }
-    representatives.sort((a, b) => b.objectiveScore - a.objectiveScore
-      || b.score - a.score
-      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-    candidatesBySeed.set(seedKey, representatives);
-  }
-
-  const selectedNeighbors = [];
-  const selectedNeighborKeys = new Set();
-  let round = 0;
-  while (selectedNeighbors.length < reserveLimit) {
-    let added = false;
-    for (const seed of seeds) {
-      const seedKey = choiceKey(seed.items);
-      const candidate = candidatesBySeed.get(seedKey)?.[round];
-      if (!candidate) continue;
-      const key = choiceKey(candidate.items);
-      if (!key || retainedKeys.has(key) || selectedNeighborKeys.has(key)) continue;
-      selectedNeighborKeys.add(key);
-      selectedNeighbors.push({ seedKey, state: candidate });
-      added = true;
-      if (selectedNeighbors.length >= reserveLimit) break;
-    }
-    if (!added) break;
-    round++;
-  }
-  if (!selectedNeighbors.length) return retained.slice(0, targetCount);
-
-  const primaryBudget = Math.max(seedKeys.size, targetCount - selectedNeighbors.length);
-  const keptPrimaryKeys = new Set(seedKeys);
-  let optionalPrimary = Math.max(0, primaryBudget - keptPrimaryKeys.size);
+  const retainedCores = new Set();
   for (const state of retained) {
-    const key = choiceKey(state.items);
-    if (keptPrimaryKeys.has(key)) continue;
-    if (optionalPrimary <= 0) break;
-    keptPrimaryKeys.add(key);
-    optionalPrimary--;
+    for (const core of oneSwapCoreKeys(state.items)) retainedCores.add(core);
   }
 
-  const neighborsBySeed = new Map();
-  for (const entry of selectedNeighbors) {
-    const bucket = neighborsBySeed.get(entry.seedKey) || [];
-    bucket.push(entry.state);
-    neighborsBySeed.set(entry.seedKey, bucket);
-  }
+  const neighbors = states
+    .filter((state) => {
+      const key = choiceKey(state.items);
+      if (!key || retainedKeys.has(key)) return false;
+      return oneSwapCoreKeys(state.items).some((core) => retainedCores.has(core));
+    })
+    .sort((a, b) => b.objectiveScore - a.objectiveScore
+      || b.score - a.score
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)))
+    .slice(0, reserveLimit);
 
+  if (!neighbors.length) return retained.slice(0, targetCount);
+
+  const primaryCount = Math.max(0, targetCount - neighbors.length);
   const output = [];
   const outputKeys = new Set();
   function push(state) {
@@ -198,12 +123,8 @@ function preserveDofusOneSwapNeighborhood(states, retained, limit) {
     output.push(state);
   }
 
-  for (const state of retained) {
-    const key = choiceKey(state.items);
-    if (!keptPrimaryKeys.has(key)) continue;
-    push(state);
-    for (const neighbor of neighborsBySeed.get(key) || []) push(neighbor);
-  }
+  for (const state of retained.slice(0, primaryCount)) push(state);
+  for (const state of neighbors) push(state);
   for (const state of retained) push(state);
   return output;
 }
