@@ -3,6 +3,10 @@ function score(build) {
   return Number.isFinite(value) ? value : 0;
 }
 
+function rankByScore(builds = []) {
+  return [...builds].sort((a, b) => score(b) - score(a));
+}
+
 function itemIds(build, { includeDofus = true } = {}) {
   return (build?.items || [])
     .filter((item) => includeDofus || item?.slot !== 'dofus')
@@ -37,7 +41,7 @@ export function prysmaraditeKey(build) {
 function uniqueByResultKey(builds = []) {
   const seen = new Set();
   const output = [];
-  for (const build of [...builds].sort((a, b) => score(b) - score(a))) {
+  for (const build of rankByScore(builds)) {
     const key = itemIds(build).sort().join('|');
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -93,8 +97,10 @@ function takeDifferentGear(builds, limit, requestedMinimum = 3) {
 export function diversifyBuilds(builds = [], mode = 'gear', limit = 10) {
   const ranked = uniqueByResultKey(builds);
   const cap = Math.max(1, Number(limit || 10));
-  if (mode === 'score') return ranked.slice(0, cap);
-  if (mode === 'prysma') return takePrysmaVariants(ranked, cap);
-  if (mode === 'gear-4') return takeDifferentGear(ranked, cap, 4);
-  return takeDifferentGear(ranked, cap, 3);
+  let selected;
+  if (mode === 'score') selected = ranked.slice(0, cap);
+  else if (mode === 'prysma') selected = takePrysmaVariants(ranked, cap);
+  else if (mode === 'gear-4') selected = takeDifferentGear(ranked, cap, 4);
+  else selected = takeDifferentGear(ranked, cap, 3);
+  return rankByScore(selected);
 }
