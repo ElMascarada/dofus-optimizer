@@ -78,41 +78,111 @@ function choiceKey(items) {
   return (items || []).map((item) => String(item.id)).sort().join('|');
 }
 
-function oneSwapCoreKeys(items = []) {
-  const ids = (items || []).map((item) => String(item.id)).sort();
-  if (ids.length < 2) return [];
-  return ids.map((_, removedIndex) => ids
-    .filter((__, index) => index !== removedIndex)
-    .join('|'));
+function parentChoiceKey(state) {
+  const items = state?.items || [];
+  if (items.length < 2) return '';
+  return choiceKey(items.slice(0, -1));
 }
 
-function preserveDofusOneSwapNeighborhood(states, retained, limit) {
+function parentChildRepresentatives(states, limit, context) {
+  if (!states.length || limit <= 0) return [];
+  const constraintKeys = new Set(positiveConstraintKeys(context.constraints));
+  const output = [];
+  const seen = new Set();
+
+  function push(state) {
+    if (!state || output.length >= limit) return;
+    const key = choiceKey(state.items);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  }
+
+  const byObjective = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore
+    || b.score - a.score
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const byProxy = [...states].sort((a, b) => b.score - a.score
+    || b.objectiveScore - a.objectiveScore
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  push(byObjective[0]);
+  push(byProxy[0]);
+
+  for (const key of context.policy.paretoKeys || []) {
+    if (output.length >= limit) break;
+    const specialist = [...states]
+      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints)
+        - retentionStat(a, key, constraintKeys, context.constraints)
+        || b.objectiveScore - a.objectiveScore
+        || b.score - a.score
+        || choiceKey(a.items).localeCompare(choiceKey(b.items)))[0];
+    push(specialist);
+  }
+
+  const diversified = keepChoiceDiversity(
+    states,
+    Math.min(states.length, limit),
+    context,
+    { preserveStructuralContributors: true }
+  );
+  for (const state of diversified) push(state);
+  for (const state of byProxy) push(state);
+  return output;
+}
+
+function preserveDofusParentChildDiversity(states, retained, limit, context) {
   const targetCount = Math.min(Math.max(0, Number(limit || 0)), retained.length);
   if (targetCount <= 1 || !states.length || !retained.length) return retained.slice(0, targetCount);
 
-  const reserveLimit = Math.min(72, Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
+  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
   if (reserveLimit <= 0) return retained.slice(0, targetCount);
 
   const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
-  const retainedCores = new Set();
+  const parentOrder = [];
+  const retainedParentKeys = new Set();
   for (const state of retained) {
-    for (const core of oneSwapCoreKeys(state.items)) retainedCores.add(core);
+    const parentKey = parentChoiceKey(state);
+    if (!parentKey || retainedParentKeys.has(parentKey)) continue;
+    retainedParentKeys.add(parentKey);
+    parentOrder.push(parentKey);
   }
 
-  const neighbors = states
-    .filter((state) => {
-      const key = choiceKey(state.items);
-      if (!key || retainedKeys.has(key)) return false;
-      return oneSwapCoreKeys(state.items).some((core) => retainedCores.has(core));
-    })
-    .sort((a, b) => b.objectiveScore - a.objectiveScore
-      || b.score - a.score
-      || choiceKey(a.items).localeCompare(choiceKey(b.items)))
-    .slice(0, reserveLimit);
+  const childrenByParent = new Map(parentOrder.map((key) => [key, []]));
+  for (const state of states) {
+    const group = childrenByParent.get(parentChoiceKey(state));
+    if (group) group.push(state);
+  }
 
-  if (!neighbors.length) return retained.slice(0, targetCount);
+  const lanes = parentOrder
+    .map((parentKey) => parentChildRepresentatives(
+      childrenByParent.get(parentKey) || [],
+      reserveLimit,
+      context
+    ).filter((state) => !retainedKeys.has(choiceKey(state.items))))
+    .filter((lane) => lane.length);
 
-  const primaryCount = Math.max(0, targetCount - neighbors.length);
+  const protectedStates = [];
+  const protectedKeys = new Set();
+  while (protectedStates.length < reserveLimit) {
+    let progressed = false;
+    for (const lane of lanes) {
+      while (lane.length) {
+        const state = lane.shift();
+        const key = choiceKey(state.items);
+        if (!key || protectedKeys.has(key)) continue;
+        protectedKeys.add(key);
+        protectedStates.push(state);
+        progressed = true;
+        break;
+      }
+      if (protectedStates.length >= reserveLimit) break;
+    }
+    if (!progressed) break;
+  }
+
+  if (!protectedStates.length) return retained.slice(0, targetCount);
+
+  const primaryCount = Math.max(0, targetCount - protectedStates.length);
   const output = [];
   const outputKeys = new Set();
   function push(state) {
@@ -124,7 +194,7 @@ function preserveDofusOneSwapNeighborhood(states, retained, limit) {
   }
 
   for (const state of retained.slice(0, primaryCount)) push(state);
-  for (const state of neighbors) push(state);
+  for (const state of protectedStates) push(state);
   for (const state of retained) push(state);
   return output;
 }
@@ -301,7 +371,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     }
     const primaryStates = keepChoiceDiversity(next, beamWidth, context);
     states = context.slot === 'dofus' && pick === 3
-      ? preserveDofusOneSwapNeighborhood(next, primaryStates, beamWidth)
+      ? preserveDofusParentChildDiversity(next, primaryStates, beamWidth, context)
       : primaryStates;
     if (!states.length) break;
   }
