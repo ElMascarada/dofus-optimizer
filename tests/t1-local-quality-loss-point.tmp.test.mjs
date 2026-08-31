@@ -10,8 +10,8 @@ const WINNER_NAMES = [
   'Dofus Ocre',
   'Dofus Pourpre',
   'Dofus Émeraude',
-  'Major Scholar',
-  'Major Fire Wrecker'
+  'Savant majeur',
+  'Ravageur Feu majeur'
 ];
 
 function key(ids = []) {
