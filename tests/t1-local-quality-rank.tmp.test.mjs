@@ -44,34 +44,50 @@ test('diagnostic: rank certified winner at first lossy Dofus beam', async () => 
     assert.equal(orderedWinnerIds.length, 6);
     const target4 = key(orderedWinnerIds.slice(0, 4));
     const parent3 = key(orderedWinnerIds.slice(0, 3));
-    let report = null;
+    let parentReport = null;
+    let childReport = null;
 
     buildGroupChoices(profiles, 6, {
       policy: prefiltered.policy, profile: prefiltered.policy.profile, constraints: request.constraints, turnMode: 't1', scenario, slot: 'dofus',
       onGroupChoicePreReduction({ pick, states }) {
+        if (pick === 3) {
+          const byObjective = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore || b.score - a.score || a.key.localeCompare(b.key));
+          const byProxy = [...states].sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore || a.key.localeCompare(b.key));
+          const target = states.find((state) => state.key === parent3);
+          assert.ok(target, 'winner parent must exist before beam-3 reduction');
+          parentReport = {
+            candidateCount: states.length,
+            targetObjectiveRank: byObjective.findIndex((state) => state.key === parent3) + 1,
+            targetProxyRank: byProxy.findIndex((state) => state.key === parent3) + 1,
+            parent3
+          };
+          return;
+        }
         if (pick !== 4) return;
         const byObjective = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore || b.score - a.score || a.key.localeCompare(b.key));
         const byProxy = [...states].sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore || a.key.localeCompare(b.key));
         const target = states.find((state) => state.key === target4);
         assert.ok(target, 'winner prefix must exist before beam-4 reduction');
-        const siblings = states.filter((state) => state.key.split('|').filter((id) => parent3.split('|').includes(id)).length === 3);
+        const parentIds = parent3.split('|');
+        const siblings = states.filter((state) => state.key.split('|').filter((id) => parentIds.includes(id)).length === 3);
         const siblingObjective = [...siblings].sort((a, b) => b.objectiveScore - a.objectiveScore || b.score - a.score || a.key.localeCompare(b.key));
         const siblingProxy = [...siblings].sort((a, b) => b.score - a.score || b.objectiveScore - a.objectiveScore || a.key.localeCompare(b.key));
-        report = {
+        childReport = {
           candidateCount: states.length,
           targetObjectiveRank: byObjective.findIndex((state) => state.key === target4) + 1,
           targetProxyRank: byProxy.findIndex((state) => state.key === target4) + 1,
           siblingCount: siblings.length,
           targetSiblingObjectiveRank: siblingObjective.findIndex((state) => state.key === target4) + 1,
           targetSiblingProxyRank: siblingProxy.findIndex((state) => state.key === target4) + 1,
-          topSiblingObjectiveKeys: siblingObjective.slice(0, 8).map((state) => state.key),
           target4,
           parent3
         };
       }
     });
-    assert.ok(report);
-    console.log(`T1_LOCAL_QUALITY_RANK=${JSON.stringify(report)}`);
+    assert.ok(parentReport);
+    assert.ok(childReport);
+    console.log(`T1_LOCAL_QUALITY_PARENT_RANK=${JSON.stringify(parentReport)}`);
+    console.log(`T1_LOCAL_QUALITY_RANK=${JSON.stringify(childReport)}`);
   } finally {
     try { unlinkSync(tempPath); } catch {}
   }
