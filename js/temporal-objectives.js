@@ -12,12 +12,24 @@ export function isTemporalMode(mode) {
   return TEMPORAL_MODE_SET.has(String(mode || ''));
 }
 
-export function turnsForTemporalMode(mode = 't1') {
+export function scoredTurnsForTemporalMode(mode = 't1') {
   const normalized = String(mode || 't1');
   if (normalized === 't1') return [1];
   if (normalized === 't2') return [2];
   if (normalized === 't3') return [3];
   return [...TEMPORAL_TURNS];
+}
+
+export function simulationTurnsForTemporalMode(mode = 't1') {
+  const normalized = String(mode || 't1');
+  if (normalized === 't2') return [1, 2];
+  return scoredTurnsForTemporalMode(normalized);
+}
+
+// Compatibility alias with scoring semantics only. New planning code must choose
+// explicitly between scoredTurnsForTemporalMode() and simulationTurnsForTemporalMode().
+export function turnsForTemporalMode(mode = 't1') {
+  return scoredTurnsForTemporalMode(mode);
 }
 
 export function constantTemporalScore(values = []) {
@@ -29,7 +41,7 @@ export function constantTemporalScore(values = []) {
 export function aggregateTemporalScore(perTurn = {}, mode = 'sum', activeTurns = null) {
   const turns = Array.isArray(activeTurns) && activeTurns.length
     ? activeTurns.map(Number).filter((turn) => TEMPORAL_TURNS.includes(turn))
-    : turnsForTemporalMode(mode);
+    : scoredTurnsForTemporalMode(mode);
   const values = turns.map((turn) => finiteDamage(perTurn?.[turn]));
   if (!values.length) return 0;
 
