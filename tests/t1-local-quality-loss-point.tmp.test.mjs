@@ -103,6 +103,12 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
     });
     assert.ok(finalTrace, 'final reduction trace must be captured');
 
+    const beam3 = beamTrace.find((entry) => entry.pick === 3);
+    const beam4 = beamTrace.find((entry) => entry.pick === 4);
+    assert.equal(beam3?.winnerPathPresent, true, 'certified winner parent must survive beam 3');
+    assert.equal(beam4?.winnerPathPresent, true, 'certified winner child must survive beam 4 after fix');
+    assert.ok((beam4?.retainedCount ?? Number.POSITIVE_INFINITY) <= 72, 'beam 4 retention must remain within beamWidth=72');
+
     const report = {
       winnerPresentAfterEachMultipickBeam: beamTrace,
       winnerPresentInFinalStates: finalTrace.candidateKeys.includes(winnerKey),
