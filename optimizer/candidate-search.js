@@ -378,7 +378,10 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         });
       }
     }
-    states = keepChoiceDiversity(next, beamWidth, context);
+    const primaryStates = keepChoiceDiversity(next, beamWidth, context);
+    states = context.slot === 'dofus' && pick === 3
+      ? preserveDofusOneSwapNeighborhood(next, primaryStates, beamWidth)
+      : primaryStates;
     if (!states.length) break;
   }
 
@@ -387,20 +390,10 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     softLimit,
     Math.min(states.length, profile.search.groupBucketLimit * profile.search.groupDiversityMultiplier)
   );
-  const primaryChoices = keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true });
-  const retainedChoices = context.slot === 'dofus'
-    ? preserveDofusOneSwapNeighborhood(states, primaryChoices, diversityLimit)
-    : primaryChoices;
-  if (typeof context.onGroupChoiceFinalReduction === 'function') {
-    context.onGroupChoiceFinalReduction({
-      candidateKeys: states.map((state) => choiceKey(state.items)),
-      primaryKeys: primaryChoices.map((state) => choiceKey(state.items)),
-      retainedKeys: retainedChoices.map((state) => choiceKey(state.items))
-    });
-  }
-  return retainedChoices.map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
-    items, score, objectiveScore, optimisticStats, bounded, prysma
-  }));
+  return keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true })
+    .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({
+      items, score, objectiveScore, optimisticStats, bounded, prysma
+    }));
 }
 
 export function staticBuildStats(items = [], setsById = {}) {
