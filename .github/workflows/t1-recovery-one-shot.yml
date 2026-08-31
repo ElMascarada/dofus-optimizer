@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   product-audit:
-    if: github.event.head_commit.message == 'audit: run T1 recovery product call'
+    if: github.event.head_commit.message == 'audit-run-t1-product-call'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
