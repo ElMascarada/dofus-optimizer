@@ -78,6 +78,201 @@ function choiceKey(items) {
   return (items || []).map((item) => String(item.id)).sort().join('|');
 }
 
+function parentChoiceKey(state) {
+  const items = state?.items || [];
+  if (items.length < 2) return '';
+  return choiceKey(items.slice(0, -1));
+}
+
+function parentChildRepresentatives(states, limit, context) {
+  if (!states.length || limit <= 0) return [];
+  const constraintKeys = new Set(positiveConstraintKeys(context.constraints));
+  const output = [];
+  const seen = new Set();
+
+  function push(state) {
+    if (!state || output.length >= limit) return;
+    const key = choiceKey(state.items);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  }
+
+  const byObjective = [...states].sort((a, b) => b.objectiveScore - a.objectiveScore
+    || b.score - a.score
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const byProxy = [...states].sort((a, b) => b.score - a.score
+    || b.objectiveScore - a.objectiveScore
+    || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  push(byObjective[0]);
+  push(byProxy[0]);
+
+  for (const key of context.policy.paretoKeys || []) {
+    if (output.length >= limit) break;
+    const specialist = [...states]
+      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints)
+        - retentionStat(a, key, constraintKeys, context.constraints)
+        || b.objectiveScore - a.objectiveScore
+        || b.score - a.score
+        || choiceKey(a.items).localeCompare(choiceKey(b.items)))[0];
+    push(specialist);
+  }
+
+  const diversified = keepChoiceDiversity(
+    states,
+    Math.min(states.length, limit),
+    context,
+    { preserveStructuralContributors: true }
+  );
+  for (const state of diversified) push(state);
+  for (const state of byProxy) push(state);
+  return output;
+}
+
+function preserveDofusParentChildDiversity(parentStates, states, retained, limit, context) {
+  const targetCount = Math.min(Math.max(0, Number(limit || 0)), retained.length);
+  if (targetCount <= 1 || !parentStates.length || !states.length || !retained.length) {
+    return retained.slice(0, targetCount);
+  }
+
+  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
+  if (reserveLimit <= 0) return retained.slice(0, targetCount);
+
+  const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
+  const parentOrder = [];
+  const seenParentKeys = new Set();
+  function pushParentKey(parentKey) {
+    if (!parentKey || seenParentKeys.has(parentKey)) return;
+    seenParentKeys.add(parentKey);
+    parentOrder.push(parentKey);
+  }
+
+  // Preserve the previous ordering for parents already represented by the
+  // primary reduction, then append any retained pick-3 parents whose complete
+  // child lineage disappeared. The parent set therefore comes from the real
+  // previous beam instead of only from surviving pick-4 children.
+  for (const state of retained) pushParentKey(parentChoiceKey(state));
+  for (const state of parentStates) pushParentKey(choiceKey(state.items));
+
+  const activeParentOrder = parentOrder;
+  const perLaneLimit = reserveLimit;
+  const childrenByParent = new Map(activeParentOrder.map((key) => [key, []]));
+  for (const state of states) {
+    const group = childrenByParent.get(parentChoiceKey(state));
+    if (group) group.push(state);
+  }
+
+  const laneEntries = activeParentOrder.map((parentKey) => {
+    const representatives = parentChildRepresentatives(
+      childrenByParent.get(parentKey) || [],
+      perLaneLimit,
+      context
+    );
+    return {
+      parentKey,
+      representatives,
+      lane: representatives.filter((state) => !retainedKeys.has(choiceKey(state.items)))
+    };
+  });
+
+  // The primary beam already rewards absolute child quality. The protected
+  // reserve instead evaluates each qualified representative by the opportunity
+  // it creates relative to its exact retained parent. Reuse the existing
+  // representative reducer on these marginal scores so the reserve stays
+  // deterministic and bounded without introducing rank or item-specific quotas.
+  const parentByKey = new Map(parentStates.map((state) => [choiceKey(state.items), state]));
+  const marginalPool = [];
+  const originalByKey = new Map();
+  const representativeKeys = new Set();
+  for (const entry of laneEntries) {
+    const parent = parentByKey.get(entry.parentKey);
+    if (!parent) continue;
+    for (const state of entry.lane) {
+      const key = choiceKey(state.items);
+      if (!key || representativeKeys.has(key)) continue;
+      representativeKeys.add(key);
+      originalByKey.set(key, state);
+      marginalPool.push({
+        ...state,
+        objectiveScore: Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0),
+        score: Number(state.score || 0) - Number(parent.score || 0)
+      });
+    }
+  }
+  marginalPool.sort((a, b) => choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const protectedStates = parentChildRepresentatives(marginalPool, reserveLimit, context)
+    .map((state) => originalByKey.get(choiceKey(state.items)))
+    .filter(Boolean);
+
+  let output;
+  if (!protectedStates.length) {
+    output = retained.slice(0, targetCount);
+  } else {
+    const primaryCount = Math.max(0, targetCount - protectedStates.length);
+    output = [];
+    const outputKeys = new Set();
+    function push(state) {
+      if (output.length >= targetCount) return;
+      const key = choiceKey(state.items);
+      if (!key || outputKeys.has(key)) return;
+      outputKeys.add(key);
+      output.push(state);
+    }
+
+    for (const state of retained.slice(0, primaryCount)) push(state);
+    for (const state of protectedStates) push(state);
+    for (const state of retained) push(state);
+  }
+
+  const traceParentKey = String(context.traceParentKey || '');
+  const traceChildKey = String(context.traceChildKey || '');
+  if (typeof context.onDofusParentChildTrace === 'function' && traceParentKey && traceChildKey) {
+    const oneBasedStateIndex = (list, targetKey) => {
+      const index = list.findIndex((state) => choiceKey(state.items) === targetKey);
+      return index >= 0 ? index + 1 : null;
+    };
+    const winnerPrimaryChildren = retained.filter((state) => parentChoiceKey(state) === traceParentKey);
+    const winnerSiblings = childrenByParent.get(traceParentKey) || [];
+    const winnerByObjective = [...winnerSiblings].sort((a, b) => b.objectiveScore - a.objectiveScore
+      || b.score - a.score
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    const winnerByProxy = [...winnerSiblings].sort((a, b) => b.score - a.score
+      || b.objectiveScore - a.objectiveScore
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    const winnerLaneEntry = laneEntries.find((entry) => entry.parentKey === traceParentKey);
+    const winnerRepresentatives = winnerLaneEntry?.representatives || [];
+    const representativeIndex = oneBasedStateIndex(winnerRepresentatives, traceChildKey);
+    const protectedIndex = oneBasedStateIndex(protectedStates, traceChildKey);
+    const parentOrderIndex = parentOrder.indexOf(traceParentKey);
+
+    context.onDofusParentChildTrace({
+      WINNER_PARENT_RETAINED_INDEX_AT_PICK3: oneBasedStateIndex(parentStates, traceParentKey),
+      PICK3_RETAINED_PARENT_COUNT: parentStates.length,
+      WINNER_PARENT_HAS_ANY_PRIMARY_CHILD_AT_PICK4: winnerPrimaryChildren.length > 0,
+      WINNER_PARENT_PRIMARY_CHILD_COUNT: winnerPrimaryChildren.length,
+      WINNER_PARENT_ORDER_IN_PARENT_LANES: parentOrderIndex >= 0 ? parentOrderIndex + 1 : null,
+      TOTAL_PARENT_LANES: parentOrder.length,
+      ACTIVE_PARENT_LANES: activeParentOrder.length,
+      RESERVE_LIMIT: reserveLimit,
+      PER_LANE_LIMIT: perLaneLimit,
+      WINNER_PARENT_LANE_ACTIVE: activeParentOrder.includes(traceParentKey),
+      WINNER_SIBLING_COUNT: winnerSiblings.length,
+      WINNER_SIBLING_OBJECTIVE_RANK: oneBasedStateIndex(winnerByObjective, traceChildKey),
+      WINNER_SIBLING_PROXY_RANK: oneBasedStateIndex(winnerByProxy, traceChildKey),
+      WINNER_CHILD_PRESENT_IN_PARENT_CHILD_REPRESENTATIVES: representativeIndex !== null,
+      WINNER_CHILD_REPRESENTATIVE_INDEX: representativeIndex,
+      WINNER_CHILD_ENTERED_PROTECTED_STATES: protectedIndex !== null,
+      WINNER_CHILD_PROTECTED_INDEX: protectedIndex,
+      WINNER_CHILD_PRESENT_IN_PRIMARY_STATES: retainedKeys.has(traceChildKey),
+      WINNER_CHILD_PRESENT_IN_FINAL_BEAM4: output.some((state) => choiceKey(state.items) === traceChildKey),
+      BEAM4_RETAINED_COUNT: output.length
+    });
+  }
+
+  return output;
+}
+
 function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
@@ -223,9 +418,10 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     bounded: true
   }];
   for (let pick = 0; pick < count; pick++) {
+    const parentStates = states;
     const next = [];
     const leftAfter = count - pick - 1;
-    for (const state of states) {
+    for (const state of parentStates) {
       const last = profiles.length - leftAfter;
       for (let index = state.next; index < last; index++) {
         const candidate = profiles[index];
@@ -248,7 +444,10 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
         });
       }
     }
-    states = keepChoiceDiversity(next, beamWidth, context);
+    const primaryStates = keepChoiceDiversity(next, beamWidth, context);
+    states = context.slot === 'dofus' && pick === 3
+      ? preserveDofusParentChildDiversity(parentStates, next, primaryStates, beamWidth, context)
+      : primaryStates;
     if (!states.length) break;
   }
 
