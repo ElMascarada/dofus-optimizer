@@ -28,9 +28,15 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
     beamNeedle,
     `    if (typeof context.onGroupChoiceBeam === 'function') {\n      context.onGroupChoiceBeam({\n        pick: pick + 1,\n        candidateKeys: states.map((state) => choiceKey(state.items))\n      });\n    }\n    if (!states.length) break;`
   );
+  const marginalTraceNeedle = `    context.onDofusParentChildTrace({\n      WINNER_PARENT_RETAINED_INDEX_AT_PICK3: oneBasedStateIndex(parentStates, traceParentKey),`;
+  assert.equal(instrumentedBeam.includes(marginalTraceNeedle), true, 'candidate-search marginal reserve trace shape changed');
+  const instrumentedMarginal = instrumentedBeam.replace(
+    marginalTraceNeedle,
+    `    const winnerMarginalState = marginalPool.find((state) => choiceKey(state.items) === traceChildKey) || null;\n    const winnerMarginalByObjective = [...marginalPool].sort((a, b) => b.objectiveScore - a.objectiveScore\n      || b.score - a.score\n      || choiceKey(a.items).localeCompare(choiceKey(b.items)));\n    const winnerMarginalByProxy = [...marginalPool].sort((a, b) => b.score - a.score\n      || b.objectiveScore - a.objectiveScore\n      || choiceKey(a.items).localeCompare(choiceKey(b.items)));\n    const marginalDiversified = keepChoiceDiversity(\n      marginalPool,\n      Math.min(marginalPool.length, reserveLimit),\n      context,\n      { preserveStructuralContributors: true }\n    );\n    const protectedParentCounts = new Map();\n    for (const state of protectedStates) {\n      const parentKey = parentChoiceKey(state);\n      protectedParentCounts.set(parentKey, (protectedParentCounts.get(parentKey) || 0) + 1);\n    }\n    const protectedAddedItemIds = new Set(protectedStates\n      .map((state) => {\n        const items = state.items || [];\n        return items.length ? String(items[items.length - 1]?.id || '') : '';\n      })\n      .filter(Boolean));\n    const marginalDiversifiedIndex = oneBasedStateIndex(marginalDiversified, traceChildKey);\n    const winnerMarginalObjectiveRank = oneBasedStateIndex(winnerMarginalByObjective, traceChildKey);\n    const winnerMarginalProxyRank = oneBasedStateIndex(winnerMarginalByProxy, traceChildKey);\n    const maxProtectedChildrenFromOneParent = protectedParentCounts.size\n      ? Math.max(...protectedParentCounts.values())\n      : 0;\n\n    context.onDofusParentChildTrace({\n      MARGINAL_POOL_COUNT: marginalPool.length,\n      WINNER_MARGINAL_OBJECTIVE_GAIN: winnerMarginalState?.objectiveScore ?? null,\n      WINNER_MARGINAL_PROXY_GAIN: winnerMarginalState?.score ?? null,\n      WINNER_MARGINAL_OBJECTIVE_RANK: winnerMarginalObjectiveRank,\n      WINNER_MARGINAL_PROXY_RANK: winnerMarginalProxyRank,\n      WINNER_PARENT_REPRESENTATIVE_COUNT: winnerRepresentatives.length,\n      WINNER_PRESENT_IN_MARGINAL_POOL: winnerMarginalState !== null,\n      WINNER_PRESENT_IN_MARGINAL_DIVERSIFIED: marginalDiversifiedIndex !== null,\n      WINNER_MARGINAL_DIVERSIFIED_INDEX: marginalDiversifiedIndex,\n      PROTECTED_STATE_COUNT: protectedStates.length,\n      PROTECTED_DISTINCT_PARENT_COUNT: protectedParentCounts.size,\n      WINNER_PARENT_PROTECTED_CHILD_COUNT: protectedParentCounts.get(traceParentKey) || 0,\n      MAX_PROTECTED_CHILDREN_FROM_ONE_PARENT: maxProtectedChildrenFromOneParent,\n      PROTECTED_DISTINCT_ADDED_ITEM_COUNT: protectedAddedItemIds.size,\n      WINNER_PARENT_RETAINED_INDEX_AT_PICK3: oneBasedStateIndex(parentStates, traceParentKey),`
+  );
   const finalNeedle = `  return keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true })\n    .map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({\n      items, score, objectiveScore, optimisticStats, bounded, prysma\n    }));`;
-  assert.equal(instrumentedBeam.includes(finalNeedle), true, 'candidate-search final reduction shape changed');
-  const instrumented = instrumentedBeam.replace(
+  assert.equal(instrumentedMarginal.includes(finalNeedle), true, 'candidate-search final reduction shape changed');
+  const instrumented = instrumentedMarginal.replace(
     finalNeedle,
     `  const tracedFinalChoices = keepChoiceDiversity(states, diversityLimit, context, { preserveStructuralContributors: true });\n  if (typeof context.onGroupChoiceFinalReduction === 'function') {\n    context.onGroupChoiceFinalReduction({\n      candidateKeys: states.map((state) => choiceKey(state.items)),\n      primaryKeys: tracedFinalChoices.map((state) => choiceKey(state.items))\n    });\n  }\n  return tracedFinalChoices.map(({ items, score, objectiveScore, optimisticStats, bounded, prysma }) => ({\n    items, score, objectiveScore, optimisticStats, bounded, prysma\n  }));`
   );
@@ -119,6 +125,20 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
       CONFIGURED_DOFUS_GROUP_BEAM_WIDTH: configuredDofusGroupBeamWidth
     };
     const traceFields = [
+      'MARGINAL_POOL_COUNT',
+      'WINNER_MARGINAL_OBJECTIVE_GAIN',
+      'WINNER_MARGINAL_PROXY_GAIN',
+      'WINNER_MARGINAL_OBJECTIVE_RANK',
+      'WINNER_MARGINAL_PROXY_RANK',
+      'WINNER_PARENT_REPRESENTATIVE_COUNT',
+      'WINNER_PRESENT_IN_MARGINAL_POOL',
+      'WINNER_PRESENT_IN_MARGINAL_DIVERSIFIED',
+      'WINNER_MARGINAL_DIVERSIFIED_INDEX',
+      'PROTECTED_STATE_COUNT',
+      'PROTECTED_DISTINCT_PARENT_COUNT',
+      'WINNER_PARENT_PROTECTED_CHILD_COUNT',
+      'MAX_PROTECTED_CHILDREN_FROM_ONE_PARENT',
+      'PROTECTED_DISTINCT_ADDED_ITEM_COUNT',
       'WINNER_PARENT_RETAINED_INDEX_AT_PICK3',
       'PICK3_RETAINED_PARENT_COUNT',
       'WINNER_PARENT_HAS_ANY_PRIMARY_CHILD_AT_PICK4',
