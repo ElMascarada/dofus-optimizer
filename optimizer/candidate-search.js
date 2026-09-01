@@ -176,22 +176,34 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
     };
   });
 
-  // All admissible representatives now compete globally for the same bounded
-  // reserve. Sorting by the stable choice key only neutralizes lane-order ties;
-  // the actual selection reuses the existing objective/proxy/Pareto/diversity
-  // representative primitive rather than introducing a new tuning constant.
-  const representativePool = [];
+  // The primary beam already rewards absolute child quality. The protected
+  // reserve instead evaluates each qualified representative by the opportunity
+  // it creates relative to its exact retained parent. Reuse the existing
+  // representative reducer on these marginal scores so the reserve stays
+  // deterministic and bounded without introducing rank or item-specific quotas.
+  const parentByKey = new Map(parentStates.map((state) => [choiceKey(state.items), state]));
+  const marginalPool = [];
+  const originalByKey = new Map();
   const representativeKeys = new Set();
   for (const entry of laneEntries) {
+    const parent = parentByKey.get(entry.parentKey);
+    if (!parent) continue;
     for (const state of entry.lane) {
       const key = choiceKey(state.items);
       if (!key || representativeKeys.has(key)) continue;
       representativeKeys.add(key);
-      representativePool.push(state);
+      originalByKey.set(key, state);
+      marginalPool.push({
+        ...state,
+        objectiveScore: Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0),
+        score: Number(state.score || 0) - Number(parent.score || 0)
+      });
     }
   }
-  representativePool.sort((a, b) => choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  const protectedStates = parentChildRepresentatives(representativePool, reserveLimit, context);
+  marginalPool.sort((a, b) => choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const protectedStates = parentChildRepresentatives(marginalPool, reserveLimit, context)
+    .map((state) => originalByKey.get(choiceKey(state.items)))
+    .filter(Boolean);
 
   let output;
   if (!protectedStates.length) {
