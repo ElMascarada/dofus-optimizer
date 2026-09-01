@@ -175,26 +175,23 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
       lane: representatives.filter((state) => !retainedKeys.has(choiceKey(state.items)))
     };
   });
-  const lanes = laneEntries.map((entry) => entry.lane).filter((lane) => lane.length);
 
-  const protectedStates = [];
-  const protectedKeys = new Set();
-  while (protectedStates.length < reserveLimit) {
-    let progressed = false;
-    for (const lane of lanes) {
-      while (lane.length) {
-        const state = lane.shift();
-        const key = choiceKey(state.items);
-        if (!key || protectedKeys.has(key)) continue;
-        protectedKeys.add(key);
-        protectedStates.push(state);
-        progressed = true;
-        break;
-      }
-      if (protectedStates.length >= reserveLimit) break;
+  // All admissible representatives now compete globally for the same bounded
+  // reserve. Sorting by the stable choice key only neutralizes lane-order ties;
+  // the actual selection reuses the existing objective/proxy/Pareto/diversity
+  // representative primitive rather than introducing a new tuning constant.
+  const representativePool = [];
+  const representativeKeys = new Set();
+  for (const entry of laneEntries) {
+    for (const state of entry.lane) {
+      const key = choiceKey(state.items);
+      if (!key || representativeKeys.has(key)) continue;
+      representativeKeys.add(key);
+      representativePool.push(state);
     }
-    if (!progressed) break;
   }
+  representativePool.sort((a, b) => choiceKey(a.items).localeCompare(choiceKey(b.items)));
+  const protectedStates = parentChildRepresentatives(representativePool, reserveLimit, context);
 
   let output;
   if (!protectedStates.length) {
