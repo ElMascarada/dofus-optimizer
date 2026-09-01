@@ -84,7 +84,10 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
       .map((profile) => String(profile.item.id));
     assert.equal(orderedWinnerIds.length, WINNER_NAMES.length, 'winner path must contain six ordered profiles');
 
+    const winnerParentKey = key(orderedWinnerIds.slice(0, 3));
+    const winnerChildKey = key(orderedWinnerIds.slice(0, 4));
     const beamTrace = [];
+    let parentChildTrace = null;
     let finalTrace = null;
     const choices = buildGroupChoices(dofusProfiles, 6, {
       policy: prefiltered.policy,
@@ -93,6 +96,11 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
       turnMode: 't1',
       scenario,
       slot: 'dofus',
+      traceParentKey: winnerParentKey,
+      traceChildKey: winnerChildKey,
+      onDofusParentChildTrace(trace) {
+        parentChildTrace = trace;
+      },
       onGroupChoiceBeam({ pick, candidateKeys }) {
         const prefixKey = key(orderedWinnerIds.slice(0, pick));
         beamTrace.push({ pick, winnerPathPresent: candidateKeys.includes(prefixKey), retainedCount: candidateKeys.length });
@@ -101,13 +109,47 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
         finalTrace = trace;
       }
     });
-    assert.ok(finalTrace, 'final reduction trace must be captured');
 
     const configuredDofusGroupBeamWidth = Number(prefiltered.policy.profile.search.dofusGroupBeamWidth);
-    assert.ok(Number.isFinite(configuredDofusGroupBeamWidth) && configuredDofusGroupBeamWidth > 0,
-      'configured Dofus group beam width must be a positive finite number');
     const beam3 = beamTrace.find((entry) => entry.pick === 3);
     const beam4 = beamTrace.find((entry) => entry.pick === 4);
+    const diagnosticTrace = {
+      ...(parentChildTrace || {}),
+      BEAM4_RETAINED_COUNT: beam4?.retainedCount ?? parentChildTrace?.BEAM4_RETAINED_COUNT ?? null,
+      CONFIGURED_DOFUS_GROUP_BEAM_WIDTH: configuredDofusGroupBeamWidth
+    };
+    const traceFields = [
+      'WINNER_PARENT_RETAINED_INDEX_AT_PICK3',
+      'PICK3_RETAINED_PARENT_COUNT',
+      'WINNER_PARENT_HAS_ANY_PRIMARY_CHILD_AT_PICK4',
+      'WINNER_PARENT_PRIMARY_CHILD_COUNT',
+      'WINNER_PARENT_ORDER_IN_PARENT_LANES',
+      'TOTAL_PARENT_LANES',
+      'ACTIVE_PARENT_LANES',
+      'RESERVE_LIMIT',
+      'PER_LANE_LIMIT',
+      'WINNER_PARENT_LANE_ACTIVE',
+      'WINNER_SIBLING_COUNT',
+      'WINNER_SIBLING_OBJECTIVE_RANK',
+      'WINNER_SIBLING_PROXY_RANK',
+      'WINNER_CHILD_PRESENT_IN_PARENT_CHILD_REPRESENTATIVES',
+      'WINNER_CHILD_REPRESENTATIVE_INDEX',
+      'WINNER_CHILD_ENTERED_PROTECTED_STATES',
+      'WINNER_CHILD_PROTECTED_INDEX',
+      'WINNER_CHILD_PRESENT_IN_PRIMARY_STATES',
+      'WINNER_CHILD_PRESENT_IN_FINAL_BEAM4',
+      'BEAM4_RETAINED_COUNT',
+      'CONFIGURED_DOFUS_GROUP_BEAM_WIDTH'
+    ];
+    for (const field of traceFields) {
+      const value = diagnosticTrace[field];
+      console.log(`${field}=${value === null || value === undefined ? 'NULL' : String(value)}`);
+    }
+    console.log(`T1_PARENT_LANE_TRACE=${JSON.stringify(diagnosticTrace)}`);
+
+    assert.ok(finalTrace, 'final reduction trace must be captured');
+    assert.ok(Number.isFinite(configuredDofusGroupBeamWidth) && configuredDofusGroupBeamWidth > 0,
+      'configured Dofus group beam width must be a positive finite number');
     assert.equal(beam3?.winnerPathPresent, true, 'certified winner parent must survive beam 3');
     assert.equal(beam4?.winnerPathPresent, true, 'certified winner child must survive beam 4 after fix');
     assert.ok((beam4?.retainedCount ?? Number.POSITIVE_INFINITY) <= configuredDofusGroupBeamWidth,

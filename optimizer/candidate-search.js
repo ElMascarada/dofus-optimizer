@@ -104,15 +104,7 @@ function parentChildRepresentatives(states, limit, context) {
   const byProxy = [...states].sort((a, b) => b.score - a.score
     || b.objectiveScore - a.objectiveScore
     || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-
-  // Keep a sublinear local objective band so a useful child does not need to be
-  // the single lane head. The depth scales with the sibling set instead of a
-  // product-, class-, or rank-specific constant.
-  const objectiveBand = Math.min(
-    byObjective.length,
-    Math.max(1, Math.ceil(Math.sqrt(byObjective.length * 2)))
-  );
-  for (let index = 0; index < objectiveBand; index++) push(byObjective[index]);
+  push(byObjective[0]);
   push(byProxy[0]);
 
   for (const key of context.policy.paretoKeys || []) {
@@ -144,54 +136,46 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
     return retained.slice(0, targetCount);
   }
 
-  // Reserve composition only: the beam width itself never grows. Half of the
-  // retained beam remains available to the normal global reduction while the
-  // other half can carry bounded parent->child exploration.
-  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 2)), targetCount - 1);
+  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
   if (reserveLimit <= 0) return retained.slice(0, targetCount);
 
   const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
-  const representedParentKeys = new Set(retained.map((state) => parentChoiceKey(state)).filter(Boolean));
   const parentOrder = [];
   const seenParentKeys = new Set();
-
-  function pushParent(state) {
-    const parentKey = choiceKey(state?.items || []);
+  function pushParentKey(parentKey) {
     if (!parentKey || seenParentKeys.has(parentKey)) return;
     seenParentKeys.add(parentKey);
     parentOrder.push(parentKey);
   }
 
-  // Parents whose entire lineage disappeared from the primary pick-4 reduction
-  // get first access to the bounded reserve. Crucially, this order comes from
-  // the actual retained pick-3 beam rather than reconstructed surviving children.
-  for (const state of parentStates) {
-    const parentKey = choiceKey(state.items);
-    if (!representedParentKeys.has(parentKey)) pushParent(state);
-  }
-  for (const state of parentStates) pushParent(state);
+  // Preserve the previous ordering for parents already represented by the
+  // primary reduction, then append any retained pick-3 parents whose complete
+  // child lineage disappeared. The parent set therefore comes from the real
+  // previous beam instead of only from surviving pick-4 children.
+  for (const state of retained) pushParentKey(parentChoiceKey(state));
+  for (const state of parentStates) pushParentKey(choiceKey(state.items));
 
-  const parentLaneLimit = Math.min(
-    parentOrder.length,
-    Math.max(1, Math.floor(Math.sqrt(reserveLimit)))
-  );
-  const activeParentOrder = parentOrder.slice(0, parentLaneLimit);
-  if (!activeParentOrder.length) return retained.slice(0, targetCount);
-  const perLaneLimit = Math.max(1, Math.ceil(reserveLimit / activeParentOrder.length));
-
+  const activeParentOrder = parentOrder;
+  const perLaneLimit = reserveLimit;
   const childrenByParent = new Map(activeParentOrder.map((key) => [key, []]));
   for (const state of states) {
     const group = childrenByParent.get(parentChoiceKey(state));
     if (group) group.push(state);
   }
 
-  const lanes = activeParentOrder
-    .map((parentKey) => parentChildRepresentatives(
+  const laneEntries = activeParentOrder.map((parentKey) => {
+    const representatives = parentChildRepresentatives(
       childrenByParent.get(parentKey) || [],
       perLaneLimit,
       context
-    ).filter((state) => !retainedKeys.has(choiceKey(state.items))))
-    .filter((lane) => lane.length);
+    );
+    return {
+      parentKey,
+      representatives,
+      lane: representatives.filter((state) => !retainedKeys.has(choiceKey(state.items)))
+    };
+  });
+  const lanes = laneEntries.map((entry) => entry.lane).filter((lane) => lane.length);
 
   const protectedStates = [];
   const protectedKeys = new Set();
@@ -212,22 +196,71 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
     if (!progressed) break;
   }
 
-  if (!protectedStates.length) return retained.slice(0, targetCount);
+  let output;
+  if (!protectedStates.length) {
+    output = retained.slice(0, targetCount);
+  } else {
+    const primaryCount = Math.max(0, targetCount - protectedStates.length);
+    output = [];
+    const outputKeys = new Set();
+    function push(state) {
+      if (output.length >= targetCount) return;
+      const key = choiceKey(state.items);
+      if (!key || outputKeys.has(key)) return;
+      outputKeys.add(key);
+      output.push(state);
+    }
 
-  const primaryCount = Math.max(0, targetCount - protectedStates.length);
-  const output = [];
-  const outputKeys = new Set();
-  function push(state) {
-    if (output.length >= targetCount) return;
-    const key = choiceKey(state.items);
-    if (!key || outputKeys.has(key)) return;
-    outputKeys.add(key);
-    output.push(state);
+    for (const state of retained.slice(0, primaryCount)) push(state);
+    for (const state of protectedStates) push(state);
+    for (const state of retained) push(state);
   }
 
-  for (const state of retained.slice(0, primaryCount)) push(state);
-  for (const state of protectedStates) push(state);
-  for (const state of retained) push(state);
+  const traceParentKey = String(context.traceParentKey || '');
+  const traceChildKey = String(context.traceChildKey || '');
+  if (typeof context.onDofusParentChildTrace === 'function' && traceParentKey && traceChildKey) {
+    const oneBasedStateIndex = (list, targetKey) => {
+      const index = list.findIndex((state) => choiceKey(state.items) === targetKey);
+      return index >= 0 ? index + 1 : null;
+    };
+    const winnerPrimaryChildren = retained.filter((state) => parentChoiceKey(state) === traceParentKey);
+    const winnerSiblings = childrenByParent.get(traceParentKey) || [];
+    const winnerByObjective = [...winnerSiblings].sort((a, b) => b.objectiveScore - a.objectiveScore
+      || b.score - a.score
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    const winnerByProxy = [...winnerSiblings].sort((a, b) => b.score - a.score
+      || b.objectiveScore - a.objectiveScore
+      || choiceKey(a.items).localeCompare(choiceKey(b.items)));
+    const winnerLaneEntry = laneEntries.find((entry) => entry.parentKey === traceParentKey);
+    const winnerRepresentatives = winnerLaneEntry?.representatives || [];
+    const representativeIndex = oneBasedStateIndex(winnerRepresentatives, traceChildKey);
+    const protectedIndex = oneBasedStateIndex(protectedStates, traceChildKey);
+    const parentOrderIndex = parentOrder.indexOf(traceParentKey);
+
+    context.onDofusParentChildTrace({
+      WINNER_PARENT_RETAINED_INDEX_AT_PICK3: oneBasedStateIndex(parentStates, traceParentKey),
+      PICK3_RETAINED_PARENT_COUNT: parentStates.length,
+      WINNER_PARENT_HAS_ANY_PRIMARY_CHILD_AT_PICK4: winnerPrimaryChildren.length > 0,
+      WINNER_PARENT_PRIMARY_CHILD_COUNT: winnerPrimaryChildren.length,
+      WINNER_PARENT_ORDER_IN_PARENT_LANES: parentOrderIndex >= 0 ? parentOrderIndex + 1 : null,
+      TOTAL_PARENT_LANES: parentOrder.length,
+      ACTIVE_PARENT_LANES: activeParentOrder.length,
+      RESERVE_LIMIT: reserveLimit,
+      PER_LANE_LIMIT: perLaneLimit,
+      WINNER_PARENT_LANE_ACTIVE: activeParentOrder.includes(traceParentKey),
+      WINNER_SIBLING_COUNT: winnerSiblings.length,
+      WINNER_SIBLING_OBJECTIVE_RANK: oneBasedStateIndex(winnerByObjective, traceChildKey),
+      WINNER_SIBLING_PROXY_RANK: oneBasedStateIndex(winnerByProxy, traceChildKey),
+      WINNER_CHILD_PRESENT_IN_PARENT_CHILD_REPRESENTATIVES: representativeIndex !== null,
+      WINNER_CHILD_REPRESENTATIVE_INDEX: representativeIndex,
+      WINNER_CHILD_ENTERED_PROTECTED_STATES: protectedIndex !== null,
+      WINNER_CHILD_PROTECTED_INDEX: protectedIndex,
+      WINNER_CHILD_PRESENT_IN_PRIMARY_STATES: retainedKeys.has(traceChildKey),
+      WINNER_CHILD_PRESENT_IN_FINAL_BEAM4: output.some((state) => choiceKey(state.items) === traceChildKey),
+      BEAM4_RETAINED_COUNT: output.length
+    });
+  }
+
   return output;
 }
 
