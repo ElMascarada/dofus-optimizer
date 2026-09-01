@@ -103,11 +103,15 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
     });
     assert.ok(finalTrace, 'final reduction trace must be captured');
 
+    const configuredDofusGroupBeamWidth = Number(prefiltered.policy.profile.search.dofusGroupBeamWidth);
+    assert.ok(Number.isFinite(configuredDofusGroupBeamWidth) && configuredDofusGroupBeamWidth > 0,
+      'configured Dofus group beam width must be a positive finite number');
     const beam3 = beamTrace.find((entry) => entry.pick === 3);
     const beam4 = beamTrace.find((entry) => entry.pick === 4);
     assert.equal(beam3?.winnerPathPresent, true, 'certified winner parent must survive beam 3');
     assert.equal(beam4?.winnerPathPresent, true, 'certified winner child must survive beam 4 after fix');
-    assert.ok((beam4?.retainedCount ?? Number.POSITIVE_INFINITY) <= 72, 'beam 4 retention must remain within beamWidth=72');
+    assert.ok((beam4?.retainedCount ?? Number.POSITIVE_INFINITY) <= configuredDofusGroupBeamWidth,
+      `beam 4 retention must remain within configured Dofus beam width=${configuredDofusGroupBeamWidth}`);
 
     const report = {
       winnerPresentAfterEachMultipickBeam: beamTrace,
@@ -117,6 +121,8 @@ test('diagnostic: trace certified T1 local winner through Dofus multipick beams 
       dofusChoicesBefore: finalTrace.primaryKeys.length,
       dofusChoicesAfter: choices.length,
       returnedChoices: choices.length,
+      configuredDofusGroupBeamWidth,
+      beam4RetainedCount: beam4?.retainedCount ?? null,
       winnerKey
     };
     console.log(`T1_LOCAL_QUALITY_TRACE=${JSON.stringify(report)}`);

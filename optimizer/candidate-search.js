@@ -104,7 +104,15 @@ function parentChildRepresentatives(states, limit, context) {
   const byProxy = [...states].sort((a, b) => b.score - a.score
     || b.objectiveScore - a.objectiveScore
     || choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  push(byObjective[0]);
+
+  // Keep a sublinear local objective band so a useful child does not need to be
+  // the single lane head. The depth scales with the sibling set instead of a
+  // product-, class-, or rank-specific constant.
+  const objectiveBand = Math.min(
+    byObjective.length,
+    Math.max(1, Math.ceil(Math.sqrt(byObjective.length * 2)))
+  );
+  for (let index = 0; index < objectiveBand; index++) push(byObjective[index]);
   push(byProxy[0]);
 
   for (const key of context.policy.paretoKeys || []) {
@@ -130,33 +138,57 @@ function parentChildRepresentatives(states, limit, context) {
   return output;
 }
 
-function preserveDofusParentChildDiversity(states, retained, limit, context) {
+function preserveDofusParentChildDiversity(parentStates, states, retained, limit, context) {
   const targetCount = Math.min(Math.max(0, Number(limit || 0)), retained.length);
-  if (targetCount <= 1 || !states.length || !retained.length) return retained.slice(0, targetCount);
+  if (targetCount <= 1 || !parentStates.length || !states.length || !retained.length) {
+    return retained.slice(0, targetCount);
+  }
 
-  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
+  // Reserve composition only: the beam width itself never grows. Half of the
+  // retained beam remains available to the normal global reduction while the
+  // other half can carry bounded parent->child exploration.
+  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 2)), targetCount - 1);
   if (reserveLimit <= 0) return retained.slice(0, targetCount);
 
   const retainedKeys = new Set(retained.map((state) => choiceKey(state.items)));
+  const representedParentKeys = new Set(retained.map((state) => parentChoiceKey(state)).filter(Boolean));
   const parentOrder = [];
-  const retainedParentKeys = new Set();
-  for (const state of retained) {
-    const parentKey = parentChoiceKey(state);
-    if (!parentKey || retainedParentKeys.has(parentKey)) continue;
-    retainedParentKeys.add(parentKey);
+  const seenParentKeys = new Set();
+
+  function pushParent(state) {
+    const parentKey = choiceKey(state?.items || []);
+    if (!parentKey || seenParentKeys.has(parentKey)) return;
+    seenParentKeys.add(parentKey);
     parentOrder.push(parentKey);
   }
 
-  const childrenByParent = new Map(parentOrder.map((key) => [key, []]));
+  // Parents whose entire lineage disappeared from the primary pick-4 reduction
+  // get first access to the bounded reserve. Crucially, this order comes from
+  // the actual retained pick-3 beam rather than reconstructed surviving children.
+  for (const state of parentStates) {
+    const parentKey = choiceKey(state.items);
+    if (!representedParentKeys.has(parentKey)) pushParent(state);
+  }
+  for (const state of parentStates) pushParent(state);
+
+  const parentLaneLimit = Math.min(
+    parentOrder.length,
+    Math.max(1, Math.floor(Math.sqrt(reserveLimit)))
+  );
+  const activeParentOrder = parentOrder.slice(0, parentLaneLimit);
+  if (!activeParentOrder.length) return retained.slice(0, targetCount);
+  const perLaneLimit = Math.max(1, Math.ceil(reserveLimit / activeParentOrder.length));
+
+  const childrenByParent = new Map(activeParentOrder.map((key) => [key, []]));
   for (const state of states) {
     const group = childrenByParent.get(parentChoiceKey(state));
     if (group) group.push(state);
   }
 
-  const lanes = parentOrder
+  const lanes = activeParentOrder
     .map((parentKey) => parentChildRepresentatives(
       childrenByParent.get(parentKey) || [],
-      reserveLimit,
+      perLaneLimit,
       context
     ).filter((state) => !retainedKeys.has(choiceKey(state.items))))
     .filter((lane) => lane.length);
@@ -344,9 +376,10 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     bounded: true
   }];
   for (let pick = 0; pick < count; pick++) {
+    const parentStates = states;
     const next = [];
     const leftAfter = count - pick - 1;
-    for (const state of states) {
+    for (const state of parentStates) {
       const last = profiles.length - leftAfter;
       for (let index = state.next; index < last; index++) {
         const candidate = profiles[index];
@@ -371,7 +404,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
     }
     const primaryStates = keepChoiceDiversity(next, beamWidth, context);
     states = context.slot === 'dofus' && pick === 3
-      ? preserveDofusParentChildDiversity(next, primaryStates, beamWidth, context)
+      ? preserveDofusParentChildDiversity(parentStates, next, primaryStates, beamWidth, context)
       : primaryStates;
     if (!states.length) break;
   }
