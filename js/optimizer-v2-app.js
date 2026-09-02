@@ -2,6 +2,7 @@ import { APP_VERSION, TURN_MODES } from './config.js';
 import { loadDofusData, loadSpellData } from './data-loader.js';
 import {
   createOptimizerV2Request,
+  formatOptimizerV2FmSummary,
   OPTIMIZER_V2_ELEMENTS
 } from './optimizer-v2-orchestrator.js';
 import { SearchMemoryRepository } from './search-memory/search-repository.js';
@@ -34,6 +35,12 @@ const CONSTRAINT_INPUTS = Object.freeze({
   resWater: 'optimizer-res-water',
   resAir: 'optimizer-res-air'
 });
+const FM_CONTROL_IDS = Object.freeze([
+  'optimizer-fm-exo-ap',
+  'optimizer-fm-exo-mp',
+  'optimizer-fm-spell-damage',
+  'optimizer-fm-crit-damage'
+]);
 
 let dataset = null;
 let spellData = null;
@@ -72,6 +79,15 @@ function readConstraints() {
   return Object.fromEntries(Object.entries(CONSTRAINT_INPUTS).map(([key, id]) => [key, readNumber(id)]));
 }
 
+function readFmPolicy() {
+  return {
+    exoAp: readNumber('optimizer-fm-exo-ap') === 1 ? 1 : 0,
+    exoMp: readNumber('optimizer-fm-exo-mp') === 1 ? 1 : 0,
+    spellDamagePct: readNumber('optimizer-fm-spell-damage') === 1 ? 3 : 0,
+    allowCritDamage: readNumber('optimizer-fm-crit-damage') === 1
+  };
+}
+
 function activeTurns(turnMode) {
   if (turnMode === 't1') return [1];
   if (turnMode === 't2') return [2];
@@ -108,6 +124,7 @@ function setSearchControlsDisabled(disabled) {
   elementSelect.disabled = disabled;
   turnSelect.disabled = disabled;
   for (const id of Object.values(CONSTRAINT_INPUTS)) document.getElementById(id).disabled = disabled;
+  for (const id of FM_CONTROL_IDS) document.getElementById(id).disabled = disabled;
 }
 
 function setSearchingUi(searching, label = '') {
@@ -152,7 +169,8 @@ function renderResults(builds = [], emptyText = 'Aucun stuff certifié ne satisf
   resultsRoot.setAttribute('aria-busy', 'false');
   if (displayedBuilds.length) {
     resultsRoot.dataset.state = 'results';
-    resultsRoot.innerHTML = displayedBuilds.map(renderBuild).join('');
+    const fmSummary = `<p class="hint optimizer-v2-fm-summary">${escapeHtml(formatOptimizerV2FmSummary(currentPayload?.fmPolicy))}</p>`;
+    resultsRoot.innerHTML = fmSummary + displayedBuilds.map(renderBuild).join('');
     return;
   }
   renderState('empty', 'Aucun stuff trouvé', emptyText);
@@ -298,6 +316,7 @@ async function runSearch(refinement = null) {
       classId: classSelect.value,
       element: elementSelect.value,
       constraints: readConstraints(),
+      fmPolicy: readFmPolicy(),
       turnMode: turnSelect.value,
       topN: 10,
       lockedItemsBySlot: refinement?.lockedItemsBySlot || {},
