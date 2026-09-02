@@ -2,6 +2,7 @@ import { BASE_CHARACTER } from '../config.js';
 import { evaluateCompleteBuild } from '../complete-build-evaluator.js';
 import { evaluateSpell } from '../spell-evaluator.js';
 import { spellsForBreed } from '../spell-selection.js';
+import { statsForTurnDetailed } from '../spells.js';
 import {
   canonicalT1ContextIsUsable,
   spellsForCanonicalT1Context
@@ -34,6 +35,28 @@ function currentCanonicalT1Context(build = {}, spellData = {}) {
   return { invalid: false, context, spells };
 }
 
+function t1DamageSources(items = [], staticStats = {}, scenario = {}) {
+  const labels = new Map();
+  for (const item of items) {
+    for (const passive of item?.passives || []) labels.set(String(passive.id), passive.label || passive.id);
+  }
+  const detail = statsForTurnDetailed(staticStats, items, 1, scenario);
+  return (detail.applied || [])
+    .map((entry) => {
+      const stats = { ...(entry.stats || {}) };
+      const damageStats = Object.fromEntries(Object.entries(stats).filter(([key, value]) => Number(value || 0) !== 0 && [
+        'finalDamagePct', 'spellDamagePct', 'weaponDamagePct', 'meleeDamagePct', 'rangedDamagePct',
+        'power', 'earth', 'fire', 'water', 'air', 'damage', 'critDamage', 'crit'
+      ].includes(key)));
+      return {
+        passiveId: entry.passiveId,
+        label: labels.get(String(entry.passiveId)) || entry.passiveId,
+        stats: damageStats
+      };
+    })
+    .filter((entry) => Object.keys(entry.stats).length > 0);
+}
+
 export function evaluateWorkshopBuild({
   build,
   dataset,
@@ -59,6 +82,7 @@ export function evaluateWorkshopBuild({
   }
 
   const selections = canonical ? [] : selectedSpellInputs(build, spellData);
+  const effectiveScenario = canonical?.context?.scenario || scenario;
   const evaluation = evaluateCompleteBuild({
     items,
     sets: dataset?.sets || [],
@@ -70,7 +94,7 @@ export function evaluateWorkshopBuild({
     // Workshop selections describe spells to evaluate, not a mandatory cast plan.
     // Executable rotations are solved later by analyzeWorkshopTurns().
     scenario: {
-      ...(canonical?.context?.scenario || scenario),
+      ...effectiveScenario,
       requiredApByTurn: {}
     }
   });
@@ -91,24 +115,29 @@ export function evaluateWorkshopBuild({
 
   const resolvedStats = canonical?.context?.stats || evaluation.result.stats;
   const resolvedStatsByTurn = canonical?.context?.effectiveStatsByTurn || evaluation.result.effectiveStatsByTurn || {};
-  const stats = resolvedStatsByTurn?.[1] || resolvedStats;
+  const effectiveT1Stats = resolvedStatsByTurn?.[1] || resolvedStats;
   const classSpells = build?.classId ? spellsForBreed(spellData, build.classId) : [];
   const spells = classSpells
     .filter((spell) => (spell.hits || []).length > 0)
-    .map((spell) => ({ spell, evaluation: evaluateSpell(spell, stats, { turn: 1 }) }))
-    .filter((entry) => entry.evaluation.supported);
+    .map((spell) => {
+      const staticEvaluation = evaluateSpell(spell, resolvedStats, { turn: 1 });
+      const t1Evaluation = evaluateSpell(spell, effectiveT1Stats, { turn: 1 });
+      return { spell, evaluation: t1Evaluation, staticEvaluation, t1Evaluation };
+    })
+    .filter((entry) => entry.staticEvaluation.supported || entry.t1Evaluation.supported);
 
   return {
     valid: true,
     reason: null,
     items,
     stats: resolvedStats,
-    effectiveStats: stats,
+    effectiveStats: effectiveT1Stats,
     effectiveStatsByTurn: resolvedStatsByTurn,
     activeSets: evaluation.result.activeSets || [],
     characteristics: evaluation.result.characteristics,
     fm: canonical?.context?.fm || evaluation.result.fm,
     spells,
+    t1DamageSources: t1DamageSources(items, resolvedStats, effectiveScenario),
     combatSpells: canonical?.spells || classSpells.filter((spell) => spell?.combatRelevant !== false),
     canonicalCombatContext: canonical?.context || null,
     combatEvaluationSource: canonical ? 'optimizer-canonical-t1' : 'workshop',

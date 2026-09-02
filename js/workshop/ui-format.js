@@ -1,14 +1,12 @@
-export const WORKSHOP_STAT_LABELS = Object.freeze({
-  ap: 'PA', mp: 'PM', range: 'PO', vit: 'Vitalité', initiative: 'Initiative',
-  earth: 'Terre', fire: 'Feu', water: 'Eau', air: 'Air', power: 'Puissance',
-  crit: 'Critique', critDamage: 'Do Crit', damage: 'Dommages',
-  damageEarth: 'Do Terre', damageFire: 'Do Feu', damageWater: 'Do Eau', damageAir: 'Do Air',
-  resNeutral: 'Rés. Neutre', resEarth: 'Rés. Terre', resFire: 'Rés. Feu', resWater: 'Rés. Eau', resAir: 'Rés. Air'
-});
+import { STAT_DEFINITION_BY_KEY } from '../stat-catalog.js';
+
+export const WORKSHOP_STAT_LABELS = Object.freeze(Object.fromEntries(
+  Object.entries(STAT_DEFINITION_BY_KEY).map(([key, definition]) => [key, definition.label])
+));
 
 export function escapeHtml(value = '') {
-  return String(value).replace(/[&<>'"]/g, (char) => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  return String(value).replace(/[&<>'\"]/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;'
   }[char]));
 }
 
@@ -21,5 +19,5 @@ export function statLabel(key) {
 }
 
 export function statSuffix(key) {
-  return key === 'crit' || key.startsWith('res') || key.endsWith('Pct') ? '%' : '';
+  return STAT_DEFINITION_BY_KEY[key]?.percent ? '%' : '';
 }

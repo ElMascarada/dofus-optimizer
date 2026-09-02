@@ -45,11 +45,14 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   resAir: 0
 });
 
+// Offensive FM must be an explicit product choice. Applying 3% spell damage
+// to every forgeable slot by default made the Workshop silently optimistic by
+// up to 27% on a complete build and broke Dofusbook parity.
 export const DEFAULT_FM = Object.freeze({
-  spellDamagePct: 3,
+  spellDamagePct: 0,
   allowCritDamage: true,
   critDamageAmount: 8,
-  structuralExos: false
+  structuralExos: true
 });
 
 export const TURN_MODES = [

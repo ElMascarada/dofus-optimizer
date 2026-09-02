@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="styles-workshop.css">
   <link rel="stylesheet" href="styles-optimizer-v2.css">
   <link rel="stylesheet" href="styles-v2-polish.css">
+  <link rel="stylesheet" href="styles-damage-truth.css">
 </head>
 <body>
   <header class="topbar">
@@ -75,7 +76,7 @@
               <label class="field">Résistance Eau %<input id="optimizer-res-water" type="number" min="0" max="50" step="1" value="0"></label>
               <label class="field">Résistance Air %<input id="optimizer-res-air" type="number" min="0" max="50" step="1" value="0"></label>
             </div>
-            <p class="hint">Laisse une valeur à 0 pour ne pas imposer cette contrainte.</p>
+            <p class="hint">Laisse une valeur à 0 pour ne pas imposer cette contrainte. Tu peux aussi cumuler des minima génériques ci-dessous.</p>
           </section>
 
           <section class="panel">
@@ -109,6 +110,7 @@
   <script src="js/runtime-meta.js?v=20260827-3"></script>
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
   <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
+  <script type="module" src="js/min-conditions-ui.js?v=20260902-1"></script>
   <script type="module" src="js/optimizer-v2-app.js?v=20260827-3"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260827-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>

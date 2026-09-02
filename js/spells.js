@@ -18,14 +18,35 @@ const FLAT_DAMAGE_STAT = {
   air: 'damageAir'
 };
 
-function midpoint(range) {
-  if (Array.isArray(range)) return (Number(range[0]) + Number(range[1])) / 2;
-  return Number(range || 0);
-}
-
 function rangeEndpoint(range, index) {
   if (Array.isArray(range)) return Number(range[index] ?? range[0] ?? 0);
   return Number(range || 0);
+}
+
+function dofusFloor(value) {
+  const number = Number(value || 0);
+  return Math.floor(number + Number.EPSILON * Math.max(1, Math.abs(number)));
+}
+
+export function dofusDamageEndpoint({
+  baseDamage = 0,
+  characteristic = 0,
+  flatDamage = 0,
+  criticalDamage = 0,
+  sourcePct = 0,
+  positionPct = 0,
+  finalPct = 0
+} = {}) {
+  const scaled = dofusFloor(Number(baseDamage || 0) * (1 + Number(characteristic || 0) / 100));
+  const withFlat = dofusFloor(scaled + Number(flatDamage || 0));
+  const withCritical = dofusFloor(withFlat + Number(criticalDamage || 0));
+  const afterSource = dofusFloor(withCritical * (1 + Number(sourcePct || 0) / 100));
+  const afterPosition = dofusFloor(afterSource * (1 + Number(positionPct || 0) / 100));
+  const final = dofusFloor(afterPosition * (1 + Number(finalPct || 0) / 100));
+  return {
+    damage: final,
+    stages: { scaled, withFlat, withCritical, afterSource, afterPosition, final }
+  };
 }
 
 function scenarioContextForTurn(scenario = {}, turn = 1) {
@@ -70,41 +91,6 @@ export function spellHitVariants(spell) {
   return [{ hits, element: elements.length === 1 ? elements[0] : null }];
 }
 
-function spellRawTotalsForHits(hits, stats) {
-  let nonCrit = 0;
-  let crit = 0;
-  for (const hit of hits || []) {
-    const element = hit.element || 'earth';
-    const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
-    const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
-    const normalBase = midpoint(hit.normal);
-    const critBase = midpoint(hit.crit ?? hit.normal);
-    nonCrit += normalBase * (1 + characteristic / 100) + flat;
-    crit += critBase * (1 + characteristic / 100) + flat + stat(stats, 'critDamage');
-  }
-  return { nonCrit, crit };
-}
-
-function spellRawRangesForHits(hits, stats) {
-  let normalMin = 0;
-  let normalMax = 0;
-  let critMin = 0;
-  let critMax = 0;
-  for (const hit of hits || []) {
-    const element = hit.element || 'earth';
-    const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
-    const flat = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
-    const multiplier = 1 + characteristic / 100;
-    const normal = hit.normal || [0, 0];
-    const critical = hit.crit ?? normal;
-    normalMin += rangeEndpoint(normal, 0) * multiplier + flat;
-    normalMax += rangeEndpoint(normal, 1) * multiplier + flat;
-    critMin += rangeEndpoint(critical, 0) * multiplier + flat + stat(stats, 'critDamage');
-    critMax += rangeEndpoint(critical, 1) * multiplier + flat + stat(stats, 'critDamage');
-  }
-  return { normal: [normalMin, normalMax], critical: [critMin, critMax] };
-}
-
 function damageSource(spell) {
   return spell?.damageSource === 'weapon' ? 'weapon' : 'spell';
 }
@@ -136,22 +122,58 @@ function damageMultiplierDetails(spell, stats, turn) {
   const multiplier = (1 + sourcePct / 100)
     * (1 + position.pct / 100)
     * (1 + finalPct / 100);
-  return { multiplier, distance: position.distance };
+  return { multiplier, sourcePct, positionPct: position.pct, finalPct, distance: position.distance };
+}
+
+function roundedRangesForHits(spell, hits, stats, turn) {
+  const details = damageMultiplierDetails(spell, stats, turn);
+  const ranges = { normal: [0, 0], critical: [0, 0] };
+
+  for (const hit of hits || []) {
+    const element = hit.element || 'earth';
+    const characteristic = stat(stats, ELEMENT_STAT[element]) + stat(stats, 'power');
+    const flatDamage = stat(stats, 'damage') + stat(stats, FLAT_DAMAGE_STAT[element]);
+    const critDamage = stat(stats, 'critDamage');
+    const normal = hit.normal || [0, 0];
+    const critical = hit.crit ?? normal;
+
+    for (const endpoint of [0, 1]) {
+      ranges.normal[endpoint] += dofusDamageEndpoint({
+        baseDamage: rangeEndpoint(normal, endpoint),
+        characteristic,
+        flatDamage,
+        sourcePct: details.sourcePct,
+        positionPct: details.positionPct,
+        finalPct: details.finalPct
+      }).damage;
+      ranges.critical[endpoint] += dofusDamageEndpoint({
+        baseDamage: rangeEndpoint(critical, endpoint),
+        characteristic,
+        flatDamage,
+        criticalDamage: critDamage,
+        sourcePct: details.sourcePct,
+        positionPct: details.positionPct,
+        finalPct: details.finalPct
+      }).damage;
+    }
+  }
+
+  return { ...ranges, ...details };
 }
 
 function breakdownForHits(spell, hits, stats, turn, element = null) {
   const critChance = Math.max(0, Math.min(1, (Number(spell.baseCritPct || 0) + stat(stats, 'crit')) / 100));
-  const totals = spellRawTotalsForHits(hits, stats);
-  const ranges = spellRawRangesForHits(hits, stats);
-  const { multiplier, distance } = damageMultiplierDetails(spell, stats, turn);
-  const expected = (totals.nonCrit * (1 - critChance) + totals.crit * critChance) * multiplier;
+  const ranges = roundedRangesForHits(spell, hits, stats, turn);
+  const nonCritAverage = (ranges.normal[0] + ranges.normal[1]) / 2;
+  const critAverage = (ranges.critical[0] + ranges.critical[1]) / 2;
+  const expected = nonCritAverage * (1 - critChance) + critAverage * critChance;
   return {
     expected,
     critChancePct: critChance * 100,
-    normal: ranges.normal.map((value) => value * multiplier),
-    critical: ranges.critical.map((value) => value * multiplier),
+    normal: ranges.normal,
+    critical: ranges.critical,
     element,
-    distance,
+    distance: ranges.distance,
     hits
   };
 }
@@ -173,11 +195,10 @@ export function spellExpectedDamage(spell, stats, turn = 1) {
 }
 
 export function spellDamageUpperBound(spell, stats, turn = 1) {
-  const { multiplier } = damageMultiplierDetails(spell, stats, turn);
   let best = 0;
   for (const variant of spellHitVariants(spell)) {
-    const totals = spellRawTotalsForHits(variant.hits, stats);
-    best = Math.max(best, Math.max(totals.nonCrit, totals.crit) * multiplier);
+    const ranges = roundedRangesForHits(spell, variant.hits, stats, turn);
+    best = Math.max(best, ranges.normal[1], ranges.critical[1]);
   }
   return best;
 }
@@ -299,9 +320,14 @@ export function estimateElementValues(selections = [], referenceStats = {}) {
   const baseline = evaluateObjective({ stats: referenceStats, selections, turnMode: 'sum' }).score;
   const values = {};
   for (const element of ['earth', 'fire', 'water', 'air']) {
-    const plusOne = { ...referenceStats, [element]: (referenceStats[element] || 0) + 1 };
-    const score = evaluateObjective({ stats: plusOne, selections, turnMode: 'sum' }).score;
-    values[element] = Math.max(0, score - baseline);
+    // Damage is intentionally integer-rounded at each Dofus layer. A one-point
+    // finite difference can therefore collapse to zero even for a useful
+    // characteristic. Sample a 100-point step so the search keeps a stable
+    // marginal signal without bypassing the exact damage formula.
+    const sample = 100;
+    const plusSample = { ...referenceStats, [element]: (referenceStats[element] || 0) + sample };
+    const score = evaluateObjective({ stats: plusSample, selections, turnMode: 'sum' }).score;
+    values[element] = Math.max(0, (score - baseline) / sample);
   }
   return values;
 }

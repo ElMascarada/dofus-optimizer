@@ -1,18 +1,12 @@
+import { WORKSHOP_STAT_SECTIONS, statDisplayValue } from '../stat-catalog.js';
 import { escapeHtml, formatNumber, statLabel, statSuffix } from './ui-format.js';
 import { analyzeWorkshopTurns } from './workshop-turn-analysis.js';
 
-const PRIMARY_STATS = [
-  'ap', 'mp', 'range', 'vit', 'initiative',
-  'earth', 'fire', 'water', 'air', 'power',
-  'crit', 'critDamage', 'damage'
-];
-const RESISTANCES = ['resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir'];
-
-function tiles(stats, keys) {
-  return keys.map((key) => `
-    <div class="workshop-stat">
-      <span>${escapeHtml(statLabel(key))}</span>
-      <b>${formatNumber(stats?.[key])}${statSuffix(key)}</b>
+function tiles(stats, definitions) {
+  return definitions.map((definition) => `
+    <div class="workshop-stat" data-stat-key="${escapeHtml(definition.key)}">
+      <span>${escapeHtml(definition.label)}</span>
+      <b>${formatNumber(statDisplayValue(stats, definition))}${definition.percent ? '%' : ''}</b>
     </div>`).join('');
 }
 
@@ -42,6 +36,12 @@ function turnIndicators(evaluation) {
     </div>`;
 }
 
+function statSections(stats) {
+  return WORKSHOP_STAT_SECTIONS.map((section) => `
+    <h4>${escapeHtml(section.label)}</h4>
+    <div class="workshop-stat-grid${section.id === 'resistances' ? ' workshop-res-grid' : ''}" data-stat-section="${escapeHtml(section.id)}">${tiles(stats, section.stats)}</div>`).join('');
+}
+
 export function renderStatsPanel(root, evaluation) {
   if (!evaluation?.valid) {
     const message = evaluation?.reason === 'item-condition'
@@ -63,10 +63,8 @@ export function renderStatsPanel(root, evaluation) {
   root.innerHTML = `
     <div class="workshop-panel-heading"><div><span class="eyebrow">STATS LIVE</span><h3>Statistiques</h3></div><span class="workshop-speed" title="Temps de recalcul du build">${formatNumber(evaluation.recalculationMs, 2)} ms</span></div>
     ${turnIndicators(evaluation)}
-    <h4>Statistiques du build</h4>
-    <div class="workshop-stat-grid">${tiles(evaluation.stats, PRIMARY_STATS)}</div>
-    <h4>Résistances</h4>
-    <div class="workshop-stat-grid workshop-res-grid">${tiles(evaluation.stats, RESISTANCES)}</div>
+    <p class="hint">Les statistiques ci-dessous décrivent le build statique. Les bonus temporels sont exposés séparément dans le panneau Sorts.</p>
+    ${statSections(evaluation.stats)}
     <h4>Panoplies actives</h4>
     <div class="workshop-set-list">${sets}</div>`;
 }
