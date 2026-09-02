@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluateObjective, evaluateObjectiveUpperBound, evaluateTurnConstraints, requiredApForTurn, spellExpectedDamage } from '../js/spells.js';
 
-const spell = { baseCritPct: 0, distance: 'melee', hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }] };
+const spell = { baseCritPct: 0, distanceOptions: ['melee'], hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }] };
 
 test('100 earth doubles a 100 base hit before final modifiers', () => {
   assert.equal(spellExpectedDamage(spell, { earth: 100 }), 200);
@@ -29,9 +29,9 @@ test('Nébuleux-style temporal passive changes T1/T2/T3 damage at the final-dama
   assert.equal(result.score, 330);
 });
 
-test('final damage is applied after spell damage while melee percentage is ignored for spell scoring', () => {
+test('spell, melee and final damage are separate multiplicative Dofus buckets', () => {
   const damage = spellExpectedDamage(spell, { spellDamagePct: 10, meleeDamagePct: 10, finalDamagePct: 20 }, 1);
-  assert.equal(damage, 132);
+  assert.equal(damage, 145);
 });
 
 test('spell damage applies to spells but weapon damage does not', () => {
@@ -55,7 +55,7 @@ test('scenario can vary passive context independently on T1 T2 T3', () => {
     turnMode: 'sum',
     scenario: { turns: { 1: { attackedSinceLastTurn: false }, 2: { attackedSinceLastTurn: true }, 3: { attackedSinceLastTurn: false } } }
   });
-  assert.deepEqual(result.perTurn, { 1: 110.00000000000001, 2: 100, 3: 110.00000000000001 });
+  assert.deepEqual(result.perTurn, { 1: 110, 2: 100, 3: 110 });
   assert.deepEqual(result.unresolvedPassiveContexts, []);
 });
 
@@ -140,7 +140,7 @@ test('spell casts compute and enforce their real AP requirement per turn', () =>
 });
 
 test('branch-and-bound objective upper bound never falls below an achievable mixed-crit objective', () => {
-  const mixedSpell = { baseCritPct: 35, distance: 'ranged', hits: [{ element: 'fire', normal: [80, 90], crit: [105, 115] }] };
+  const mixedSpell = { baseCritPct: 35, distanceOptions: ['ranged'], hits: [{ element: 'fire', normal: [80, 90], crit: [105, 115] }] };
   const selection = { enabled: true, weight: 1.4, spell: mixedSpell, casts: { 1: 2, 2: 1, 3: 3 } };
   const stats = { fire: 420, power: 180, crit: 28, critDamage: 35, spellDamagePct: 12, rangedDamagePct: 8, finalDamagePct: 7 };
   for (const mode of ['t1', 't2', 't3', 'sum', 'average', 'min']) {

@@ -1,4 +1,6 @@
 import { DEFAULT_FM, TURN_MODES } from './config.js';
+import { activeMinimumConstraints } from './min-conditions.js';
+import { MIN_CONDITION_KEYS } from './stat-catalog.js';
 import { combatSpellsForElement } from './spell-selection.js';
 
 export const OPTIMIZER_V2_ELEMENTS = Object.freeze([
@@ -9,17 +11,7 @@ export const OPTIMIZER_V2_ELEMENTS = Object.freeze([
   ['multi', 'Multi']
 ]);
 
-export const OPTIMIZER_V2_CONSTRAINT_KEYS = Object.freeze([
-  'ap',
-  'mp',
-  'range',
-  'vit',
-  'initiative',
-  'resEarth',
-  'resFire',
-  'resWater',
-  'resAir'
-]);
+export const OPTIMIZER_V2_CONSTRAINT_KEYS = Object.freeze([...MIN_CONDITION_KEYS]);
 
 const ELEMENT_IDS = new Set(OPTIMIZER_V2_ELEMENTS.map(([id]) => id));
 const TURN_MODE_IDS = new Set(TURN_MODES.map(([id]) => id));
@@ -41,8 +33,9 @@ function normalizeLockedItemsBySlot(value = {}) {
 }
 
 export function normalizeOptimizerV2Constraints(constraints = {}) {
+  const withGenericMinimums = activeMinimumConstraints(constraints);
   return Object.fromEntries(
-    OPTIMIZER_V2_CONSTRAINT_KEYS.map((key) => [key, nonNegativeNumber(constraints?.[key])])
+    OPTIMIZER_V2_CONSTRAINT_KEYS.map((key) => [key, nonNegativeNumber(withGenericMinimums?.[key])])
   );
 }
 

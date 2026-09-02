@@ -1,4 +1,4 @@
-import { escapeHtml, formatNumber } from './ui-format.js';
+import { escapeHtml, formatNumber, statLabel, statSuffix } from './ui-format.js';
 import { analyzeWorkshopTurns } from './workshop-turn-analysis.js';
 
 function rangeText(range = [0, 0]) {
@@ -25,6 +25,26 @@ function rotationRows(evaluation) {
     <p class="hint">La séquence conserve buffs, états, charges et cooldowns entre les tours. Les indicateurs T1/T2/T3 proviennent de cette même rotation cohérente.</p>`;
 }
 
+function sourceText(source = {}) {
+  const entries = Object.entries(source.stats || {});
+  if (entries.length === 1 && entries[0][0] === 'finalDamagePct') {
+    const amount = Number(entries[0][1] || 0);
+    const prefix = amount > 0 ? '+' : '';
+    return `${prefix}${formatNumber(amount, 0)}% ${escapeHtml(source.label || source.passiveId)}`;
+  }
+  const fragments = entries.map(([key, value]) => {
+    const amount = Number(value || 0);
+    const prefix = amount > 0 ? '+' : '';
+    return `${prefix}${formatNumber(amount, 0)}${statSuffix(key)} ${escapeHtml(statLabel(key))}`;
+  });
+  return fragments.length ? `${fragments.join(', ')} · ${escapeHtml(source.label || source.passiveId)}` : '';
+}
+
+function t1Sources(evaluation) {
+  const sources = (evaluation.t1DamageSources || []).map(sourceText).filter(Boolean);
+  return sources.length ? `<small>Actif T1 : ${sources.join(' · ')}</small>` : '<small>Aucun bonus de dégâts temporel actif.</small>';
+}
+
 export function renderSpellPanel(root, evaluation, classId) {
   if (!classId) {
     root.innerHTML = '<div class="ui-state-inline" data-state="empty">Choisis une classe pour afficher les sorts offensifs supportés et leurs dégâts exacts.</div>';
@@ -35,13 +55,16 @@ export function renderSpellPanel(root, evaluation, classId) {
     return;
   }
 
-  const rows = (evaluation.spells || []).map(({ spell, evaluation: result }) => `
-    <article class="workshop-spell-row">
-      <div class="workshop-spell-name"><strong>${escapeHtml(spell.name)}</strong><small>${formatNumber(spell.apCost, 0)} PA</small></div>
-      <div><span>Normal</span><b>${rangeText(result.normalDamage)}</b></div>
-      <div><span>Critique</span><b>${rangeText(result.criticalDamage)}</b></div>
-      <div><span>Chance crit.</span><b>${formatNumber(result.critChancePct, 1)}%</b></div>
-    </article>`).join('');
+  const rows = (evaluation.spells || []).map(({ spell, staticEvaluation, t1Evaluation, evaluation: legacy }) => {
+    const staticResult = staticEvaluation || legacy;
+    const t1Result = t1Evaluation || legacy;
+    return `
+      <article class="workshop-spell-row" data-spell-truth="static-t1">
+        <div class="workshop-spell-name"><strong>${escapeHtml(spell.name)}</strong><small>${formatNumber(spell.apCost, 0)} PA</small></div>
+        <div><span>STATIQUE · Normal</span><b>${rangeText(staticResult.normalDamage)}</b><small>Crit ${rangeText(staticResult.criticalDamage)} · ${formatNumber(staticResult.critChancePct, 1)}%</small></div>
+        <div><span>T1 EFFECTIF · Normal</span><b>${rangeText(t1Result.normalDamage)}</b><small>Crit ${rangeText(t1Result.criticalDamage)} · ${formatNumber(t1Result.critChancePct, 1)}%</small>${t1Sources(evaluation)}</div>
+      </article>`;
+  }).join('');
 
   root.innerHTML = `${rotationRows(evaluation)}${rows || '<div class="ui-state-inline" data-state="empty">Aucun sort offensif supporté pour cette classe.</div>'}`;
 }

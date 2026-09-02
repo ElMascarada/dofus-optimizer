@@ -1,0 +1,57 @@
+.optimizer-min-condition-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(110px, .7fr);
+  gap: .65rem;
+  margin-top: .8rem;
+  padding-top: .8rem;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, .12));
+}
+
+.optimizer-min-condition-builder .secondary {
+  grid-column: 1 / -1;
+  min-height: 2.6rem;
+}
+
+.optimizer-min-condition-list {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem;
+  min-height: 1.8rem;
+  align-items: center;
+}
+
+.optimizer-min-condition-list .pill {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+}
+
+.optimizer-min-condition-list button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  opacity: .72;
+}
+
+.workshop-spell-row[data-spell-truth="static-t1"] > div:not(.workshop-spell-name) {
+  min-width: 0;
+}
+
+.workshop-spell-row[data-spell-truth="static-t1"] small {
+  display: block;
+  margin-top: .15rem;
+}
+
+.workshop-stat-grid[data-stat-section="offense"],
+.workshop-stat-grid[data-stat-section="resistances"] {
+  align-items: stretch;
+}
+
+@media (max-width: 620px) {
+  .optimizer-min-condition-builder {
+    grid-template-columns: 1fr;
+  }
+}

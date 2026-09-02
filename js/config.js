@@ -45,6 +45,10 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   resAir: 0
 });
 
+// Offensive FM remains part of the optimizer's default damage-maximization
+// policy. The product must expose the resulting stats instead of hiding them.
+// Structural AP/MP exos stay disabled here because BASE_CHARACTER already
+// includes the usual +1 AP / +1 MP structural baseline.
 export const DEFAULT_FM = Object.freeze({
   spellDamagePct: 3,
   allowCritDamage: true,
