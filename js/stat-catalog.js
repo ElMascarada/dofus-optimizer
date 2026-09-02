@@ -3,7 +3,7 @@ export const WORKSHOP_STAT_SECTIONS = Object.freeze([
     id: 'resources',
     label: 'Ressources / mobilité',
     stats: [
-      { key: 'hp', sourceKey: 'vit', label: 'PV' },
+      { key: 'vit', label: 'PV' },
       { key: 'ap', label: 'PA' },
       { key: 'mp', label: 'PM' },
       { key: 'range', label: 'PO' },
@@ -14,7 +14,6 @@ export const WORKSHOP_STAT_SECTIONS = Object.freeze([
     id: 'characteristics',
     label: 'Caractéristiques',
     stats: [
-      { key: 'vit', label: 'Vitalité' },
       { key: 'wisdom', label: 'Sagesse' },
       { key: 'earth', label: 'Force' },
       { key: 'fire', label: 'Intelligence' },
@@ -86,18 +85,15 @@ export const STAT_DEFINITION_BY_KEY = Object.freeze(
 );
 
 export const MIN_CONDITION_STATS = Object.freeze(
-  STAT_DEFINITIONS
-    .filter((definition) => definition.key !== 'hp')
-    .map((definition) => Object.freeze({
-      key: definition.key,
-      label: definition.label,
-      percent: Boolean(definition.percent)
-    }))
+  STAT_DEFINITIONS.map((definition) => Object.freeze({
+    key: definition.key,
+    label: definition.label,
+    percent: Boolean(definition.percent)
+  }))
 );
 
 export const MIN_CONDITION_KEYS = Object.freeze(MIN_CONDITION_STATS.map(({ key }) => key));
 
 export function statDisplayValue(stats = {}, definition = {}) {
-  const key = definition.sourceKey || definition.key;
-  return Number(stats?.[key] || 0);
+  return Number(stats?.[definition.key] || 0);
 }

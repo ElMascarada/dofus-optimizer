@@ -45,14 +45,15 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   resAir: 0
 });
 
-// Offensive FM must be an explicit product choice. Applying 3% spell damage
-// to every forgeable slot by default made the Workshop silently optimistic by
-// up to 27% on a complete build and broke Dofusbook parity.
+// Offensive FM remains part of the optimizer's default damage-maximization
+// policy. The product must expose the resulting stats instead of hiding them.
+// Structural AP/MP exos stay disabled here because BASE_CHARACTER already
+// includes the usual +1 AP / +1 MP structural baseline.
 export const DEFAULT_FM = Object.freeze({
-  spellDamagePct: 0,
+  spellDamagePct: 3,
   allowCritDamage: true,
   critDamageAmount: 8,
-  structuralExos: true
+  structuralExos: false
 });
 
 export const TURN_MODES = [

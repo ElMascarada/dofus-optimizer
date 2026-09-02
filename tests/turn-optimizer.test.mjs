@@ -199,7 +199,7 @@ test('temporary melee damage only boosts spells that can be cast in melee', () =
   assert.equal(Math.round(result.totalDamage), 150);
 });
 
-test('spell, melee and final damage bonuses multiply instead of adding', () => {
+test('spell, melee and final damage bonuses stay multiplicative with Dofus intermediate floors', () => {
   const melee = damageSpell({ id: 'melee', apCost: 5, base: 100, maxCastPerTurn: 1, distanceOptions: ['melee'] });
   const result = optimizeCombatSequence({
     baseStats: {
@@ -214,7 +214,7 @@ test('spell, melee and final damage bonuses multiply instead of adding', () => {
     objective: { turns: 1 }
   });
 
-  assert.equal(Math.round(result.totalDamage * 10) / 10, 171.6);
+  assert.equal(result.totalDamage, 171);
   assert.equal(result.sequence[0].distance, 'melee');
 });
 

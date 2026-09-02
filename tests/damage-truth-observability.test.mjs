@@ -7,7 +7,8 @@ import { passiveDefinitionForItem } from '../js/dofus-passives.js';
 import {
   MIN_CONDITION_KEYS,
   MIN_CONDITION_STATS,
-  WORKSHOP_STAT_SECTIONS
+  WORKSHOP_STAT_SECTIONS,
+  statDisplayValue
 } from '../js/stat-catalog.js';
 import {
   addMinCondition,
@@ -126,12 +127,16 @@ test('A6 — les dégâts statiques et T1 effectifs restent deux vérités disti
   assert.notEqual(staticDamage, effective);
 });
 
-test('A7 — cas canonique Colère: suppression du +27% FM caché explique la surévaluation', () => {
-  assert.equal(DEFAULT_FM.spellDamagePct, 0, 'aucun % Do Sorts synthétique ne doit être injecté silencieusement');
+test('A7 — cas canonique Colère: la FM automatique +27% reste distincte et non cachée', () => {
+  assert.equal(DEFAULT_FM.spellDamagePct, 3, 'la politique FM offensive par défaut reste à +3% Do Sorts par slot éligible');
+  assert.equal(DEFAULT_FM.structuralExos, false, 'les exos structurels restent intégrés à BASE_CHARACTER et non à la FM');
+  const automaticSpellDamagePct = DEFAULT_FM.spellDamagePct * 9;
+  assert.equal(automaticSpellDamagePct, 27);
+
   const staticBreakdown = spellDamageBreakdown(COLERE, CANONICAL_STATS);
   const t1Stats = statsForTurn(CANONICAL_STATS, [NEBULOUS, PRYNYANG], 1);
   const t1Breakdown = spellDamageBreakdown(COLERE, t1Stats);
-  const hiddenFmBreakdown = spellDamageBreakdown(COLERE, { ...t1Stats, spellDamagePct: 27 });
+  const automaticFmBreakdown = spellDamageBreakdown(COLERE, { ...t1Stats, spellDamagePct: automaticSpellDamagePct });
 
   assert.deepEqual(staticBreakdown.normal, [1496, 1829]);
   assert.deepEqual(staticBreakdown.critical, [2094, 2496]);
@@ -139,8 +144,8 @@ test('A7 — cas canonique Colère: suppression du +27% FM caché explique la su
   assert.deepEqual(t1Breakdown.normal, [1944, 2377]);
   assert.ok(Math.abs(t1Breakdown.critical[0] - 2721) <= 1);
   assert.ok(Math.abs(t1Breakdown.critical[1] - 3243) <= 1);
-  assert.deepEqual(hiddenFmBreakdown.normal, [2470, 3019]);
-  assert.deepEqual(hiddenFmBreakdown.critical, [3456, 4119]);
+  assert.deepEqual(automaticFmBreakdown.normal, [2470, 3019]);
+  assert.deepEqual(automaticFmBreakdown.critical, [3456, 4119]);
 });
 
 test('B8 — le panneau de droite expose toutes les stats offensives importantes', () => {
@@ -150,6 +155,8 @@ test('B8 — le panneau de droite expose toutes les stats offensives importantes
   for (const key of ['crit', 'critDamage', 'damage', 'damageNeutral', 'damageEarth', 'damageFire', 'damageWater', 'damageAir', 'spellDamagePct', 'weaponDamagePct', 'meleeDamagePct', 'rangedDamagePct', 'finalDamagePct']) {
     assert.ok(keys.has(key), `missing offense stat ${key}`);
   }
+  const spellDamage = offense.stats.find(({ key }) => key === 'spellDamagePct');
+  assert.equal(statDisplayValue({ spellDamagePct: 27 }, spellDamage), 27, 'une FM auto +27% doit être visible comme % Do Sorts = 27');
 });
 
 test('B9 — le panneau de droite expose les stats défensives et de mobilité importantes', () => {
@@ -244,7 +251,7 @@ test('C18 — normalisation et résultat des minima sont déterministes', () => 
   setActiveMinConditions([]);
 });
 
-test('UI — statique/T1 et builder générique sont réellement branchés dans les surfaces produit', async () => {
+test('UI — statique/T1, PV et builder générique sont réellement branchés dans les surfaces produit', async () => {
   const [spellPanel, statsPanel, index, minUi] = await Promise.all([
     readFile(new URL('../js/workshop/spell-panel.js', import.meta.url), 'utf8'),
     readFile(new URL('../js/workshop/stats-panel.js', import.meta.url), 'utf8'),
@@ -261,5 +268,10 @@ test('UI — statique/T1 et builder générique sont réellement branchés dans 
   assert.ok(MIN_CONDITION_KEYS.includes('initiative'));
   assert.ok(MIN_CONDITION_KEYS.includes('critDamage'));
   assert.ok(MIN_CONDITION_STATS.length > 20);
+
+  const allStats = WORKSHOP_STAT_SECTIONS.flatMap((section) => section.stats);
+  assert.deepEqual(allStats.filter(({ key }) => key === 'vit'), [{ key: 'vit', label: 'PV' }]);
+  assert.equal(allStats.some(({ label }) => label === 'Vitalité'), false);
+  assert.equal(MIN_CONDITION_STATS.find(({ key }) => key === 'vit')?.label, 'PV');
   assert.deepEqual(getActiveMinConditions(), []);
 });
