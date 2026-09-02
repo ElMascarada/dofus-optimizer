@@ -127,16 +127,20 @@ test('A6 — les dégâts statiques et T1 effectifs restent deux vérités disti
   assert.notEqual(staticDamage, effective);
 });
 
-test('A7 — cas canonique Colère: la FM automatique +27% reste distincte et non cachée', () => {
-  assert.equal(DEFAULT_FM.spellDamagePct, 3, 'la politique FM offensive par défaut reste à +3% Do Sorts par slot éligible');
-  assert.equal(DEFAULT_FM.structuralExos, false, 'les exos structurels restent intégrés à BASE_CHARACTER et non à la FM');
-  const automaticSpellDamagePct = DEFAULT_FM.spellDamagePct * 9;
-  assert.equal(automaticSpellDamagePct, 27);
+test('A7 — cas canonique Colère: +27% Do Sorts existe uniquement après activation FM explicite', () => {
+  assert.equal(DEFAULT_FM.spellDamagePct, 0, 'la politique FM par défaut ne doit ajouter aucun Do Sorts');
+  assert.equal(DEFAULT_FM.allowCritDamage, false, 'la politique FM par défaut ne doit ajouter aucun Do Crit');
+  assert.equal(DEFAULT_FM.exoAp, 0, 'aucun exo PA ne doit être implicite');
+  assert.equal(DEFAULT_FM.exoMp, 0, 'aucun exo PM ne doit être implicite');
+  assert.equal(DEFAULT_FM.spellDamagePct * 9, 0);
+
+  const explicitSpellDamagePct = 3 * 9;
+  assert.equal(explicitSpellDamagePct, 27);
 
   const staticBreakdown = spellDamageBreakdown(COLERE, CANONICAL_STATS);
   const t1Stats = statsForTurn(CANONICAL_STATS, [NEBULOUS, PRYNYANG], 1);
   const t1Breakdown = spellDamageBreakdown(COLERE, t1Stats);
-  const automaticFmBreakdown = spellDamageBreakdown(COLERE, { ...t1Stats, spellDamagePct: automaticSpellDamagePct });
+  const explicitFmBreakdown = spellDamageBreakdown(COLERE, { ...t1Stats, spellDamagePct: explicitSpellDamagePct });
 
   assert.deepEqual(staticBreakdown.normal, [1496, 1829]);
   assert.deepEqual(staticBreakdown.critical, [2094, 2496]);
@@ -144,8 +148,8 @@ test('A7 — cas canonique Colère: la FM automatique +27% reste distincte et no
   assert.deepEqual(t1Breakdown.normal, [1944, 2377]);
   assert.ok(Math.abs(t1Breakdown.critical[0] - 2721) <= 1);
   assert.ok(Math.abs(t1Breakdown.critical[1] - 3243) <= 1);
-  assert.deepEqual(automaticFmBreakdown.normal, [2470, 3019]);
-  assert.deepEqual(automaticFmBreakdown.critical, [3456, 4119]);
+  assert.deepEqual(explicitFmBreakdown.normal, [2470, 3019]);
+  assert.deepEqual(explicitFmBreakdown.critical, [3456, 4119]);
 });
 
 test('B8 — le panneau de droite expose toutes les stats offensives importantes', () => {
@@ -156,7 +160,7 @@ test('B8 — le panneau de droite expose toutes les stats offensives importantes
     assert.ok(keys.has(key), `missing offense stat ${key}`);
   }
   const spellDamage = offense.stats.find(({ key }) => key === 'spellDamagePct');
-  assert.equal(statDisplayValue({ spellDamagePct: 27 }, spellDamage), 27, 'une FM auto +27% doit être visible comme % Do Sorts = 27');
+  assert.equal(statDisplayValue({ spellDamagePct: 27 }, spellDamage), 27, 'une FM explicite +27% doit être visible comme % Do Sorts = 27');
 });
 
 test('B9 — le panneau de droite expose les stats défensives et de mobilité importantes', () => {
