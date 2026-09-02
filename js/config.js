@@ -17,14 +17,14 @@ export const SLOT_RULES = [
   { id: 'dofus', label: 'Dofus / trophées', count: 6 }
 ];
 
-// Approximation volontaire pour l'optimiseur : les deux exos structurels usuels
-// (+1 PA et +1 PM) sont intégrés directement à la base du personnage. Ils ne
-// consomment donc aucun slot de FM offensive dans le solveur.
+// Base réelle du personnage : aucune forgemagie structurelle n'est supposée.
+// Les exos PA/PM sont désormais des choix utilisateur explicites transportés
+// dans fmPolicy et appliqués par le moteur au moment de l'évaluation.
 export const BASE_CHARACTER = Object.freeze({
   level: 200,
   characteristicPoints: 995,
   scrolled: { earth: 100, fire: 100, water: 100, air: 100 },
-  baseStats: { ap: 8, mp: 4, vit: 1095 }
+  baseStats: { ap: 7, mp: 3, vit: 1095 }
 });
 
 export const ELEMENT_SOFT_CAPS = Object.freeze([
@@ -45,15 +45,15 @@ export const DEFAULT_CONSTRAINTS = Object.freeze({
   resAir: 0
 });
 
-// Offensive FM remains part of the optimizer's default damage-maximization
-// policy. The product must expose the resulting stats instead of hiding them.
-// Structural AP/MP exos stay disabled here because BASE_CHARACTER already
-// includes the usual +1 AP / +1 MP structural baseline.
+// Règle produit canonique : sans sélection utilisateur, aucune FM n'est
+// appliquée. critDamageAmount reste uniquement l'amplitude de la FM Do Crit
+// lorsqu'elle est explicitement activée.
 export const DEFAULT_FM = Object.freeze({
-  spellDamagePct: 3,
-  allowCritDamage: true,
+  spellDamagePct: 0,
+  allowCritDamage: false,
   critDamageAmount: 8,
-  structuralExos: false
+  exoAp: 0,
+  exoMp: 0
 });
 
 export const TURN_MODES = [
