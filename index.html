@@ -90,6 +90,37 @@
             </details>
           </section>
 
+          <section class="panel" aria-labelledby="optimizer-fm-title">
+            <h2 id="optimizer-fm-title">FORGEMAGIE</h2>
+            <div class="form-grid optimizer-v2-constraints">
+              <label class="field">Exo PA
+                <select id="optimizer-fm-exo-ap">
+                  <option value="0" selected>0</option>
+                  <option value="1">+1</option>
+                </select>
+              </label>
+              <label class="field">Exo PM
+                <select id="optimizer-fm-exo-mp">
+                  <option value="0" selected>0</option>
+                  <option value="1">+1</option>
+                </select>
+              </label>
+              <label class="field">FM Do Sorts
+                <select id="optimizer-fm-spell-damage">
+                  <option value="0" selected>Désactivée</option>
+                  <option value="1">Activée · +3% / slot</option>
+                </select>
+              </label>
+              <label class="field">FM Do Crit
+                <select id="optimizer-fm-crit-damage">
+                  <option value="0" selected>Désactivée</option>
+                  <option value="1">Activée · +8</option>
+                </select>
+              </label>
+            </div>
+            <p class="hint">Aucune forgemagie n’est appliquée tant que tu ne l’actives pas ici.</p>
+          </section>
+
           <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
           <p id="optimizer-diagnostics" class="diagnostics" aria-live="polite">Prêt après sélection d’une classe.</p>
         </aside>
@@ -111,7 +142,7 @@
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
   <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
   <script type="module" src="js/min-conditions-ui.js?v=20260902-1"></script>
-  <script type="module" src="js/optimizer-v2-app.js?v=20260827-3"></script>
+  <script type="module" src="js/optimizer-v2-app.js?v=20260902-2"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260827-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
