@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_CONSTRAINTS } from '../js/config.js';
+import { BASE_CHARACTER, DEFAULT_CONSTRAINTS, DEFAULT_FM } from '../js/config.js';
 
 test('default build constraints only require 12 AP and 6 MP', () => {
   assert.deepEqual(DEFAULT_CONSTRAINTS, {
@@ -13,4 +13,13 @@ test('default build constraints only require 12 AP and 6 MP', () => {
     resWater: 0,
     resAir: 0
   });
+});
+
+test('default character and FM policy contain no hidden forgemagie', () => {
+  assert.equal(BASE_CHARACTER.baseStats.ap, 7);
+  assert.equal(BASE_CHARACTER.baseStats.mp, 3);
+  assert.equal(DEFAULT_FM.spellDamagePct, 0);
+  assert.equal(DEFAULT_FM.allowCritDamage, false);
+  assert.equal(DEFAULT_FM.exoAp, 0);
+  assert.equal(DEFAULT_FM.exoMp, 0);
 });
