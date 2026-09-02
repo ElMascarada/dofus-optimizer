@@ -1,6 +1,7 @@
 import { searchArchitecturesV2 } from './architecture-search-v2.js';
 import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
+import { repairFinalDofusBuild } from './final-dofus-local-repair.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 import { diversifyBuilds } from './result-diversity.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
@@ -316,6 +317,25 @@ self.addEventListener('message', (event) => {
         onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
       });
       combat.results = keepRequiredBuilds(combat.results, requiredIds);
+      const localRepair = combat.results.length ? repairFinalDofusBuild({
+        build: combat.results[0],
+        candidateItems,
+        sets: normalizedPayload.sets,
+        selections,
+        constraints: normalizedPayload.constraints,
+        fmPolicy: normalizedPayload.fmPolicy,
+        turnMode,
+        scenario,
+        spells: combatSpells,
+        combatObjective: { ...combatObjective, turnMode },
+        searchProfile: searchProfileName,
+        requiredItemIds: requiredIds,
+        rejectedItemIds: normalizedPayload.rejectedItemIds
+      }) : { result: null, diagnostics: { changed: false, evaluated: 0, legal: 0, reason: 'no-build' } };
+      if (localRepair.result) {
+        combat.results = mergeBuildCandidates([[localRepair.result], combat.results.slice(1)], combat.results.length)
+          .sort((left, right) => Number(right.score || 0) - Number(left.score || 0) || resultKey(left).localeCompare(resultKey(right)));
+      }
       const diversified = diversifyBuilds(combat.results, diversityMode, requestedTopN);
       output = {
         ...output,
@@ -330,6 +350,7 @@ self.addEventListener('message', (event) => {
             candidates: combat.results.length,
             returned: diversified.length
           },
+          finalDofusLocalRepair: localRepair.diagnostics,
           combatRefine: {
             ...combat.diagnostics,
             spellPool: combatSpells.length,
