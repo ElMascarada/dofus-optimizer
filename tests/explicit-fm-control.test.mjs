@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
+import { evaluateCompleteBuild } from '../js/complete-build-evaluator.js';
 import {
   createOptimizerV2Request,
   formatOptimizerV2FmSummary,
@@ -58,6 +59,39 @@ test('request transports Do Crit OFF/ON independently', () => {
   assert.equal(request({ allowCritDamage: false }).fmPolicy.allowCritDamage, false);
   assert.equal(request({ allowCritDamage: true }).fmPolicy.allowCritDamage, true);
   assert.equal(request({ allowCritDamage: true }).fmPolicy.spellDamagePct, 0);
+});
+
+test('explicit structural exos affect the final build while the neutral policy does not', () => {
+  const character = {
+    level: 200,
+    characteristicPoints: 0,
+    scrolled: {},
+    baseStats: { ap: 7, mp: 3 }
+  };
+  const neutral = evaluateCompleteBuild({
+    items: [],
+    sets: [],
+    selections: [],
+    constraints: { ap: 8, mp: 4 },
+    fmPolicy: normalizeOptimizerV2FmPolicy({}),
+    turnMode: 't1',
+    character
+  });
+  assert.equal(neutral.result, null);
+  assert.equal(neutral.reason, 'constraint');
+
+  const explicit = evaluateCompleteBuild({
+    items: [],
+    sets: [],
+    selections: [],
+    constraints: { ap: 8, mp: 4 },
+    fmPolicy: normalizeOptimizerV2FmPolicy({ exoAp: 1, exoMp: 1 }),
+    turnMode: 't1',
+    character
+  });
+  assert.ok(explicit.result);
+  assert.equal(explicit.result.stats.ap, 8);
+  assert.equal(explicit.result.stats.mp, 4);
 });
 
 test('FM summary exposes either none or the exact requested policy', () => {
