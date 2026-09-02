@@ -83,7 +83,7 @@ function evaluateHistoricalScreenshotBuild() {
     sets: request.sets || [],
     selections: gearSelections,
     constraints: request.constraints,
-    fmPolicy: { ...request.fmPolicy, structuralExos: false },
+    fmPolicy: { ...request.fmPolicy, exoAp: 1, exoMp: 1 },
     turnMode: 't1',
     scenario: {
       ...(request.scenario || {}),

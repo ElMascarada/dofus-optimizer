@@ -33,7 +33,7 @@ const airSelections = [{
 }];
 
 const constraints = { ap: 12, mp: 6, range: 0, vit: 0, resEarth: 0, resFire: 0, resWater: 0, resAir: 0 };
-const fmPolicy = { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, structuralExos: false };
+const fmPolicy = { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, exoAp: 1, exoMp: 1 };
 
 function item(id, slot, stats = {}, setId = null, typeName = slot, level = 200) {
   return {

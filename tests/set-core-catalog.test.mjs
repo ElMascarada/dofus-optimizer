@@ -43,7 +43,8 @@ const fmPolicy = {
   spellDamagePct: 0,
   allowCritDamage: false,
   critDamageAmount: 8,
-  structuralExos: false
+  exoAp: 1,
+  exoMp: 1
 };
 
 function item(id, slot, stats = {}, setId = null, extra = {}) {
