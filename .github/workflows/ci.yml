@@ -16,6 +16,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install Chrome for V2 browser acceptance
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
       - name: Inspect PM-variable effect definitions
         run: |
           node --input-type=module <<'NODE'
@@ -65,7 +68,12 @@ jobs:
           exit 0
       - name: V2 browser acceptance recipe
         shell: bash
-        run: npm run recipe:browser 2>&1 | tee recipe-v2-browser-output.txt
+        env:
+          CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: |
+          test -x "$CHROME_BIN"
+          "$CHROME_BIN" --version
+          npm run recipe:browser 2>&1 | tee recipe-v2-browser-output.txt
       - name: Product smoke
         shell: bash
         run: npm run smoke:product 2>&1 | tee product-smoke-output.txt
