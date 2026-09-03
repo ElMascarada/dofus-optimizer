@@ -176,7 +176,15 @@ function stateBucket(state, context) {
   return `${Math.min(num(stats, 'ap'), 14)}:${Math.min(num(stats, 'mp'), 8)}:${progress.signature}:${setSignature}`;
 }
 
-function keepDiverseStates(states, context, limit) {
+function dofusLineageKey(state) {
+  const ids = (state?.items || [])
+    .filter((item) => item?.slot === 'dofus')
+    .map((item) => String(item.id))
+    .sort();
+  return ids.length ? ids.join('|') : null;
+}
+
+export function keepDiverseStates(states, context, limit) {
   for (const state of states) {
     const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
     const progress = constraintProgressForStats(stats, context.constraints);
@@ -202,6 +210,20 @@ function keepDiverseStates(states, context, limit) {
     perBucket.set(bucket, used + 1);
     output.push(state);
     return true;
+  }
+
+  // buildGroupChoices deliberately returns fewer Dofus combinations than the
+  // cross-slot state beam can represent. Keep one best state per generated
+  // combination while that guarantee fits inside the existing beam, so later
+  // equipment reductions cannot erase a Dofus lineage wholesale.
+  const byDofusLineage = new Map();
+  for (const state of states) {
+    const lineageKey = dofusLineageKey(state);
+    if (!lineageKey || byDofusLineage.has(lineageKey)) continue;
+    byDofusLineage.set(lineageKey, state);
+  }
+  if (byDofusLineage.size > 1 && byDofusLineage.size <= limit) {
+    for (const state of byDofusLineage.values()) tryKeep(state, { enforceBucket: false });
   }
 
   // Multiplicative specialists can look weak while a build is still partial.
