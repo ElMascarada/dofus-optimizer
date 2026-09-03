@@ -45,15 +45,23 @@ function addSignedConstraintStats(target, candidate, keys = []) {
   return target;
 }
 
-function constraintContributionTarget(key, constraints = {}) {
-  const target = Math.max(0, Number(constraints?.[key] || 0));
-  return Math.max(0, target - Math.max(0, num(BASE_CHARACTER.baseStats, key)));
+function constraintBaselineStats(context = {}) {
+  return {
+    ...(BASE_CHARACTER.baseStats || {}),
+    ap: num(BASE_CHARACTER.baseStats, 'ap') + (Number(context.fmPolicy?.exoAp) === 1 ? 1 : 0),
+    mp: num(BASE_CHARACTER.baseStats, 'mp') + (Number(context.fmPolicy?.exoMp) === 1 ? 1 : 0)
+  };
 }
 
-function retentionStat(state, key, constraintKeys, constraints = {}) {
+function constraintContributionTarget(key, constraints = {}, baselineStats = BASE_CHARACTER.baseStats || {}) {
+  const target = Math.max(0, Number(constraints?.[key] || 0));
+  return Math.max(0, target - Math.max(0, num(baselineStats, key)));
+}
+
+function retentionStat(state, key, constraintKeys, constraints = {}, baselineStats = BASE_CHARACTER.baseStats || {}) {
   if (!constraintKeys.has(key)) return num(state.optimisticStats, key);
   const value = num(state.constraintStats, key);
-  const target = constraintContributionTarget(key, constraints);
+  const target = constraintContributionTarget(key, constraints, baselineStats);
   if (!(target > 0)) return Math.min(0, value);
   return Math.min(target, value);
 }
@@ -63,7 +71,7 @@ function rankGroupState(optimisticStats, constraintStats, context) {
   const signedConstraintSignal = signedConstraintOrderingSignal(
     constraintStats,
     context.constraints,
-    BASE_CHARACTER.baseStats || {}
+    constraintBaselineStats(context)
   );
   const constraintWeight = Number(context.profile?.ranking?.constraintWeight || 0);
   return {
@@ -87,6 +95,7 @@ function parentChoiceKey(state) {
 function parentChildRepresentatives(states, limit, context) {
   if (!states.length || limit <= 0) return [];
   const constraintKeys = new Set(positiveConstraintKeys(context.constraints));
+  const baselineStats = constraintBaselineStats(context);
   const output = [];
   const seen = new Set();
 
@@ -110,9 +119,9 @@ function parentChildRepresentatives(states, limit, context) {
   for (const key of context.policy.paretoKeys || []) {
     if (output.length >= limit) break;
     const specialist = [...states]
-      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
-      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints)
-        - retentionStat(a, key, constraintKeys, context.constraints)
+      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints, baselineStats) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints, baselineStats)
+        - retentionStat(a, key, constraintKeys, context.constraints, baselineStats)
         || b.objectiveScore - a.objectiveScore
         || b.score - a.score
         || choiceKey(a.items).localeCompare(choiceKey(b.items)))[0];
@@ -273,12 +282,12 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
   return output;
 }
 
-function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set()) {
+function resourceBucket(state, constraints = {}, prysma = 0, constraintKeys = new Set(), baselineStats = BASE_CHARACTER.baseStats || {}) {
   const keys = [...new Set(['ap', 'mp', 'range', ...positiveConstraintKeys(constraints)])];
   const parts = keys.map((key) => {
-    const value = Math.max(0, retentionStat(state, key, constraintKeys, constraints));
+    const value = Math.max(0, retentionStat(state, key, constraintKeys, constraints, baselineStats));
     const target = constraintKeys.has(key)
-      ? constraintContributionTarget(key, constraints)
+      ? constraintContributionTarget(key, constraints, baselineStats)
       : Math.max(0, Number(constraints?.[key] || 0));
     if (target > 0) return `${key}:${Math.min(4, Math.floor((value / target) * 4))}`;
     return `${key}:${Math.min(4, Math.round(value))}`;
@@ -291,12 +300,13 @@ function keepChoiceDiversity(states, limit, context, { preserveStructuralContrib
   const output = [];
   const perBucket = new Map();
   const constraintKeys = new Set(positiveConstraintKeys(context.constraints));
+  const baselineStats = constraintBaselineStats(context);
 
   function tryKeep(state, { enforceBucket = true } = {}) {
     if (output.length >= limit) return false;
     const key = choiceKey(state.items);
     if (!key || seen.has(key)) return false;
-    const bucket = resourceBucket(state, context.constraints, state.prysma, constraintKeys);
+    const bucket = resourceBucket(state, context.constraints, state.prysma, constraintKeys, baselineStats);
     const used = perBucket.get(bucket) || 0;
     if (enforceBucket && used >= context.profile.search.groupBucketLimit) return false;
     seen.add(key);
@@ -351,8 +361,8 @@ function keepChoiceDiversity(states, limit, context, { preserveStructuralContrib
   for (const key of context.policy.paretoKeys || []) {
     if (output.length >= limit || specialistReserve <= 0) break;
     const bySpecialist = [...states]
-      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints) > 0)
-      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints) - retentionStat(a, key, constraintKeys, context.constraints)
+      .filter((state) => retentionStat(state, key, constraintKeys, context.constraints, baselineStats) > 0)
+      .sort((a, b) => retentionStat(b, key, constraintKeys, context.constraints, baselineStats) - retentionStat(a, key, constraintKeys, context.constraints, baselineStats)
         || b.objectiveScore - a.objectiveScore
         || b.score - a.score);
     let kept = 0;
@@ -552,6 +562,7 @@ export function branchFeasibility({
   remainingGroups = [],
   profilesFor,
   constraints = {},
+  fmPolicy = {},
   sets = [],
   setsById = {},
   currentStats = null,
@@ -567,7 +578,12 @@ export function branchFeasibility({
   const setCaps = prepared.setCaps || {};
   for (const key of keys) {
     const target = Number(constraints[key] || 0);
-    const actual = num(current, key) + characteristicUpperAllowance(key);
+    const explicitStructuralExo = key === 'ap' && Number(fmPolicy?.exoAp) === 1
+      ? 1
+      : key === 'mp' && Number(fmPolicy?.exoMp) === 1
+        ? 1
+        : 0;
+    const actual = num(current, key) + explicitStructuralExo + characteristicUpperAllowance(key);
     const maximum = actual + Number(remaining.caps[key] || 0) + Number(setCaps[key] || 0);
     if (maximum + 1e-9 < target) return { feasible: false, key, actual, maximum, target };
   }
