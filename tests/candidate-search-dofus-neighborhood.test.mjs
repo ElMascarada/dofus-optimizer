@@ -66,6 +66,29 @@ const profiles = [
   makeProfile(106, 6)
 ];
 
+const latePickProfiles = [
+  makeProfile(100, 86, 669),
+  makeProfile(101, 82, 100),
+  makeProfile(102, 7, 412),
+  makeProfile(103, 93, 347),
+  makeProfile(104, 13, 254),
+  makeProfile(105, 24, 194),
+  makeProfile(106, 68, 459),
+  makeProfile(107, 17, 432),
+  makeProfile(108, 23, 285),
+  makeProfile(109, 59, 255),
+  makeProfile(110, 9, 453),
+  makeProfile(111, 70, 100),
+  makeProfile(112, 6, 667),
+  makeProfile(113, 69, 856),
+  makeProfile(114, 1, 992),
+  makeProfile(115, 11, 948),
+  makeProfile(116, 96, 869),
+  makeProfile(117, 30, 170),
+  makeProfile(118, 52, 497),
+  makeProfile(119, 61, 218)
+];
+
 const targetNeighborKey = '101|102|103|104';
 const normalProxyKeys = ['101|102|103|105', '101|102|103|106', '101|102|105|106'];
 
@@ -81,39 +104,17 @@ test('buildGroupChoices retains a bounded distance-1 Dofus neighbor at the lossy
 });
 
 test('buildGroupChoices preserves a deep diverse child from a represented parent without growing the beam', () => {
-  const parentProfiles = [
-    makeProfile(100, 86, 669),
-    makeProfile(101, 82, 100),
-    makeProfile(102, 7, 412),
-    makeProfile(103, 93, 347),
-    makeProfile(104, 13, 254),
-    makeProfile(105, 24, 194),
-    makeProfile(106, 68, 459),
-    makeProfile(107, 17, 432),
-    makeProfile(108, 23, 285),
-    makeProfile(109, 59, 255),
-    makeProfile(110, 9, 453),
-    makeProfile(111, 70, 100),
-    makeProfile(112, 6, 667),
-    makeProfile(113, 69, 856),
-    makeProfile(114, 1, 992),
-    makeProfile(115, 11, 948),
-    makeProfile(116, 96, 869),
-    makeProfile(117, 30, 170),
-    makeProfile(118, 52, 497),
-    makeProfile(119, 61, 218)
-  ];
   const targetKey = '100|101|103|114';
-  const targetIndex = parentProfiles.findIndex((profile) => profile.item.id === 114);
-  const siblings = parentProfiles
+  const targetIndex = latePickProfiles.findIndex((profile) => profile.item.id === 114);
+  const siblings = latePickProfiles
     .slice(4)
     .map((profile) => ({ id: profile.item.id, proxy: profile.optimisticStats.proxy }))
     .sort((a, b) => b.proxy - a.proxy || a.id - b.id);
   const siblingProxyRank = 1 + siblings.findIndex((profile) => profile.id === 114);
 
-  const first = buildGroupChoices(parentProfiles, 4, makeWideContext('dofus'));
-  const second = buildGroupChoices(parentProfiles, 4, makeWideContext('dofus'));
-  const proxyOnly = buildGroupChoices(parentProfiles, 4, makeWideContext('ring'));
+  const first = buildGroupChoices(latePickProfiles, 4, makeWideContext('dofus'));
+  const second = buildGroupChoices(latePickProfiles, 4, makeWideContext('dofus'));
+  const proxyOnly = buildGroupChoices(latePickProfiles, 4, makeWideContext('ring'));
 
   assert.ok(targetIndex >= 0);
   assert.ok(siblingProxyRank >= 14, 'fixture must exercise a child deeper than a small top-proxy lane');
@@ -121,6 +122,31 @@ test('buildGroupChoices preserves a deep diverse child from a represented parent
   assert.ok(keys(first).includes(targetKey), 'parent lane must retain a diverse child from the represented parent');
   assert.equal(first.length, 72, 'parent lane must replace global states rather than grow the beam');
   assert.deepEqual(keys(first), keys(second), 'parent-child lane must remain deterministic');
+});
+
+test('buildGroupChoices preserves a bounded late-pick lineage for a six-item Dofus group', () => {
+  const targetParentKey = '100|101|103|106|114';
+  const targetKey = '100|101|103|106|114|116';
+  const traces = [];
+  const context = makeWideContext('dofus');
+  context.traceParentKey = targetParentKey;
+  context.traceChildKey = targetKey;
+  context.onDofusParentChildTrace = (trace) => traces.push(trace);
+
+  const choices = buildGroupChoices(latePickProfiles, 6, context);
+  const proxyOnly = buildGroupChoices(latePickProfiles, 6, makeWideContext('ring'));
+  const trace = traces.find((entry) => entry.WINNER_PARENT_RETAINED_INDEX_AT_PICK3 !== null);
+  const targetChoice = choices.find((choice) => keys([choice])[0] === targetKey);
+
+  assert.ok(trace, 'late-pick parent-child trace must exist');
+  assert.ok(trace.WINNER_PARENT_RETAINED_INDEX_AT_PICK3 !== null, 'five-item parent must still be retained before the final pick');
+  assert.equal(trace.WINNER_CHILD_PRESENT_IN_PRIMARY_STATES, false, 'primary reduction must eliminate the target child');
+  assert.equal(trace.WINNER_CHILD_ENTERED_PROTECTED_STATES, true, 'parent-child reserve must recover the target child');
+  assert.equal(trace.WINNER_CHILD_PRESENT_IN_FINAL_BEAM4, true, 'final protected beam must contain the target child');
+  assert.ok(targetChoice, 'final Dofus choices must contain the target six-item lineage');
+  assert.ok(targetChoice.objectiveScore > 3000, 'target choice must retain the intended high objective score');
+  assert.ok(!keys(proxyOnly).includes(targetKey), 'non-Dofus reduction must not gain the protected lineage');
+  assert.equal(choices.length, 72, 'late parent-child reserve must not grow the configured choice limit');
 });
 
 test('buildGroupChoices leaves non-Dofus group behavior unchanged', () => {

@@ -455,7 +455,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
       }
     }
     const primaryStates = keepChoiceDiversity(next, beamWidth, context);
-    states = context.slot === 'dofus' && pick === 3
+    states = context.slot === 'dofus' && pick >= 3
       ? preserveDofusParentChildDiversity(parentStates, next, primaryStates, beamWidth, context)
       : primaryStates;
     if (!states.length) break;
