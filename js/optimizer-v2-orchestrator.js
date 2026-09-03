@@ -1,4 +1,4 @@
-import { DEFAULT_FM, TURN_MODES } from './config.js';
+import { TURN_MODES } from './config.js';
 import { activeMinimumConstraints } from './min-conditions.js';
 import { MIN_CONDITION_KEYS } from './stat-catalog.js';
 import { combatSpellsForElement } from './spell-selection.js';
@@ -39,12 +39,37 @@ export function normalizeOptimizerV2Constraints(constraints = {}) {
   );
 }
 
+export function normalizeOptimizerV2FmPolicy(fmPolicy = {}) {
+  return {
+    spellDamagePct: Number(fmPolicy?.spellDamagePct || 0) > 0 ? 3 : 0,
+    allowCritDamage: fmPolicy?.allowCritDamage === true,
+    critDamageAmount: 8,
+    exoAp: Number(fmPolicy?.exoAp || 0) === 1 ? 1 : 0,
+    exoMp: Number(fmPolicy?.exoMp || 0) === 1 ? 1 : 0
+  };
+}
+
+export function formatOptimizerV2FmSummary(fmPolicy = {}) {
+  const normalized = normalizeOptimizerV2FmPolicy(fmPolicy);
+  if (!normalized.exoAp && !normalized.exoMp && !normalized.spellDamagePct && !normalized.allowCritDamage) {
+    return 'FM : aucune';
+  }
+  return [
+    `PA ${normalized.exoAp ? '+1' : 'OFF'}`,
+    `PM ${normalized.exoMp ? '+1' : 'OFF'}`,
+    `Do Sorts ${normalized.spellDamagePct ? '+3% / slot' : 'OFF'}`,
+    `Do Crit ${normalized.allowCritDamage ? '+8' : 'OFF'}`
+  ].join(' · ')
+    .replace(/^/, 'FM : ');
+}
+
 export function createOptimizerV2Request({
   dataset,
   spellData,
   classId,
   element = 'earth',
   constraints = {},
+  fmPolicy = {},
   turnMode = 'sum',
   topN = 10,
   lockedItemsBySlot = {},
@@ -82,12 +107,7 @@ export function createOptimizerV2Request({
       metric: 'total-damage'
     },
     constraints: normalizeOptimizerV2Constraints(constraints),
-    fmPolicy: {
-      spellDamagePct: Number(DEFAULT_FM.spellDamagePct || 0),
-      allowCritDamage: Boolean(DEFAULT_FM.allowCritDamage),
-      critDamageAmount: Number(DEFAULT_FM.critDamageAmount || 8),
-      structuralExos: false
-    },
+    fmPolicy: normalizeOptimizerV2FmPolicy(fmPolicy),
     turnMode: normalizedTurnMode,
     scenario: { requiredApByTurn: {} },
     diversityMode: 'gear',

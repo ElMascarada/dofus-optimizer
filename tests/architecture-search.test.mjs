@@ -68,7 +68,7 @@ test('architecture search starts from a strong set and can replace a set piece w
     sets,
     selections,
     constraints: { ap: 12, mp: 6, range: 0, vit: 0, resEarth: 0, resFire: 0, resWater: 0, resAir: 0 },
-    fmPolicy: { spellDamagePct: 3, allowCritDamage: true, critDamageAmount: 8, structuralExos: false },
+    fmPolicy: { spellDamagePct: 3, allowCritDamage: true, critDamageAmount: 8, exoAp: 1, exoMp: 1 },
     turnMode: 't1',
     scenario: { requiredApByTurn: { 1: 3 } },
     topN: 10

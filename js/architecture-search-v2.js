@@ -149,8 +149,10 @@ function impossibleRequiredResult(required) {
   };
 }
 
-function progressStats(items, setsById, constraints) {
+function progressStats(items, setsById, constraints, fmPolicy = {}) {
   const stats = staticBuildStats(items, setsById);
+  if (Number(fmPolicy?.exoAp) === 1) stats.ap = num(stats, 'ap') + 1;
+  if (Number(fmPolicy?.exoMp) === 1) stats.mp = num(stats, 'mp') + 1;
   if (Number(constraints?.vit || 0) > 0) stats.vit = num(stats, 'vit') + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
   for (const element of ['earth', 'fire', 'water', 'air']) {
     if (Number(constraints?.[element] || 0) <= 0) continue;
@@ -162,7 +164,7 @@ function progressStats(items, setsById, constraints) {
 }
 
 function stateBucket(state, context) {
-  const stats = progressStats(state.items, context.setsById, context.constraints);
+  const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
   const progress = constraintProgressForStats(stats, context.constraints);
   const setCounts = new Map();
   for (const item of state.items) if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
@@ -176,7 +178,7 @@ function stateBucket(state, context) {
 
 function keepDiverseStates(states, context, limit) {
   for (const state of states) {
-    const stats = progressStats(state.items, context.setsById, context.constraints);
+    const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
     const progress = constraintProgressForStats(stats, context.constraints);
     state.searchStats = stats;
     state.searchRank = state.heuristic
@@ -265,7 +267,7 @@ export function searchArchitecturesV2({
   });
   const policy = prefilter.policy;
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
-  const context = { policy, profile, selections, constraints, turnMode, scenario, sets, setsById };
+  const context = { policy, profile, selections, constraints, fmPolicy, turnMode, scenario, sets, setsById };
 
   const synergy = buildSetSynergyIndex({
     items: prefilter.items,
@@ -360,6 +362,7 @@ export function searchArchitecturesV2({
       remainingGroups: missing,
       profilesFor,
       constraints,
+      fmPolicy,
       sets,
       setsById
     });
@@ -394,6 +397,7 @@ export function searchArchitecturesV2({
             remainingGroups,
             profilesFor,
             constraints,
+            fmPolicy,
             sets,
             setsById
           });
@@ -445,8 +449,8 @@ export function searchArchitecturesV2({
 
     const complete = states.filter((state) => fullShape(state.items));
     complete.sort((a, b) => {
-      const pa = constraintProgressForStats(progressStats(a.items, setsById, constraints), constraints);
-      const pb = constraintProgressForStats(progressStats(b.items, setsById, constraints), constraints);
+      const pa = constraintProgressForStats(progressStats(a.items, setsById, constraints, fmPolicy), constraints);
+      const pb = constraintProgressForStats(progressStats(b.items, setsById, constraints, fmPolicy), constraints);
       return Number(pb.ready) - Number(pa.ready)
         || (b.searchRank || b.heuristic) - (a.searchRank || a.heuristic);
     });

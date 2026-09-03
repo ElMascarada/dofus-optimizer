@@ -16,7 +16,19 @@ const noCritSpell = {
   hits: [{ element: 'earth', normal: [100, 100], crit: [100, 100] }]
 };
 
-test('FM auto picks +8 crit damage when it is stronger', () => {
+const nineForgeableItems = [
+  { id: 'hat', slot: 'hat', stats: {} },
+  { id: 'cape', slot: 'cape', stats: {} },
+  { id: 'amulet', slot: 'amulet', stats: {} },
+  { id: 'ring-1', slot: 'ring', stats: {} },
+  { id: 'ring-2', slot: 'ring', stats: {} },
+  { id: 'belt', slot: 'belt', stats: {} },
+  { id: 'boots', slot: 'boots', stats: {} },
+  { id: 'weapon', slot: 'weapon', stats: {} },
+  { id: 'shield', slot: 'shield', stats: {} }
+];
+
+test('explicit offensive FM picks +8 crit damage when it is stronger', () => {
   const result = optimizeFm({
     baseStats: { earth: 0 },
     items: [{ id: 'a', slot: 'hat', stats: {} }],
@@ -28,7 +40,7 @@ test('FM auto picks +8 crit damage when it is stronger', () => {
   assert.equal(result.spellPctItems, 0);
 });
 
-test('FM auto picks % spell damage when it is stronger', () => {
+test('explicit offensive FM picks % spell damage when it is stronger', () => {
   const result = optimizeFm({
     baseStats: { earth: 1000 },
     items: [{ id: 'a', slot: 'hat', stats: {} }],
@@ -40,7 +52,25 @@ test('FM auto picks % spell damage when it is stronger', () => {
   assert.equal(result.spellPctItems, 1);
 });
 
-test('Aucun disables both spell damage FM and crit damage FM', () => {
+test('no FM selection means no offensive or structural FM', () => {
+  const result = optimizeFm({
+    baseStats: { earth: 0, crit: 100, ap: 7, mp: 3 },
+    items: [{ id: 'a', slot: 'hat', stats: {} }],
+    selections: [{ enabled: true, weight: 1, spell: critSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: {}
+  });
+  assert.equal(result.critItems, 0);
+  assert.equal(result.spellPctItems, 0);
+  assert.equal(result.stats.spellDamagePct || 0, 0);
+  assert.equal(result.stats.critDamage || 0, 0);
+  assert.equal(result.stats.ap, 7);
+  assert.equal(result.stats.mp, 3);
+  assert.equal(result.structuralExos, 0);
+  assert.equal(result.assignments[0].type, 'none');
+});
+
+test('Do Crit can be explicitly enabled while Do Sorts remains disabled', () => {
   const result = optimizeFm({
     baseStats: { earth: 0, crit: 100 },
     items: [{ id: 'a', slot: 'hat', stats: {} }],
@@ -48,11 +78,36 @@ test('Aucun disables both spell damage FM and crit damage FM', () => {
     turnMode: 't1',
     policy: { spellDamagePct: 0, allowCritDamage: true, critDamageAmount: 8 }
   });
-  assert.equal(result.critItems, 0);
+  assert.equal(result.critItems, 1);
   assert.equal(result.spellPctItems, 0);
   assert.equal(result.stats.spellDamagePct || 0, 0);
-  assert.equal(result.stats.critDamage || 0, 0);
-  assert.equal(result.assignments[0].type, 'none');
+  assert.equal(result.stats.critDamage, 8);
+  assert.equal(result.assignments[0].type, 'critDamage');
+});
+
+test('Do Sorts enabled on nine eligible slots adds exactly +27%', () => {
+  const result = optimizeFm({
+    baseStats: { earth: 1000 },
+    items: nineForgeableItems,
+    selections: [{ enabled: true, weight: 1, spell: noCritSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8 }
+  });
+  assert.equal(result.spellPctItems, 9);
+  assert.equal(result.stats.spellDamagePct, 27);
+  assert.equal(result.critItems, 0);
+});
+
+test('Do Sorts disabled on nine eligible slots adds no +27%', () => {
+  const result = optimizeFm({
+    baseStats: { earth: 1000 },
+    items: nineForgeableItems,
+    selections: [{ enabled: true, weight: 1, spell: noCritSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8 }
+  });
+  assert.equal(result.spellPctItems, 0);
+  assert.equal(result.stats.spellDamagePct || 0, 0);
 });
 
 test('FM never applies to Dofus, trophies or companions', () => {
@@ -72,7 +127,31 @@ test('FM never applies to Dofus, trophies or companions', () => {
   assert.equal(result.critItems + result.spellPctItems, 1);
 });
 
-test('structural exos add free +1 AP and +1 MP without consuming offensive FM slots', () => {
+test('structural exos are independent explicit +1 AP and +1 MP choices', () => {
+  const apOnly = optimizeFm({
+    baseStats: { earth: 1000, ap: 7, mp: 3 },
+    items: [{ id: 'hat', slot: 'hat', stats: {} }],
+    selections: [{ enabled: true, weight: 1, spell: noCritSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: { spellDamagePct: 0, allowCritDamage: false, exoAp: 1, exoMp: 0 }
+  });
+  assert.equal(apOnly.stats.ap, 8);
+  assert.equal(apOnly.stats.mp, 3);
+  assert.equal(apOnly.structuralExos, 1);
+
+  const mpOnly = optimizeFm({
+    baseStats: { earth: 1000, ap: 7, mp: 3 },
+    items: [{ id: 'hat', slot: 'hat', stats: {} }],
+    selections: [{ enabled: true, weight: 1, spell: noCritSpell, casts: { 1: 1 } }],
+    turnMode: 't1',
+    policy: { spellDamagePct: 0, allowCritDamage: false, exoAp: 0, exoMp: 1 }
+  });
+  assert.equal(mpOnly.stats.ap, 7);
+  assert.equal(mpOnly.stats.mp, 4);
+  assert.equal(mpOnly.structuralExos, 1);
+});
+
+test('legacy explicit structuralExos pair remains deterministic without becoming a product default', () => {
   const result = optimizeFm({
     baseStats: { earth: 1000, ap: 11, mp: 5 },
     items: [

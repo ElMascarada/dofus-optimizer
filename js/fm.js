@@ -10,59 +10,69 @@ function offensiveAssignmentOptions(items, policy) {
   return { critEligible, forcedSpellPctItems, maxCritItems };
 }
 
-function noOffensiveFm({ baseStats, items, selections, turnMode, scenario, structuralExos }) {
+function structuralExoSelection(policy = {}) {
+  // Keep legacy structuralExos as an explicitly-requested compatibility input
+  // for old deterministic callers. Product requests use the independent fields.
+  const legacyPair = policy?.structuralExos === true;
+  return {
+    exoAp: Number(policy?.exoAp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0,
+    exoMp: Number(policy?.exoMp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0
+  };
+}
+
+function applyStructuralExos(stats, { exoAp = 0, exoMp = 0 } = {}) {
+  if (exoAp) stats.ap = (stats.ap || 0) + 1;
+  if (exoMp) stats.mp = (stats.mp || 0) + 1;
+}
+
+function noOffensiveFm({ baseStats, items, selections, turnMode, scenario, exoAp, exoMp }) {
   const stats = cloneStats(baseStats);
-  if (structuralExos) {
-    stats.ap = (stats.ap || 0) + 1;
-    stats.mp = (stats.mp || 0) + 1;
-  }
+  applyStructuralExos(stats, { exoAp, exoMp });
   const objective = evaluateObjective({ stats, items, selections, turnMode, scenario });
   return {
     stats,
     objective,
     critItems: 0,
     spellPctItems: 0,
-    structuralExos: structuralExos ? 2 : 0,
+    structuralExos: exoAp + exoMp,
+    exoAp,
+    exoMp,
     assignments: items.map((item) => ({ itemId: item.id, type: 'none', value: 0 }))
   };
 }
 
-export function optimizeFm({ baseStats, items, selections, turnMode, policy, scenario = {} }) {
+export function optimizeFm({ baseStats, items, selections, turnMode, policy = {}, scenario = {} }) {
   const forgeableItems = items.filter((item) => FM_ELIGIBLE_SLOTS.has(item.slot));
-  const useStructuralExos = policy?.structuralExos === true;
+  const { exoAp, exoMp } = structuralExoSelection(policy);
   const spellDamagePct = Math.max(0, Number(policy?.spellDamagePct || 0));
+  const allowCritDamage = policy?.allowCritDamage === true;
 
-  // "Aucun" means exactly that: no % Do sorts and no +8 Do Crit. The crit
-  // alternative only exists when an offensive FM percentage is selected.
-  if (spellDamagePct <= 0) {
+  if (spellDamagePct <= 0 && !allowCritDamage) {
     return noOffensiveFm({
       baseStats,
       items,
       selections,
       turnMode,
       scenario,
-      structuralExos: useStructuralExos
+      exoAp,
+      exoMp
     });
   }
 
-  const normalizedPolicy = { ...policy, spellDamagePct };
+  const normalizedPolicy = { ...policy, spellDamagePct, allowCritDamage };
   const { critEligible, forcedSpellPctItems, maxCritItems } = offensiveAssignmentOptions(forgeableItems, normalizedPolicy);
   let best = null;
 
-  // Performance approximation: PA/PM exos are modeled as +1 AP/+1 MP permanent
-  // base bonuses and do not consume offensive FM slots. This avoids testing all
-  // possible exo placements on every complete build. The resulting offensive
-  // score is slightly optimistic, but the ranking remains useful and the search
-  // stays fast enough for interactive use.
+  // Structural exos remain abstract permanent +1 bonuses and do not consume
+  // offensive FM slots. They are now independent explicit user selections.
   for (let critItems = 0; critItems <= maxCritItems; critItems++) {
     const stats = cloneStats(baseStats);
-    if (useStructuralExos) {
-      stats.ap = (stats.ap || 0) + 1;
-      stats.mp = (stats.mp || 0) + 1;
-    }
+    applyStructuralExos(stats, { exoAp, exoMp });
 
-    const spellPctItems = forcedSpellPctItems.length + (critEligible.length - critItems);
-    stats.spellDamagePct = (stats.spellDamagePct || 0) + spellPctItems * normalizedPolicy.spellDamagePct;
+    const spellPctItems = spellDamagePct > 0
+      ? forcedSpellPctItems.length + (critEligible.length - critItems)
+      : 0;
+    stats.spellDamagePct = (stats.spellDamagePct || 0) + spellPctItems * spellDamagePct;
     stats.critDamage = (stats.critDamage || 0) + critItems * Number(normalizedPolicy.critDamageAmount ?? 8);
 
     const objective = evaluateObjective({ stats, items, selections, turnMode, scenario });
@@ -73,11 +83,14 @@ export function optimizeFm({ baseStats, items, selections, turnMode, policy, sce
         objective,
         critItems,
         spellPctItems,
-        structuralExos: useStructuralExos ? 2 : 0,
+        structuralExos: exoAp + exoMp,
+        exoAp,
+        exoMp,
         assignments: items.map((item) => {
           if (!FM_ELIGIBLE_SLOTS.has(item.slot)) return { itemId: item.id, type: 'none', value: 0 };
           if (critIds.has(item.id)) return { itemId: item.id, type: 'critDamage', value: Number(normalizedPolicy.critDamageAmount ?? 8) };
-          return { itemId: item.id, type: 'spellDamagePct', value: normalizedPolicy.spellDamagePct };
+          if (spellDamagePct > 0) return { itemId: item.id, type: 'spellDamagePct', value: spellDamagePct };
+          return { itemId: item.id, type: 'none', value: 0 };
         })
       };
     }

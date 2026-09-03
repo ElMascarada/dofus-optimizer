@@ -5,6 +5,7 @@ import { evaluateCompleteBuild } from '../js/complete-build-evaluator.js';
 const spell = { id: 's', name: 'S', apCost: 2, baseCritPct: 0, hits: [{ element: 'earth', normal: [10, 10] }] };
 const selections = [{ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 0, 3: 0 } }];
 const fmPolicy = { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8, structuralExos: false };
+const legacyStructuralFmPolicy = { spellDamagePct: 3, allowCritDamage: false, critDamageAmount: 8, exoAp: 1, exoMp: 1 };
 
 test('equipment conditions are hard legality rules', () => {
   const trophy = {
@@ -54,7 +55,7 @@ test('AP and MP constraints are minimums and do not cap a stronger build', () =>
     sets: [],
     selections,
     constraints: { ap: 11, mp: 5 },
-    fmPolicy,
+    fmPolicy: legacyStructuralFmPolicy,
     turnMode: 't1',
     scenario: { requiredApByTurn: {} }
   });
@@ -83,7 +84,7 @@ test('a Ganymede-style odd-turn AP/MP loss obeys the selected minimum', () => {
     sets: [],
     selections,
     constraints: { ap: 12, mp: 6 },
-    fmPolicy,
+    fmPolicy: legacyStructuralFmPolicy,
     turnMode: 't1',
     scenario: { requiredApByTurn: {} }
   });
@@ -95,7 +96,7 @@ test('a Ganymede-style odd-turn AP/MP loss obeys the selected minimum', () => {
     sets: [],
     selections,
     constraints: { ap: 11, mp: 5 },
-    fmPolicy,
+    fmPolicy: legacyStructuralFmPolicy,
     turnMode: 't1',
     scenario: { requiredApByTurn: {} }
   });

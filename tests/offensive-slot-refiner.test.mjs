@@ -12,7 +12,7 @@ const spell = {
 };
 const selections = [{ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 0, 3: 0 } }];
 const constraints = { ap: 12, mp: 6, range: 0, vit: 0, resEarth: 0, resFire: 0, resWater: 0, resAir: 0 };
-const fmPolicy = { spellDamagePct: 0, allowCritDamage: true, critDamageAmount: 8, structuralExos: false };
+const fmPolicy = { spellDamagePct: 0, allowCritDamage: true, critDamageAmount: 8, exoAp: 1, exoMp: 1 };
 
 function item(id, slot, stats = {}, extra = {}) {
   return {
