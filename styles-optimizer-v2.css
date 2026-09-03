@@ -62,6 +62,58 @@
   font-size: 1.7rem;
 }
 
+.optimizer-v2-combat-preview {
+  display: grid;
+  gap: 10px;
+}
+
+.optimizer-v2-combat-turn {
+  border: 1px solid var(--border, #333);
+  padding: 12px;
+  display: grid;
+  gap: 7px;
+}
+
+.optimizer-v2-combat-turn > strong {
+  font-size: 1.05rem;
+}
+
+.optimizer-v2-rotation {
+  font-weight: 700;
+}
+
+.optimizer-v2-breakdown {
+  display: grid;
+  gap: 4px;
+}
+
+.optimizer-v2-breakdown small,
+.optimizer-v2-combat-unavailable {
+  opacity: .72;
+}
+
+.optimizer-v2-breakdown dl {
+  margin: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.optimizer-v2-breakdown dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.optimizer-v2-breakdown dt,
+.optimizer-v2-breakdown dd,
+.optimizer-v2-combat-unavailable {
+  margin: 0;
+}
+
+.optimizer-v2-combat-unavailable {
+  font-size: .88rem;
+}
+
 .optimizer-v2-turns,
 .optimizer-v2-stats {
   display: grid;
