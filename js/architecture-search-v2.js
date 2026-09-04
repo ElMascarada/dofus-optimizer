@@ -15,6 +15,10 @@ import {
   staticBuildStats
 } from '../optimizer/candidate-search.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
+import {
+  filterOptimizerEligibleItems,
+  optimizerTrophyEligibilityCounts
+} from '../optimizer/item-eligibility.js';
 
 function num(stats, key) {
   const value = Number(stats?.[key] || 0);
@@ -250,13 +254,19 @@ export function searchArchitecturesV2({
   searchProfile = 'BALANCED',
   onProgress = null
 } = {}) {
-  const required = requiredConstraint(items, requiredItemIds);
-  if (!required.valid) return impossibleRequiredResult(required);
+  const trophyEligibility = optimizerTrophyEligibilityCounts(items);
+  const eligibleItems = filterOptimizerEligibleItems(items);
+  const required = requiredConstraint(eligibleItems, requiredItemIds);
+  if (!required.valid) {
+    const impossible = impossibleRequiredResult(required);
+    impossible.diagnostics.trophyEligibility = trophyEligibility;
+    return impossible;
+  }
 
   const profile = getSearchProfile(searchProfile);
   const extraConstraints = positiveConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key));
   const prefilter = prefilterItems({
-    items,
+    items: eligibleItems,
     sets,
     selections,
     constraints,
@@ -282,7 +292,7 @@ export function searchArchitecturesV2({
     searchProfile: profile
   });
 
-  const originalById = new Map(items.map((item) => [String(item.id), item]));
+  const originalById = new Map(eligibleItems.map((item) => [String(item.id), item]));
   const slotProfiles = new Map();
   for (const rule of SLOT_RULES) {
     const profiles = (prefilter.pools?.[rule.id] || [])
@@ -524,6 +534,7 @@ export function searchArchitecturesV2({
       pruneReasons: Object.fromEntries(pruneReasons),
       rejected: Object.fromEntries(rejectReasons),
       prefilter: prefilter.diagnostics,
+      trophyEligibility,
       nodes: evaluated,
       visited: valid,
       pruned: safePruned + [...rejectReasons.values()].reduce((sum, value) => sum + value, 0)
