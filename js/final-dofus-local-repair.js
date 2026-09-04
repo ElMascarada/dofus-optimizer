@@ -366,6 +366,7 @@ export function repairFinalDofusBuild({
       recoveryEvaluated,
       recoveryLegal,
       recoveryCandidates: recoveryEntries.length,
+      rejected: rejectedReasons,
       recovery: swap?.recovery || null,
       from: swap?.from || null,
       to: swap?.to || null,
