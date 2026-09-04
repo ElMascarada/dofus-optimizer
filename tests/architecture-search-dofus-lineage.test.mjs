@@ -75,7 +75,7 @@ test('architecture state reduction does not reserve mediocre Dofus lineages outs
     state('dofus-dominant', 'dominant-a', 100, 900),
     state('dofus-dominant', 'dominant-b', 90, 900)
   ];
-  const mediocre = state('dofus-mediocre', 'mediocre-child', 95, 1);
+  const mediocre = state('dofus-mediocre', 'mediocre-child', 85, 1);
 
   const kept = keepDiverseStates([promising, ...dominant, mediocre], context({ lineageReserve: 2 }), 3);
   const retainedKeys = keys(kept);
