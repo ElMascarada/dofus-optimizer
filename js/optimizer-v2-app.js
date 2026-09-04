@@ -12,6 +12,7 @@ import { mergeSearchOutputs, withExactCacheDiagnostics } from './search-memory/s
 import { createWorkshopBuildFromOptimizerResult } from './workshop/workshop-build.js';
 import { workshopOptimizationContext } from './workshop/workshop-optimization.js';
 import { FIND_BETTER_BUILD_EVENT, OPEN_WORKSHOP_BUILD_EVENT } from './workshop/workshop-events.js';
+import { optimizerApMpTruth } from './optimizer-v2-result-truth.js';
 
 const $ = (selector) => document.querySelector(selector);
 const classSelect = $('#optimizer-class');
@@ -139,13 +140,18 @@ function renderBuild(build, index) {
   const turns = activeTurns(currentPayload?.turnMode || turnSelect.value)
     .map((turn) => `<span>T${turn} <b>${fmt(build.perTurn?.[turn])}</b></span>`)
     .join('');
+  const apMpTruth = optimizerApMpTruth(build);
+  const t1Truth = apMpTruth.t1
+    ? `<div class="optimizer-v2-t1-effective"><strong>T1</strong> : <b>${fmt(apMpTruth.t1.ap)} PA · ${fmt(apMpTruth.t1.mp)} PM</b> <small>après bonus dynamiques</small></div>`
+    : '';
   return `
     <article class="optimizer-v2-result-card">
       <header><span class="rank">#${index + 1}</span><div><strong>${fmt(build.score)}</strong><small>score de l’objectif sélectionné</small></div></header>
       <div class="optimizer-v2-turns">${turns}</div>
+      ${t1Truth}
       <div class="optimizer-v2-stats">
-        <span>PA <b>${fmt(build.stats?.ap)}</b></span>
-        <span>PM <b>${fmt(build.stats?.mp)}</b></span>
+        <span>PA permanents <b>${fmt(apMpTruth.permanentAp)}</b></span>
+        <span>PM permanents <b>${fmt(apMpTruth.permanentMp)}</b></span>
         <span>PO <b>${fmt(build.stats?.range)}</b></span>
         <span>Vitalité <b>${fmt(build.stats?.vit)}</b></span>
         <span>Initiative <b>${fmt(build.stats?.initiative)}</b></span>
@@ -337,7 +343,6 @@ async function runSearch(refinement = null) {
     const versions = createSearchVersions({ dataset, spellData, rulesVersion: APP_VERSION });
     const query = normalizeSearchQuery({ payload, versions });
     currentQuery = query;
-
     let exact = null;
     let nearby = [];
     let memoryError = null;
