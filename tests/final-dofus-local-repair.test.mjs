@@ -13,7 +13,8 @@ function makeBuild(scores = [1, 10, 10, 10, 10, 10], extras = []) {
 
 function fakeEvaluate({ items }) {
   if (items.some((entry) => entry.illegal)) return { result: null, reason: 'fixture-illegal' };
-  return { result: { items: [...items], score: 0, equipmentScore: 0, stats: {}, effectiveStatsByTurn: { 1: {}, 2: {}, 3: {} } }, reason: null };
+  const score = items.reduce((sum, entry) => sum + Number(entry.testScore || 0), 0);
+  return { result: { items: [...items], score, equipmentScore: score, stats: {}, effectiveStatsByTurn: { 1: {}, 2: {}, 3: {} } }, reason: null };
 }
 
 function fakeRefine({ results }) {
@@ -132,21 +133,10 @@ test('final recovery lets a set-restoring skeleton recombine companion and Dofus
   const structuralDofus = item('structural-dofus', 'dofus', 6);
   const candidates = [...build.items, setHat, offensiveCompanion, structuralDofus];
 
-  const refineSlots = ({ results }) => {
-    const restored = results.find((result) => ids(result).includes('hat-set-a'));
-    assert.ok(restored, 'set-restoring skeleton should enter complete-build recovery');
-    const rebuiltItems = restored.items
-      .map((entry) => entry.slot === 'companion' ? offensiveCompanion : entry)
-      .map((entry) => entry.id === 'd1' ? structuralDofus : entry);
-    return {
-      results: [fakeEvaluate({ items: rebuiltItems }).result],
-      diagnostics: { refined: 1, evaluated: 1, skeletons: results.length }
-    };
-  };
-
-  const output = repair(build, candidates, { refineSlots });
+  const output = repair(build, candidates);
   assert.equal(output.diagnostics.changed, true);
   assert.equal(output.diagnostics.recovery, 'complete-build-neighborhood');
+  assert.equal(output.diagnostics.skeletonChanged, true);
   assert.ok(ids(output.result).includes('hat-set-a'));
   assert.ok(ids(output.result).includes('offensive-companion'));
   assert.ok(ids(output.result).includes('structural-dofus'));
