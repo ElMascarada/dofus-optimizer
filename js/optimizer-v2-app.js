@@ -71,6 +71,11 @@ function fmt(value) {
   return new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 1 }).format(Number(value || 0));
 }
 
+function signedFmt(value) {
+  const number = Number(value || 0);
+  return `${number >= 0 ? '+' : ''}${fmt(number)}`;
+}
+
 function readNumber(id) {
   const value = Number(document.getElementById(id)?.value || 0);
   return Number.isFinite(value) ? Math.max(0, value) : 0;
@@ -142,7 +147,7 @@ function renderBuild(build, index) {
     .join('');
   const apMpTruth = optimizerApMpTruth(build);
   const t1Truth = apMpTruth.t1
-    ? `<div class="optimizer-v2-t1-effective"><strong>T1</strong> : <b>${fmt(apMpTruth.t1.ap)} PA · ${fmt(apMpTruth.t1.mp)} PM</b> <small>après bonus dynamiques</small></div>`
+    ? `<div class="optimizer-v2-t1-effective"><span><strong>Bonus T1</strong> : <b>${signedFmt(apMpTruth.t1.bonusAp)} PA · ${signedFmt(apMpTruth.t1.bonusMp)} PM</b></span><span><strong>PA/PM au T1</strong> : <b>${fmt(apMpTruth.t1.ap)} PA · ${fmt(apMpTruth.t1.mp)} PM</b> <small>disponibles avant actions</small></span></div>`
     : '';
   return `
     <article class="optimizer-v2-result-card">
