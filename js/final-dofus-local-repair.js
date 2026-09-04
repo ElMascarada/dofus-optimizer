@@ -1,6 +1,9 @@
 import { evaluateCompleteBuild } from './complete-build-evaluator.js';
 import { refineCombatTurns } from './combat-turn-refiner.js';
+import { refineOffensiveSlots } from './offensive-slot-refiner.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
+
+const REFINED_SLOTS = new Set(['companion', 'dofus']);
 
 function itemId(item) {
   return String(item?.id || '');
@@ -8,6 +11,14 @@ function itemId(item) {
 
 function buildKey(build) {
   return (build?.items || []).map(itemId).sort().join('|');
+}
+
+function skeletonKey(items = []) {
+  return items
+    .filter((item) => !REFINED_SLOTS.has(item?.slot))
+    .map(itemId)
+    .sort()
+    .join('|');
 }
 
 function sameDofusIdentity(left, right) {
@@ -63,6 +74,70 @@ function scoreAllCanonically(results, context, refineFinal) {
   return scored;
 }
 
+function setCounts(items = []) {
+  const counts = new Map();
+  for (const item of items) {
+    if (!item?.setId || REFINED_SLOTS.has(item.slot)) continue;
+    counts.set(String(item.setId), (counts.get(String(item.setId)) || 0) + 1);
+  }
+  return counts;
+}
+
+function respectsLocks(items, required, rejected) {
+  if ((items || []).some((item) => rejected.has(itemId(item)))) return false;
+  for (const id of required) if (!(items || []).some((item) => itemId(item) === id)) return false;
+  return true;
+}
+
+function completeBuildRecoverySeeds(build, candidateItems, required, rejected, searchProfile) {
+  const profile = getSearchProfile(searchProfile);
+  const budget = Math.max(2, Math.ceil(Number(profile.refine.maxSkeletons || 4) / 3));
+  const baseCounts = setCounts(build.items);
+  const seeds = [{ ...build, recoveryOpportunity: Infinity }];
+  const seen = new Set([skeletonKey(build.items)]);
+  const structuralPool = (candidateItems || [])
+    .filter((item) => item && !REFINED_SLOTS.has(item.slot) && !rejected.has(itemId(item)))
+    .sort((left, right) => itemId(left).localeCompare(itemId(right)));
+
+  for (let index = 0; index < build.items.length; index++) {
+    const from = build.items[index];
+    if (!from || REFINED_SLOTS.has(from.slot) || required.has(itemId(from))) continue;
+
+    for (const to of structuralPool) {
+      if (to.slot !== from.slot || itemId(to) === itemId(from) || !to.setId) continue;
+      if (build.items.some((item, itemIndex) => itemIndex !== index && itemId(item) === itemId(to))) continue;
+      const targetSet = String(to.setId);
+      const before = Number(baseCounts.get(targetSet) || 0);
+      const after = before + 1 - (String(from.setId || '') === targetSet ? 1 : 0);
+      // Recovery is deliberately narrow: only restore/deepen a set synergy that
+      // already has another equipped piece. Standalone structural exploration
+      // remains owned by the main architecture search.
+      if (before < 1 || after <= before) continue;
+
+      const items = [...build.items];
+      items[index] = to;
+      if (!respectsLocks(items, required, rejected)) continue;
+      const key = skeletonKey(items);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      seeds.push({
+        ...build,
+        items,
+        score: Number.NEGATIVE_INFINITY,
+        equipmentScore: Number.NEGATIVE_INFINITY,
+        recoveryOpportunity: after
+      });
+    }
+  }
+
+  const original = seeds[0];
+  const challengers = seeds.slice(1)
+    .sort((left, right) => Number(right.recoveryOpportunity || 0) - Number(left.recoveryOpportunity || 0)
+      || skeletonKey(left.items).localeCompare(skeletonKey(right.items)))
+    .slice(0, Math.max(0, budget - 1));
+  return [original, ...challengers];
+}
+
 export function repairFinalDofusBuild({
   build,
   candidateItems = [],
@@ -78,7 +153,8 @@ export function repairFinalDofusBuild({
   requiredItemIds = [],
   rejectedItemIds = [],
   evaluateComplete = evaluateCompleteBuild,
-  refineFinal = refineCombatTurns
+  refineFinal = refineCombatTurns,
+  refineSlots = refineOffensiveSlots
 } = {}) {
   if (!build?.items?.length) {
     return { result: build || null, diagnostics: { changed: false, evaluated: 0, legal: 0, reason: 'no-build' } };
@@ -109,8 +185,7 @@ export function repairFinalDofusBuild({
       const neighborItems = [...build.items];
       neighborItems[index] = to;
       if (neighborItems.length !== build.items.length || hasDuplicateDofus(neighborItems)) continue;
-      if ([...required].some((id) => !neighborItems.some((item) => itemId(item) === id))) continue;
-      if (neighborItems.some((item) => rejected.has(itemId(item)))) continue;
+      if (!respectsLocks(neighborItems, required, rejected)) continue;
 
       attempted++;
       const evaluation = evaluateComplete({
@@ -133,7 +208,47 @@ export function repairFinalDofusBuild({
       evaluatedByKey.set(key, {
         result: evaluation.result,
         from: from.name || itemId(from),
-        to: to.name || itemId(to)
+        to: to.name || itemId(to),
+        recovery: 'dofus-distance-1'
+      });
+    }
+  }
+
+  const recoverySeeds = completeBuildRecoverySeeds(build, candidateItems, required, rejected, searchProfile);
+  let recoveryDiagnostics = { evaluated: 0, skeletons: recoverySeeds.length, refined: 0 };
+  if (recoverySeeds.length > 0
+    && candidateItems.some((item) => item?.slot === 'companion')
+    && candidateItems.some((item) => item?.slot === 'dofus')) {
+    const profile = getSearchProfile(searchProfile);
+    const recoveryTopN = Math.max(
+      Number(profile.combat.preciseCandidateCeiling || 10),
+      recoverySeeds.length * 6
+    );
+    const allowedCandidates = candidateItems.filter((item) => !rejected.has(itemId(item)));
+    const recovered = refineSlots({
+      results: recoverySeeds,
+      items: allowedCandidates,
+      sets,
+      selections,
+      constraints,
+      fmPolicy,
+      turnMode,
+      scenario,
+      topN: recoveryTopN,
+      preservePrysmaradites: false,
+      searchProfile
+    });
+    recoveryDiagnostics = recovered?.diagnostics || recoveryDiagnostics;
+    for (const candidate of recovered?.results || []) {
+      if (!Number.isFinite(Number(candidate?.score))) continue;
+      if (!respectsLocks(candidate.items, required, rejected)) continue;
+      const key = buildKey(candidate);
+      if (!key || key === buildKey(build) || evaluatedByKey.has(key)) continue;
+      evaluatedByKey.set(key, {
+        result: candidate,
+        from: null,
+        to: null,
+        recovery: 'complete-build-neighborhood'
       });
     }
   }
@@ -154,6 +269,9 @@ export function repairFinalDofusBuild({
         attempted,
         legal,
         finalScored: scored.length,
+        recoverySkeletons: recoverySeeds.length,
+        recoveryEvaluated: Number(recoveryDiagnostics.evaluated || 0),
+        recoveryCandidates: Number(recoveryDiagnostics.refined || 0),
         rejected: rejectedReasons
       }
     };
@@ -168,7 +286,10 @@ export function repairFinalDofusBuild({
       attempted,
       legal,
       finalScored: scored.length,
-      rejected: rejectedReasons,
+      recoverySkeletons: recoverySeeds.length,
+      recoveryEvaluated: Number(recoveryDiagnostics.evaluated || 0),
+      recoveryCandidates: Number(recoveryDiagnostics.refined || 0),
+      recovery: swap?.recovery || null,
       from: swap?.from || null,
       to: swap?.to || null,
       beforeScore: Number(build.score || 0),
