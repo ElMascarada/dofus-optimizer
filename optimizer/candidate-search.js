@@ -200,11 +200,13 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
     for (const state of entry.lane) {
       const key = choiceKey(state.items);
       if (!key || representativeKeys.has(key)) continue;
+      const objectiveGain = Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0);
+      if (!(objectiveGain > 0)) continue;
       representativeKeys.add(key);
       originalByKey.set(key, state);
       marginalPool.push({
         ...state,
-        objectiveScore: Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0),
+        objectiveScore: objectiveGain,
         score: Number(state.score || 0) - Number(parent.score || 0)
       });
     }
