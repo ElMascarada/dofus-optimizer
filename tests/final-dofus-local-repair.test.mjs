@@ -108,7 +108,7 @@ test('local Dofus repair is deterministic across candidate ordering', () => {
   assert.equal(first.diagnostics.to, second.diagnostics.to);
 });
 
-test('non-Dofus slots are never modified, including a crit-oriented companion fixture', () => {
+test('non-Dofus slots are never modified when no complete-build recovery pool is available', () => {
   const build = makeBuild();
   const companion = build.items.find((entry) => entry.slot === 'companion');
   companion.stats = { crit: 20, critDamage: 80 };
@@ -120,4 +120,35 @@ test('non-Dofus slots are never modified, including a crit-oriented companion fi
   assert.equal(output.diagnostics.changed, true);
   assert.deepEqual(output.result.items.filter((entry) => entry.slot !== 'dofus').map((entry) => entry.id), beforeNonDofus);
   assert.equal(output.result.items.find((entry) => entry.slot === 'companion'), companion);
+});
+
+test('final recovery lets a set-restoring skeleton recombine companion and Dofus before final scoring', () => {
+  const build = makeBuild([8, 8, 8, 8, 8, 8], [item('cape-set-a', 'cape', 0, { setId: 'set-a' })]);
+  build.items.find((entry) => entry.id === 'hat').testScore = 1;
+  build.score = build.items.reduce((sum, entry) => sum + Number(entry.testScore || 0), 0);
+
+  const setHat = item('hat-set-a', 'hat', 4, { setId: 'set-a' });
+  const offensiveCompanion = item('offensive-companion', 'companion', 7);
+  const structuralDofus = item('structural-dofus', 'dofus', 6);
+  const candidates = [...build.items, setHat, offensiveCompanion, structuralDofus];
+
+  const refineSlots = ({ results }) => {
+    const restored = results.find((result) => ids(result).includes('hat-set-a'));
+    assert.ok(restored, 'set-restoring skeleton should enter complete-build recovery');
+    const rebuiltItems = restored.items
+      .map((entry) => entry.slot === 'companion' ? offensiveCompanion : entry)
+      .map((entry) => entry.id === 'd1' ? structuralDofus : entry);
+    return {
+      results: [fakeEvaluate({ items: rebuiltItems }).result],
+      diagnostics: { refined: 1, evaluated: 1, skeletons: results.length }
+    };
+  };
+
+  const output = repair(build, candidates, { refineSlots });
+  assert.equal(output.diagnostics.changed, true);
+  assert.equal(output.diagnostics.recovery, 'complete-build-neighborhood');
+  assert.ok(ids(output.result).includes('hat-set-a'));
+  assert.ok(ids(output.result).includes('offensive-companion'));
+  assert.ok(ids(output.result).includes('structural-dofus'));
+  assert.ok(output.result.score > build.score);
 });
