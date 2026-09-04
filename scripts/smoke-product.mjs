@@ -24,7 +24,7 @@ const request = createOptimizerV2Request({
   dataset,
   spellData,
   classId: String(iop.id),
-  element: 'earth',
+  element: 'fire',
   constraints: {
     ap: 12,
     mp: 6,
@@ -61,6 +61,7 @@ const output = resultMessage?.output || { results: [], diagnostics: {} };
 const results = output.results || [];
 const best = results[0] || null;
 const diagnostics = output.diagnostics || {};
+const finalRecovery = diagnostics.finalDofusLocalRepair || {};
 
 const ignoredPassiveIds = [
   'deep-purple',
@@ -70,7 +71,7 @@ const ignoredPassiveIds = [
   'descent-to-abyss'
 ];
 const gearSelections = (request.classSpells || [])
-  .filter((spell) => (spell?.hits || []).some((hit) => hit?.element === 'earth'))
+  .filter((spell) => (spell?.hits || []).some((hit) => hit?.element === 'fire'))
   .map((spell) => ({
     spell: { ...spell },
     enabled: true,
@@ -183,7 +184,7 @@ function number(value) {
 
 const t1PlanPass = t1Sequence.length > 0;
 const spellBreakdownPass = spellBreakdown.length > 0;
-const statsPresent = ['ap', 'mp', 'earth', 'power'].every((key) => Number.isFinite(Number(finalStats?.[key])));
+const statsPresent = ['ap', 'mp', 'fire', 'power'].every((key) => Number.isFinite(Number(finalStats?.[key])));
 const pass = !errorMessage
   && results.length > 0
   && buildLegal
@@ -195,10 +196,19 @@ const pass = !errorMessage
   && canonicalTruth;
 
 console.log('PRODUCT_SMOKE');
-console.log('scenario=Iop/Earth/T1/12AP/6MP/0Initiative');
+console.log('scenario=Iop/Fire/T1/12AP/6MP/0Initiative');
 console.log('');
 console.log(`optimizerResults=${results.length}`);
 console.log(`bestScore=${best ? number(best.score) : 'UNKNOWN'}`);
+console.log(`bestItems=${best ? (best.items || []).map((item) => item.name || item.id).join(' | ') : 'UNKNOWN'}`);
+console.log(`finalRecoveryChanged=${Boolean(finalRecovery.changed)}`);
+console.log(`finalRecoveryKind=${finalRecovery.recovery || 'NONE'}`);
+console.log(`finalRecoveryBefore=${number(finalRecovery.beforeScore)}`);
+console.log(`finalRecoveryAfter=${number(finalRecovery.afterScore)}`);
+console.log(`finalRecoveryDelta=${number(finalRecovery.delta)}`);
+console.log(`finalRecoveryCompanion=${finalRecovery.companion || 'NONE'}`);
+console.log(`finalRecoveryDofusChange=${finalRecovery.dofusChange || 'NONE'}`);
+console.log(`finalRecoverySkeletonChanged=${Boolean(finalRecovery.skeletonChanged)}`);
 console.log('');
 console.log(`buildLegal=${buildLegal ? 'PASS' : 'FAIL'}`);
 console.log(`workshopLegal=${workshopStatus}`);
@@ -209,7 +219,7 @@ console.log(`workshopReason=${workshopReason}`);
 console.log('');
 console.log(`ap=${number(finalStats?.ap)}`);
 console.log(`mp=${number(finalStats?.mp)}`);
-console.log(`earth=${number(finalStats?.earth)}`);
+console.log(`fire=${number(finalStats?.fire)}`);
 console.log(`power=${number(finalStats?.power)}`);
 console.log('');
 console.log(`t1Plan=${t1PlanPass ? 'PASS' : 'FAIL'}`);
