@@ -130,7 +130,7 @@ test('final recovery lets a set-restoring skeleton recombine companion and Dofus
 
   const setHat = item('hat-set-a', 'hat', 4, { setId: 'set-a' });
   const offensiveCompanion = item('offensive-companion', 'companion', 7);
-  const structuralDofus = item('structural-dofus', 'dofus', 6);
+  const structuralDofus = item('structural-dofus', 'dofus', 9);
   const candidates = [...build.items, setHat, offensiveCompanion, structuralDofus];
 
   const output = repair(build, candidates);
