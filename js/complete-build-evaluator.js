@@ -16,6 +16,46 @@ import {
   specialSlotRulesAreValid
 } from './build-legality.js';
 
+const evaluationCacheByScenario = new WeakMap();
+const objectIds = new WeakMap();
+let nextObjectId = 1;
+
+function objectId(value) {
+  if (!value || (typeof value !== 'object' && typeof value !== 'function')) return String(value);
+  if (!objectIds.has(value)) objectIds.set(value, nextObjectId++);
+  return objectIds.get(value);
+}
+
+function policyKey(policy = {}) {
+  return Object.entries(policy || {})
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}:${JSON.stringify(value)}`)
+    .join('|');
+}
+
+function evaluationKey({ items, sets, selections, constraints, fmPolicy, turnMode, character }) {
+  const itemKey = (items || []).map((item) => String(item.id)).sort().join('|');
+  return [
+    objectId(sets),
+    objectId(selections),
+    objectId(constraints),
+    objectId(character),
+    String(turnMode),
+    policyKey(fmPolicy),
+    itemKey
+  ].join('::');
+}
+
+function scenarioCache(scenario) {
+  if (!scenario || typeof scenario !== 'object') return null;
+  let cache = evaluationCacheByScenario.get(scenario);
+  if (!cache) {
+    cache = { entries: new Map(), hits: 0, misses: 0 };
+    evaluationCacheByScenario.set(scenario, cache);
+  }
+  return cache;
+}
+
 function average(values = []) {
   const numbers = values.map(Number).filter(Number.isFinite);
   if (!numbers.length) return 0;
@@ -61,7 +101,7 @@ function resourceBonus(turnStats = {}, permanentStats = {}) {
   };
 }
 
-export function evaluateCompleteBuild({
+function evaluateCompleteBuildUncached({
   items = [],
   sets = [],
   selections = [],
@@ -207,4 +247,28 @@ export function evaluateCompleteBuild({
     reason: null,
     warnings
   };
+}
+
+export function evaluateCompleteBuild(options = {}) {
+  const scenario = options?.scenario;
+  const cache = scenarioCache(scenario);
+  if (!cache) return evaluateCompleteBuildUncached(options);
+
+  const key = evaluationKey(options);
+  if (cache.entries.has(key)) {
+    cache.hits++;
+    return cache.entries.get(key);
+  }
+
+  const evaluation = evaluateCompleteBuildUncached(options);
+  cache.entries.set(key, evaluation);
+  cache.misses++;
+  return evaluation;
+}
+
+export function completeBuildEvaluationCacheStats(scenario) {
+  const cache = scenario && typeof scenario === 'object' ? evaluationCacheByScenario.get(scenario) : null;
+  return cache
+    ? { hits: cache.hits, misses: cache.misses, entries: cache.entries.size }
+    : { hits: 0, misses: 0, entries: 0 };
 }
