@@ -54,6 +54,13 @@ function buildSpellBreakdowns(selections, baseStats, items, scenario) {
     });
 }
 
+function resourceBonus(turnStats = {}, permanentStats = {}) {
+  return {
+    ap: Number(turnStats.ap || 0) - Number(permanentStats.ap || 0),
+    mp: Number(turnStats.mp || 0) - Number(permanentStats.mp || 0)
+  };
+}
+
 export function evaluateCompleteBuild({
   items = [],
   sets = [],
@@ -163,8 +170,14 @@ export function evaluateCompleteBuild({
   if (fm.objective.unresolvedPassiveContexts?.length) warnings.push('unresolved-passive');
 
   const effectiveStatsByTurn = {};
+  const resourceBonusesByTurn = {};
   for (const turn of [1, 2, 3]) {
-    effectiveStatsByTurn[turn] = effectiveStats(statsForTurnDetailed(fm.stats, items, turn, scenario).stats);
+    // statsForTurnDetailed is resolved before any combat action is spent. Keep
+    // PA/PM deltas explicitly so presentation never has to infer a temporary
+    // resource bonus from rotation state such as apRemainingAfterCast.
+    const detailed = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
+    effectiveStatsByTurn[turn] = effectiveStats(detailed);
+    resourceBonusesByTurn[turn] = resourceBonus(detailed, fm.stats);
   }
   const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
 
@@ -175,6 +188,7 @@ export function evaluateCompleteBuild({
       items: [...items],
       stats: effectiveStats(fm.stats),
       effectiveStatsByTurn,
+      resourceBonusesByTurn,
       spellBreakdowns,
       characteristics: charResult.allocation,
       characteristicRequirements: minimumStats,
