@@ -10,7 +10,6 @@ import {
 import {
   branchFeasibility,
   buildGroupChoices,
-  fastPartialRank,
   offensiveUpperBound,
   staticBuildStats
 } from '../optimizer/candidate-search.js';
@@ -153,8 +152,8 @@ function impossibleRequiredResult(required) {
   };
 }
 
-function progressStats(items, setsById, constraints, fmPolicy = {}) {
-  const stats = staticBuildStats(items, setsById);
+function progressStats(items, setsById, constraints, fmPolicy = {}, staticStats = null) {
+  const stats = staticStats ? { ...staticStats } : staticBuildStats(items, setsById);
   if (Number(fmPolicy?.exoAp) === 1) stats.ap = num(stats, 'ap') + 1;
   if (Number(fmPolicy?.exoMp) === 1) stats.mp = num(stats, 'mp') + 1;
   if (Number(constraints?.vit || 0) > 0) stats.vit = num(stats, 'vit') + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
@@ -167,9 +166,40 @@ function progressStats(items, setsById, constraints, fmPolicy = {}) {
   return stats;
 }
 
+function stateStaticStats(state, context) {
+  if (!state.searchStaticStats) {
+    state.searchStaticStats = staticBuildStats(state.items, context.setsById);
+  }
+  return state.searchStaticStats;
+}
+
+function stateProgress(state, context) {
+  if (!state.searchStats) {
+    state.searchStats = progressStats(
+      state.items,
+      context.setsById,
+      context.constraints,
+      context.fmPolicy,
+      stateStaticStats(state, context)
+    );
+  }
+  if (!state.searchProgress) {
+    state.searchProgress = constraintProgressForStats(state.searchStats, context.constraints);
+  }
+  return state.searchProgress;
+}
+
+function stateChoiceKey(state) {
+  if (state.searchChoiceKey === undefined) {
+    state.searchChoiceKey = [...state.ids].sort().join('|');
+  }
+  return state.searchChoiceKey;
+}
+
 function stateBucket(state, context) {
-  const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
-  const progress = constraintProgressForStats(stats, context.constraints);
+  if (state.searchBucket !== undefined) return state.searchBucket;
+  const progress = stateProgress(state, context);
+  const stats = state.searchStats;
   const setCounts = new Map();
   for (const item of state.items) if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
   const setSignature = [...setCounts.entries()]
@@ -177,16 +207,15 @@ function stateBucket(state, context) {
     .sort(([a], [b]) => String(a).localeCompare(String(b)))
     .map(([id, count]) => `${id}:${Math.min(count, 4)}`)
     .join(',');
-  return `${Math.min(num(stats, 'ap'), 14)}:${Math.min(num(stats, 'mp'), 8)}:${progress.signature}:${setSignature}`;
+  state.searchBucket = `${Math.min(num(stats, 'ap'), 14)}:${Math.min(num(stats, 'mp'), 8)}:${progress.signature}:${setSignature}`;
+  return state.searchBucket;
 }
 
 function keepDiverseStates(states, context, limit) {
   for (const state of states) {
-    const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
-    const progress = constraintProgressForStats(stats, context.constraints);
-    state.searchStats = stats;
+    const progress = stateProgress(state, context);
     state.searchRank = state.heuristic
-      + fastPartialRank(state.items, context.policy, context.setsById)
+      + context.policy.rankStats(stateStaticStats(state, context)).rankScore
       + progress.coverage * context.profile.ranking.constraintProgressWeight;
     state.constraintReady = progress.ready;
   }
@@ -197,7 +226,7 @@ function keepDiverseStates(states, context, limit) {
 
   function tryKeep(state, { enforceBucket = true } = {}) {
     if (output.length >= limit) return false;
-    const key = [...state.ids].sort().join('|');
+    const key = stateChoiceKey(state);
     if (seen.has(key)) return false;
     const bucket = stateBucket(state, context);
     const used = perBucket.get(bucket) || 0;
@@ -264,7 +293,12 @@ export function searchArchitecturesV2({
   }
 
   const profile = getSearchProfile(searchProfile);
-  const extraConstraints = positiveConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key));
+  const constraintKeys = positiveConstraintKeys(constraints);
+  const extraConstraints = constraintKeys.some((key) => !['ap', 'mp'].includes(key));
+  const resultLimit = Math.max(1, Number(topN || 10));
+  const evaluationLimit = extraConstraints
+    ? profile.search.constrainedEvaluationLimit
+    : profile.search.evaluationLimit;
   const prefilter = prefilterItems({
     items: eligibleItems,
     sets,
@@ -367,6 +401,7 @@ export function searchArchitecturesV2({
         return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
       });
 
+    const initialStaticStats = constraintKeys.length ? staticBuildStats(anchors, setsById) : null;
     const initialFeasibility = branchFeasibility({
       items: anchors,
       remainingGroups: missing,
@@ -374,7 +409,8 @@ export function searchArchitecturesV2({
       constraints,
       fmPolicy,
       sets,
-      setsById
+      setsById,
+      currentStats: initialStaticStats
     });
     if (!initialFeasibility.feasible) {
       const reason = initialFeasibility.key === 'shape'
@@ -388,7 +424,8 @@ export function searchArchitecturesV2({
     let states = [{
       items: anchors,
       ids: new Set(anchors.map((item) => String(item.id))),
-      heuristic: Number(entry.architecture?.score || 0)
+      heuristic: Number(entry.architecture?.score || 0),
+      ...(initialStaticStats ? { searchStaticStats: initialStaticStats } : {})
     }];
 
     for (let groupIndex = 0; groupIndex < missing.length; groupIndex++) {
@@ -402,6 +439,7 @@ export function searchArchitecturesV2({
           const nextItems = [...state.items, ...choice.items];
           if (!specialSlotRulesAreValid(nextItems)) continue;
 
+          const nextStaticStats = constraintKeys.length ? staticBuildStats(nextItems, setsById) : null;
           const feasibility = branchFeasibility({
             items: nextItems,
             remainingGroups,
@@ -409,7 +447,8 @@ export function searchArchitecturesV2({
             constraints,
             fmPolicy,
             sets,
-            setsById
+            setsById,
+            currentStats: nextStaticStats
           });
           if (!feasibility.feasible) {
             const reason = feasibility.key === 'shape'
@@ -420,7 +459,7 @@ export function searchArchitecturesV2({
             continue;
           }
 
-          const threshold = results.length >= Math.max(1, Number(topN || 10))
+          const threshold = results.length >= resultLimit
             ? Number(results[results.length - 1].score || 0)
             : null;
           if (threshold !== null) {
@@ -442,7 +481,8 @@ export function searchArchitecturesV2({
           next.push({
             items: nextItems,
             ids: new Set([...state.ids, ...choice.items.map((item) => String(item.id))]),
-            heuristic: state.heuristic + choice.score
+            heuristic: state.heuristic + choice.score,
+            ...(nextStaticStats ? { searchStaticStats: nextStaticStats } : {})
           });
           expandedStates++;
         }
@@ -459,16 +499,13 @@ export function searchArchitecturesV2({
 
     const complete = states.filter((state) => fullShape(state.items));
     complete.sort((a, b) => {
-      const pa = constraintProgressForStats(progressStats(a.items, setsById, constraints, fmPolicy), constraints);
-      const pb = constraintProgressForStats(progressStats(b.items, setsById, constraints, fmPolicy), constraints);
+      const pa = stateProgress(a, context);
+      const pb = stateProgress(b, context);
       return Number(pb.ready) - Number(pa.ready)
         || (b.searchRank || b.heuristic) - (a.searchRank || a.heuristic);
     });
 
     legalCandidates += complete.length;
-    const evaluationLimit = extraConstraints
-      ? profile.search.constrainedEvaluationLimit
-      : profile.search.evaluationLimit;
     const evaluationPool = complete.slice(0, evaluationLimit);
     heuristicTrimmed += Math.max(0, complete.length - evaluationPool.length);
 
@@ -496,7 +533,7 @@ export function searchArchitecturesV2({
           searchArchitecture: entry.variant.label,
           searchWhySelected: [...(entry.architecture?.whySelected || [])]
         };
-        insertTop(results, decorated, Math.max(1, Number(topN || 10)));
+        insertTop(results, decorated, resultLimit);
       } else {
         addCount(rejectReasons, evaluation.reason || 'unknown');
       }
@@ -521,7 +558,7 @@ export function searchArchitecturesV2({
       setCores: synergy.diagnostics,
       requiredItemIds: required.ids,
       extraConstraintSearch: extraConstraints,
-      constrainedStats: positiveConstraintKeys(constraints),
+      constrainedStats: constraintKeys,
       evaluated,
       valid,
       evaluatedByOrigin,
