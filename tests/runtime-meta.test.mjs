@@ -10,7 +10,7 @@ const serviceWorker = await readFile(new URL('../service-worker.js', import.meta
 const sessionBridge = await readFile(new URL('../js/optimizer-session-bridge.js', import.meta.url), 'utf8');
 
 test('runtime metadata is the canonical application version source', () => {
-  assert.equal(globalThis.DofusOptimizerRuntime.appVersion, '0.14.2');
+  assert.equal(globalThis.DofusOptimizerRuntime.appVersion, '0.14.4');
   assert.equal(APP_VERSION, globalThis.DofusOptimizerRuntime.appVersion);
   assert.equal(Object.hasOwn(packageJson, 'version'), false);
   assert.match(serviceWorker, /DofusOptimizerRuntime\.serviceWorkerCache/);

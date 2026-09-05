@@ -57,6 +57,7 @@ let pendingSeedOutput = null;
 let currentPayload = null;
 let currentQuery = null;
 let currentMemoryContext = { fingerprint: '', nearbyRecords: 0, seedCount: 0 };
+let currentPersistentLockedItemsBySlot = {};
 let activeRefinement = null;
 let queuedFindBetterBuild = null;
 const searchMemory = new SearchMemoryRepository();
@@ -120,9 +121,12 @@ function setRefinementContext(refinement = null) {
     return;
   }
   const locks = Object.keys(refinement.lockedItemsBySlot || {}).length;
+  const required = Object.keys(refinement.searchRequiredItemsBySlot || {}).length;
   const rejects = refinement.rejectedItemIds?.length || 0;
   refinementContext.hidden = false;
-  refinementContext.innerHTML = `<strong>Optimisation depuis l’Atelier</strong> · ${locks} item${locks > 1 ? 's' : ''} verrouillé${locks > 1 ? 's' : ''} · ${rejects} rejet${rejects > 1 ? 's' : ''}. Les autres slots restent libres de changer.`;
+  refinementContext.innerHTML = refinement.mode === 'fill-missing'
+    ? `<strong>Compléter depuis l’Atelier</strong> · ${required} item${required > 1 ? 's' : ''} conservé${required > 1 ? 's' : ''} · ${rejects} rejet${rejects > 1 ? 's' : ''}. Les slots vides restent libres.`
+    : `<strong>Optimisation depuis l’Atelier</strong> · ${locks} item${locks > 1 ? 's' : ''} verrouillé${locks > 1 ? 's' : ''} · ${rejects} rejet${rejects > 1 ? 's' : ''}. Les autres slots restent libres de changer.`;
 }
 
 function setSearchControlsDisabled(disabled) {
@@ -321,6 +325,7 @@ async function runSearch(refinement = null) {
   renderState('loading', 'Préparation de la recherche', 'Vérification des résultats compatibles déjà connus avant de lancer un nouveau calcul.');
 
   try {
+    currentPersistentLockedItemsBySlot = { ...(refinement?.lockedItemsBySlot || {}) };
     const payload = createOptimizerV2Request({
       dataset,
       spellData,
@@ -330,7 +335,7 @@ async function runSearch(refinement = null) {
       fmPolicy: readFmPolicy(),
       turnMode: turnSelect.value,
       topN: 10,
-      lockedItemsBySlot: refinement?.lockedItemsBySlot || {},
+      lockedItemsBySlot: refinement?.searchRequiredItemsBySlot || {},
       rejectedItemIds: refinement?.rejectedItemIds || []
     });
     if (!payload.classSpells.some((spell) => (spell.hits || []).length > 0)) {
@@ -419,8 +424,12 @@ async function runSearch(refinement = null) {
 
 async function findBetter(build) {
   const refinement = workshopOptimizationContext(build);
-  if (!refinement.classId || !refinement.seedBuild) {
-    diagnosticsRoot.textContent = 'Trouver mieux nécessite une classe et un stuff Atelier complet.';
+  const requiredCount = Object.keys(refinement.searchRequiredItemsBySlot || {}).length;
+  const canRun = refinement.mode === 'improve-complete'
+    ? Boolean(refinement.seedBuild)
+    : requiredCount > 0;
+  if (!refinement.classId || !canRun) {
+    diagnosticsRoot.textContent = 'L’optimisation Atelier nécessite une classe et au moins un item équipé.';
     return;
   }
   if (isSearching()) stopSearch();
@@ -447,7 +456,7 @@ resultsRoot.addEventListener('click', (event) => {
       result,
       classId: classSelect.value,
       fmPolicy: currentPayload.fmPolicy,
-      lockedItemsBySlot: currentPayload.lockedItemsBySlot,
+      lockedItemsBySlot: currentPersistentLockedItemsBySlot,
       rejectedItemIds: currentPayload.rejectedItemIds
     });
     document.dispatchEvent(new CustomEvent(OPEN_WORKSHOP_BUILD_EVENT, { detail: { build } }));
