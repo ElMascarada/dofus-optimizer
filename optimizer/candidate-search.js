@@ -590,7 +590,7 @@ export function branchFeasibility({
   return { feasible: true, key: null, actual: 0, maximum: Infinity, target: 0 };
 }
 
-function optimisticCurrentStats(items, context) {
+function optimisticCurrentStats(items, context, optimisticItemCache = null) {
   const stats = {};
   addPositive(stats, BASE_CHARACTER.baseStats || {});
   for (const element of ['earth', 'fire', 'water', 'air']) {
@@ -598,11 +598,15 @@ function optimisticCurrentStats(items, context) {
   }
   let bounded = true;
   for (const item of items || []) {
-    const optimistic = optimisticItemStats(item, {
-      includePassives: true,
-      turnMode: context.turnMode,
-      scenario: context.scenario
-    });
+    let optimistic = optimisticItemCache?.get(item);
+    if (optimistic === undefined) {
+      optimistic = optimisticItemStats(item, {
+        includePassives: true,
+        turnMode: context.turnMode,
+        scenario: context.scenario
+      });
+      optimisticItemCache?.set(item, optimistic);
+    }
     bounded = bounded && optimistic.bounded;
     addPositive(stats, optimistic.stats);
   }
@@ -646,9 +650,10 @@ export function offensiveUpperBound({
   profilesFor,
   policy,
   sets = [],
-  fmPolicy = {}
+  fmPolicy = {},
+  optimisticItemCache = null
 } = {}) {
-  const current = optimisticCurrentStats(items, policy);
+  const current = optimisticCurrentStats(items, policy, optimisticItemCache);
   const envelope = offensiveEnvelope({ remainingGroups, profilesFor, policy, sets });
   const remaining = envelope.remaining;
   if (!current.bounded || !remaining.bounded || remaining.impossibleShape) return Infinity;

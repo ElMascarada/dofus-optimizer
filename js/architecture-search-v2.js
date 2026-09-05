@@ -212,15 +212,55 @@ function keepDiverseStates(states, context, limit) {
   // Preserve a narrow lane for each context-relevant Pareto dimension so that
   // complete-build evaluation, not a partial scalar rank, gets the final say.
   const specialistReserve = Math.max(0, Number(context.profile.search.groupSpecialistReservePerStat || 0));
+
+  function compareSpecialist(a, b, statKey) {
+    return num(b.state.searchStats, statKey) - num(a.state.searchStats, statKey)
+      || Number(b.state.constraintReady) - Number(a.state.constraintReady)
+      || b.state.searchRank - a.state.searchRank
+      || a.stateIndex - b.stateIndex;
+  }
+
   for (const statKey of context.policy.paretoKeys || []) {
     if (output.length >= limit || specialistReserve <= 0) break;
-    const bySpecialist = [...states]
-      .filter((state) => num(state.searchStats, statKey) > 0)
-      .sort((a, b) => num(b.searchStats, statKey) - num(a.searchStats, statKey)
-        || Number(b.constraintReady) - Number(a.constraintReady)
-        || b.searchRank - a.searchRank);
+    const bestSpecialists = [];
+
+    for (let stateIndex = 0; stateIndex < states.length; stateIndex++) {
+      const state = states[stateIndex];
+      if (num(state.searchStats, statKey) <= 0) continue;
+
+      const candidate = { state, stateIndex, key: null };
+      let insertionIndex = 0;
+      while (
+        insertionIndex < bestSpecialists.length
+        && compareSpecialist(bestSpecialists[insertionIndex], candidate, statKey) <= 0
+      ) {
+        insertionIndex++;
+      }
+      if (bestSpecialists.length >= specialistReserve && insertionIndex >= specialistReserve) continue;
+
+      const key = [...state.ids].sort().join('|');
+      if (seen.has(key)) continue;
+      candidate.key = key;
+
+      const duplicateIndex = bestSpecialists.findIndex((entry) => entry.key === key);
+      if (duplicateIndex >= 0) {
+        if (compareSpecialist(candidate, bestSpecialists[duplicateIndex], statKey) >= 0) continue;
+        bestSpecialists.splice(duplicateIndex, 1);
+      }
+
+      insertionIndex = 0;
+      while (
+        insertionIndex < bestSpecialists.length
+        && compareSpecialist(bestSpecialists[insertionIndex], candidate, statKey) <= 0
+      ) {
+        insertionIndex++;
+      }
+      bestSpecialists.splice(insertionIndex, 0, candidate);
+      if (bestSpecialists.length > specialistReserve) bestSpecialists.length = specialistReserve;
+    }
+
     let kept = 0;
-    for (const state of bySpecialist) {
+    for (const { state } of bestSpecialists) {
       if (tryKeep(state, { enforceBucket: false })) kept++;
       if (kept >= specialistReserve || output.length >= limit) break;
     }
@@ -276,6 +316,7 @@ export function searchArchitecturesV2({
     searchProfile: profile
   });
   const policy = prefilter.policy;
+  const offensiveOptimisticItemCache = new Map();
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const context = { policy, profile, selections, constraints, fmPolicy, turnMode, scenario, sets, setsById };
 
@@ -430,7 +471,8 @@ export function searchArchitecturesV2({
               profilesFor,
               policy,
               sets,
-              fmPolicy
+              fmPolicy,
+              optimisticItemCache: offensiveOptimisticItemCache
             });
             if (Number.isFinite(bound) && bound + 1e-9 < threshold) {
               addCount(pruneReasons, 'offensive upper bound below current threshold');
