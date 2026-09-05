@@ -17,6 +17,9 @@ import {
 } from './build-legality.js';
 
 const evaluationCacheByScenario = new WeakMap();
+const policyKeyByPolicy = new WeakMap();
+const setsByIdBySets = new WeakMap();
+const elementValuesBySelections = new WeakMap();
 const objectIds = new WeakMap();
 let nextObjectId = 1;
 
@@ -27,10 +30,33 @@ function objectId(value) {
 }
 
 function policyKey(policy = {}) {
-  return Object.entries(policy || {})
+  if (policy && typeof policy === 'object' && policyKeyByPolicy.has(policy)) {
+    return policyKeyByPolicy.get(policy);
+  }
+  const key = Object.entries(policy || {})
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([key, value]) => `${key}:${JSON.stringify(value)}`)
+    .map(([name, value]) => `${name}:${JSON.stringify(value)}`)
     .join('|');
+  if (policy && typeof policy === 'object') policyKeyByPolicy.set(policy, key);
+  return key;
+}
+
+function setsByIdFor(sets = []) {
+  if (sets && typeof sets === 'object' && setsByIdBySets.has(sets)) {
+    return setsByIdBySets.get(sets);
+  }
+  const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
+  if (sets && typeof sets === 'object') setsByIdBySets.set(sets, setsById);
+  return setsById;
+}
+
+function elementValuesFor(selections = []) {
+  if (selections && typeof selections === 'object' && elementValuesBySelections.has(selections)) {
+    return elementValuesBySelections.get(selections);
+  }
+  const values = estimateElementValues(selections, {});
+  if (selections && typeof selections === 'object') elementValuesBySelections.set(selections, values);
+  return values;
 }
 
 function evaluationKey({ items, sets, selections, constraints, fmPolicy, turnMode, character }) {
@@ -62,15 +88,14 @@ function average(values = []) {
   return numbers.reduce((sum, value) => sum + value, 0) / numbers.length;
 }
 
-function buildSpellBreakdowns(selections, baseStats, items, scenario) {
+function buildSpellBreakdowns(selections, turnStatsByTurn) {
   return (selections || [])
     .filter((selection) => selection?.enabled && selection?.spell && (selection.spell.hits || []).length)
     .map((selection) => {
       const spell = selection.spell;
       const perTurn = {};
       for (const turn of [1, 2, 3]) {
-        const turnStats = statsForTurnDetailed(baseStats, items, turn, scenario).stats;
-        perTurn[turn] = spellDamageBreakdown(spell, turnStats, turn);
+        perTurn[turn] = spellDamageBreakdown(spell, turnStatsByTurn[turn], turn);
       }
       const entries = Object.values(perTurn);
       return {
@@ -113,14 +138,14 @@ function evaluateCompleteBuildUncached({
 } = {}) {
   if (!specialSlotRulesAreValid(items)) return { result: null, reason: 'structural-invalid' };
 
-  const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
+  const setsById = setsByIdFor(sets);
   const rawStats = emptyStats();
   addStats(rawStats, character.baseStats || {});
   for (const item of items) addStats(rawStats, item.stats || {});
 
   const statsWithSets = { ...rawStats };
   const activeSets = applySetBonuses(statsWithSets, items, setsById);
-  const elementValues = estimateElementValues(selections, {});
+  const elementValues = elementValuesFor(selections);
 
   // Conditions are checked on final equipped stats. Scroll is free baseline;
   // only the remaining deficit should consume the 995 characteristic points.
@@ -211,15 +236,17 @@ function evaluateCompleteBuildUncached({
 
   const effectiveStatsByTurn = {};
   const resourceBonusesByTurn = {};
+  const turnStatsByTurn = { ...(turnConstraints.perTurn || {}) };
   for (const turn of [1, 2, 3]) {
-    // statsForTurnDetailed is resolved before any combat action is spent. Keep
-    // PA/PM deltas explicitly so presentation never has to infer a temporary
-    // resource bonus from rotation state such as apRemainingAfterCast.
-    const detailed = statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
+    // Reuse the exact turn stats already resolved by the hard-constraint gate.
+    // Only turns outside the selected temporal mode need another passive pass.
+    const detailed = turnStatsByTurn[turn]
+      || statsForTurnDetailed(fm.stats, items, turn, scenario).stats;
+    turnStatsByTurn[turn] = detailed;
     effectiveStatsByTurn[turn] = effectiveStats(detailed);
     resourceBonusesByTurn[turn] = resourceBonus(detailed, fm.stats);
   }
-  const spellBreakdowns = buildSpellBreakdowns(selections, fm.stats, items, scenario);
+  const spellBreakdowns = buildSpellBreakdowns(selections, turnStatsByTurn);
 
   return {
     result: {
