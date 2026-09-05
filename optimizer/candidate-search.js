@@ -15,7 +15,7 @@ function num(stats, key) {
   return Number.isFinite(value) ? value : 0;
 }
 
-export function addPositive(target, source = {}) {
+function addPositive(target, source = {}) {
   for (const [key, raw] of Object.entries(source || {})) {
     const value = Number(raw || 0);
     if (!Number.isFinite(value) || value <= 0) continue;
@@ -590,7 +590,7 @@ export function branchFeasibility({
   return { feasible: true, key: null, actual: 0, maximum: Infinity, target: 0 };
 }
 
-export function optimisticCurrentStats(items, context) {
+function optimisticCurrentStats(items, context) {
   const stats = {};
   addPositive(stats, BASE_CHARACTER.baseStats || {});
   for (const element of ['earth', 'fire', 'water', 'air']) {
@@ -646,16 +646,9 @@ export function offensiveUpperBound({
   profilesFor,
   policy,
   sets = [],
-  fmPolicy = {},
-  currentOptimisticStats = null,
-  currentOptimisticBounded = null
+  fmPolicy = {}
 } = {}) {
-  const current = currentOptimisticStats === null
-    ? optimisticCurrentStats(items, policy)
-    : {
-        stats: { ...currentOptimisticStats },
-        bounded: currentOptimisticBounded === true
-      };
+  const current = optimisticCurrentStats(items, policy);
   const envelope = offensiveEnvelope({ remainingGroups, profilesFor, policy, sets });
   const remaining = envelope.remaining;
   if (!current.bounded || !remaining.bounded || remaining.impossibleShape) return Infinity;
