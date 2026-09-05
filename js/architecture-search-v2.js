@@ -180,7 +180,15 @@ function stateBucket(state, context) {
   return `${Math.min(num(stats, 'ap'), 14)}:${Math.min(num(stats, 'mp'), 8)}:${progress.signature}:${setSignature}`;
 }
 
-function keepDiverseStates(states, context, limit) {
+function dofusLineageKey(state) {
+  const ids = (state?.items || [])
+    .filter((item) => item?.slot === 'dofus')
+    .map((item) => String(item.id))
+    .sort();
+  return ids.length ? ids.join('|') : null;
+}
+
+export function keepDiverseStates(states, context, limit) {
   for (const state of states) {
     const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
     const progress = constraintProgressForStats(stats, context.constraints);
@@ -206,6 +214,33 @@ function keepDiverseStates(states, context, limit) {
     perBucket.set(bucket, used + 1);
     output.push(state);
     return true;
+  }
+
+  // A generated Dofus combination can be temporarily hidden by several strong
+  // children from another lineage after the next equipment slot expands. Keep
+  // a bounded offensive lane for the most promising generated lineages, using
+  // the Dofus choice objective captured before cross-slot noise is introduced.
+  // The existing offense reserve is the budget: lineages outside that budget
+  // receive no absolute protection and compete normally for the remaining beam.
+  const lineageReserve = Math.min(
+    Math.max(0, limit - output.length),
+    Math.max(0, Number(context.profile.search.groupOffenseReserve || 0))
+  );
+  if (lineageReserve > 0) {
+    const bestByLineage = new Map();
+    for (const state of states) {
+      const lineageKey = dofusLineageKey(state);
+      const promise = Number(state.dofusLineageObjectiveScore);
+      if (!lineageKey || !Number.isFinite(promise)) continue;
+      if (!bestByLineage.has(lineageKey)) bestByLineage.set(lineageKey, state);
+    }
+    const representatives = [...bestByLineage.values()]
+      .sort((a, b) => Number(b.dofusLineageObjectiveScore || 0) - Number(a.dofusLineageObjectiveScore || 0)
+        || Number(b.constraintReady) - Number(a.constraintReady)
+        || b.searchRank - a.searchRank
+        || dofusLineageKey(a).localeCompare(dofusLineageKey(b)))
+      .slice(0, lineageReserve);
+    for (const state of representatives) tryKeep(state, { enforceBucket: false });
   }
 
   // Multiplicative specialists can look weak while a build is still partial.
@@ -442,7 +477,10 @@ export function searchArchitecturesV2({
           next.push({
             items: nextItems,
             ids: new Set([...state.ids, ...choice.items.map((item) => String(item.id))]),
-            heuristic: state.heuristic + choice.score
+            heuristic: state.heuristic + choice.score,
+            dofusLineageObjectiveScore: group.id === 'dofus'
+              ? Number(choice.objectiveScore || 0)
+              : state.dofusLineageObjectiveScore
           });
           expandedStates++;
         }

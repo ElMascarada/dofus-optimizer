@@ -185,53 +185,79 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
     };
   });
 
-  // The primary beam already rewards absolute child quality. The protected
-  // reserve instead evaluates each qualified representative by the opportunity
-  // it creates relative to its exact retained parent. Reuse the existing
-  // representative reducer on these marginal scores so the reserve stays
-  // deterministic and bounded without introducing rank or item-specific quotas.
+  // The primary beam owns every slot. The reserve only selects a bounded set
+  // of late parent representatives that may challenge it. Rank those challengers
+  // by marginal opportunity versus their exact parent, then admit one only when
+  // that opportunity is strictly stronger than the weakest incumbent's own
+  // marginal opportunity. This keeps the reserve useful without turning it into
+  // a guaranteed quota for a mediocre lineage.
   const parentByKey = new Map(parentStates.map((state) => [choiceKey(state.items), state]));
+  function marginalState(state) {
+    const parent = parentByKey.get(parentChoiceKey(state));
+    if (!parent) return null;
+    return {
+      ...state,
+      objectiveScore: Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0),
+      score: Number(state.score || 0) - Number(parent.score || 0)
+    };
+  }
+  function compareMarginalQuality(a, b) {
+    const objectiveDelta = Number(a?.objectiveScore || 0) - Number(b?.objectiveScore || 0);
+    if (objectiveDelta !== 0) return objectiveDelta;
+    return Number(a?.score || 0) - Number(b?.score || 0);
+  }
+
   const marginalPool = [];
   const originalByKey = new Map();
   const representativeKeys = new Set();
   for (const entry of laneEntries) {
-    const parent = parentByKey.get(entry.parentKey);
-    if (!parent) continue;
     for (const state of entry.lane) {
       const key = choiceKey(state.items);
       if (!key || representativeKeys.has(key)) continue;
+      const marginal = marginalState(state);
+      if (!marginal) continue;
       representativeKeys.add(key);
       originalByKey.set(key, state);
-      marginalPool.push({
-        ...state,
-        objectiveScore: Number(state.objectiveScore || 0) - Number(parent.objectiveScore || 0),
-        score: Number(state.score || 0) - Number(parent.score || 0)
-      });
+      marginalPool.push(marginal);
     }
   }
   marginalPool.sort((a, b) => choiceKey(a.items).localeCompare(choiceKey(b.items)));
-  const protectedStates = parentChildRepresentatives(marginalPool, reserveLimit, context)
+  const protectedMarginalStates = parentChildRepresentatives(marginalPool, reserveLimit, context);
+  const protectedStates = protectedMarginalStates
     .map((state) => originalByKey.get(choiceKey(state.items)))
     .filter(Boolean);
 
-  let output;
-  if (!protectedStates.length) {
-    output = retained.slice(0, targetCount);
-  } else {
-    const primaryCount = Math.max(0, targetCount - protectedStates.length);
-    output = [];
-    const outputKeys = new Set();
-    function push(state) {
-      if (output.length >= targetCount) return;
-      const key = choiceKey(state.items);
-      if (!key || outputKeys.has(key)) return;
-      outputKeys.add(key);
-      output.push(state);
+  const output = retained.slice(0, targetCount);
+  const outputKeys = new Set(output.map((state) => choiceKey(state.items)));
+  for (const challenger of protectedMarginalStates) {
+    const challengerKey = choiceKey(challenger.items);
+    const original = originalByKey.get(challengerKey);
+    if (!original || outputKeys.has(challengerKey)) continue;
+
+    let victimIndex = -1;
+    let victimMarginal = null;
+    let victimKey = '';
+    for (let index = 0; index < output.length; index++) {
+      const incumbent = output[index];
+      const incumbentMarginal = marginalState(incumbent);
+      if (!incumbentMarginal) continue;
+      const incumbentKey = choiceKey(incumbent.items);
+      const comparison = victimMarginal === null
+        ? -1
+        : compareMarginalQuality(incumbentMarginal, victimMarginal);
+      if (victimMarginal === null
+        || comparison < 0
+        || (comparison === 0 && incumbentKey.localeCompare(victimKey) > 0)) {
+        victimIndex = index;
+        victimMarginal = incumbentMarginal;
+        victimKey = incumbentKey;
+      }
     }
 
-    for (const state of retained.slice(0, primaryCount)) push(state);
-    for (const state of protectedStates) push(state);
-    for (const state of retained) push(state);
+    if (victimIndex < 0 || compareMarginalQuality(challenger, victimMarginal) <= 0) continue;
+    outputKeys.delete(victimKey);
+    output[victimIndex] = original;
+    outputKeys.add(challengerKey);
   }
 
   const traceParentKey = String(context.traceParentKey || '');
@@ -455,7 +481,7 @@ export function buildGroupChoices(profiles = [], count = 1, context = {}) {
       }
     }
     const primaryStates = keepChoiceDiversity(next, beamWidth, context);
-    states = context.slot === 'dofus' && pick === 3
+    states = context.slot === 'dofus' && pick >= 3
       ? preserveDofusParentChildDiversity(parentStates, next, primaryStates, beamWidth, context)
       : primaryStates;
     if (!states.length) break;
