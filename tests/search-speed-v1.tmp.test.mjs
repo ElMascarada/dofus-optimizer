@@ -122,6 +122,7 @@ test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
   for (const entry of architectureTimingEvents) {
     const kind = String(entry.progress.label || '').startsWith('fallback légal') ? 'fallback' : 'primary';
     console.log(`ARCHITECTURE_TIMING ${kind}=${formatArchitectureTiming(entry.progress.architectureTiming)}`);
+    console.log(`STATE_EXPANSION_PROFILE ${kind}=${JSON.stringify(entry.progress.architectureTiming.stateExpansionProfile || {})}`);
   }
   console.log(`SEARCH_SPEED_V1_WINNER=${winner}`);
   console.log(`SEARCH_SPEED_V1_SCORE=${String(best.score)}`);
