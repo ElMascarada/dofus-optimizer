@@ -8,10 +8,12 @@ import {
   positiveConstraintKeys
 } from '../optimizer/candidate-policy.js';
 import {
+  addPositive,
   branchFeasibility,
   buildGroupChoices,
   fastPartialRank,
   offensiveUpperBound,
+  optimisticCurrentStats,
   staticBuildStats
 } from '../optimizer/candidate-search.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
@@ -420,10 +422,13 @@ export function searchArchitecturesV2({
       continue;
     }
 
+    const initialOptimistic = optimisticCurrentStats(anchors, policy);
     let states = [{
       items: anchors,
       ids: new Set(anchors.map((item) => String(item.id))),
-      heuristic: Number(entry.architecture?.score || 0)
+      heuristic: Number(entry.architecture?.score || 0),
+      optimisticStats: initialOptimistic.stats,
+      optimisticBounded: initialOptimistic.bounded
     }];
 
     for (let groupIndex = 0; groupIndex < missing.length; groupIndex++) {
@@ -455,17 +460,21 @@ export function searchArchitecturesV2({
             continue;
           }
 
+          const nextOptimisticStats = { ...state.optimisticStats };
+          addPositive(nextOptimisticStats, choice.optimisticStats);
+          const nextOptimisticBounded = state.optimisticBounded && choice.bounded;
           const threshold = results.length >= Math.max(1, Number(topN || 10))
             ? Number(results[results.length - 1].score || 0)
             : null;
           if (threshold !== null) {
             const bound = offensiveUpperBound({
-              items: nextItems,
               remainingGroups,
               profilesFor,
               policy,
               sets,
-              fmPolicy
+              fmPolicy,
+              currentOptimisticStats: nextOptimisticStats,
+              currentOptimisticBounded: nextOptimisticBounded
             });
             if (Number.isFinite(bound) && bound + 1e-9 < threshold) {
               addCount(pruneReasons, 'offensive upper bound below current threshold');
@@ -477,7 +486,9 @@ export function searchArchitecturesV2({
           next.push({
             items: nextItems,
             ids: new Set([...state.ids, ...choice.items.map((item) => String(item.id))]),
-            heuristic: state.heuristic + choice.score
+            heuristic: state.heuristic + choice.score,
+            optimisticStats: nextOptimisticStats,
+            optimisticBounded: nextOptimisticBounded
           });
           expandedStates++;
         }
