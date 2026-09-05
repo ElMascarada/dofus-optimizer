@@ -18,20 +18,6 @@ function phaseKey(progress = {}) {
   return `${phase}${fallback}`;
 }
 
-function formatArchitectureTiming(timing = {}) {
-  return [
-    'totalMs',
-    'eligibilityRequiredSetupMs',
-    'prefilterItemsMs',
-    'buildSetSynergyIndexMs',
-    'slotProfilePreparationMs',
-    'buildGroupChoicesMs',
-    'architectureQueueStateExpansionMs',
-    'completeBuildEvaluationMs',
-    'otherMs'
-  ].map((key) => `${key}:${Number(timing[key] || 0).toFixed(1)}`).join(';');
-}
-
 test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
   assert.ok(iop, 'Iop absent des données canoniques');
 
@@ -54,76 +40,54 @@ test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
     turnMode: 't1',
     topN: 10
   });
-  request.architectureTiming = true;
 
   let workerHandler = null;
-  const messages = [];
-  const progressEvents = [];
-  const startedAt = performance.now();
+  let resultMessage = null;
+  let errorMessage = null;
+  let runStartedAt = null;
+  let currentPhaseKey = null;
+  const phaseTransitions = [];
+
   globalThis.self = {
     addEventListener(type, handler) {
       if (type === 'message') workerHandler = handler;
     },
     postMessage(message) {
-      messages.push(message);
-      if (message?.type === 'progress') {
-        progressEvents.push({ t: performance.now() - startedAt, progress: message.progress || {} });
-      }
+      if (message?.type === 'result') resultMessage = message;
+      if (message?.type === 'error') errorMessage = message;
+      if (message?.type !== 'progress' || runStartedAt === null) return;
+
+      const key = phaseKey(message.progress || {});
+      if (key === currentPhaseKey) return;
+      currentPhaseKey = key;
+      phaseTransitions.push({ key, t: performance.now() - runStartedAt });
     }
   };
   await import('../js/optimizer-worker.js');
   assert.ok(workerHandler, 'Optimizer Worker indisponible hors UI');
 
-  const runStartedAt = performance.now();
+  runStartedAt = performance.now();
   workerHandler({ data: { type: 'optimize', requestId: 'search-speed-v1', payload: request } });
   const totalMs = performance.now() - runStartedAt;
 
-  const resultMessage = messages.findLast((message) => message?.type === 'result');
-  const errorMessage = messages.findLast((message) => message?.type === 'error');
-  assert.equal(errorMessage, undefined, errorMessage?.error || 'worker error');
+  assert.equal(errorMessage, null, errorMessage?.error || 'worker error');
   assert.ok(resultMessage?.output?.results?.length, 'aucun résultat produit');
 
   const best = resultMessage.output.results[0];
   const diagnostics = resultMessage.output.diagnostics || {};
-  const events = progressEvents
-    .map((entry) => ({ ...entry, t: entry.t - (runStartedAt - startedAt) }))
-    .filter((entry) => entry.t >= 0);
-  const architectureTimingEvents = events.filter((entry) => entry.progress?.architectureTiming);
-  assert.ok(architectureTimingEvents.length >= 1, 'instrumentation architecture absente');
-  const phaseEvents = events.filter((entry) => !entry.progress?.architectureTiming);
-  const segments = [];
-  let current = null;
-  const counts = new Map();
-  for (const entry of phaseEvents) {
-    const key = phaseKey(entry.progress);
-    if (!current) {
-      current = { key, start: 0, end: entry.t };
-      continue;
-    }
-    if (key !== current.key) {
-      current.end = entry.t;
-      const n = (counts.get(current.key) || 0) + 1;
-      counts.set(current.key, n);
-      segments.push({ ...current, label: `${current.key}#${n}` });
-      current = { key, start: entry.t, end: entry.t };
-    } else {
-      current.end = entry.t;
-    }
-  }
-  if (current) {
-    current.end = totalMs;
-    const n = (counts.get(current.key) || 0) + 1;
-    segments.push({ ...current, label: `${current.key}#${n}` });
-  }
+  const phaseCounts = new Map();
+  const segments = phaseTransitions.map((transition, index) => {
+    const n = (phaseCounts.get(transition.key) || 0) + 1;
+    phaseCounts.set(transition.key, n);
+    return {
+      label: `${transition.key}#${n}`,
+      duration: (phaseTransitions[index + 1]?.t ?? totalMs) - transition.t
+    };
+  });
 
   const winner = (best.items || []).map((item) => item.name || item.id).join(' | ');
   console.log(`SEARCH_SPEED_V1_TIME_MS=${totalMs.toFixed(1)}`);
-  console.log(`SEARCH_SPEED_V1_PHASES=${segments.map((segment) => `${segment.label}:${(segment.end - segment.start).toFixed(1)}`).join(';')}`);
-  for (const entry of architectureTimingEvents) {
-    const kind = String(entry.progress.label || '').startsWith('fallback légal') ? 'fallback' : 'primary';
-    console.log(`ARCHITECTURE_TIMING ${kind}=${formatArchitectureTiming(entry.progress.architectureTiming)}`);
-    console.log(`STATE_EXPANSION_PROFILE ${kind}=${JSON.stringify(entry.progress.architectureTiming.stateExpansionProfile || {})}`);
-  }
+  console.log(`SEARCH_SPEED_V1_PHASES=${segments.map((segment) => `${segment.label}:${segment.duration.toFixed(1)}`).join(';')}`);
   console.log(`SEARCH_SPEED_V1_WINNER=${winner}`);
   console.log(`SEARCH_SPEED_V1_SCORE=${String(best.score)}`);
   console.log(`SEARCH_SPEED_V1_DIAGNOSTICS=${JSON.stringify({

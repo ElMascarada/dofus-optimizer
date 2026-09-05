@@ -281,10 +281,6 @@ function originForEntry(entry) {
   return entry?.architecture ? 'set-core' : 'standalone';
 }
 
-function nowMs() {
-  return typeof globalThis.performance?.now === 'function' ? globalThis.performance.now() : Date.now();
-}
-
 export function searchArchitecturesV2({
   items = [],
   sets = [],
@@ -296,109 +292,11 @@ export function searchArchitecturesV2({
   requiredItemIds = [],
   topN = 10,
   searchProfile = 'BALANCED',
-  onProgress = null,
-  architectureTiming = false
+  onProgress = null
 } = {}) {
-  const timing = architectureTiming ? {
-    startedAt: nowMs(),
-    eligibilityRequiredSetupMs: 0,
-    prefilterItemsMs: 0,
-    buildSetSynergyIndexMs: 0,
-    slotProfilePreparationMs: 0,
-    buildGroupChoicesMs: 0,
-    completeBuildEvaluationMs: 0,
-    architectureWorkInclusiveMs: 0
-  } : null;
-  const stateExpansionProfile = timing ? {
-    sampleRate: 256,
-    attempts: 0,
-    duplicateItemRejects: 0,
-    specialSlotCalls: 0,
-    specialSlotRejects: 0,
-    specialSlotSampledCalls: 0,
-    specialSlotSampledMs: 0,
-    branchFeasibilityCalls: 0,
-    branchFeasibilityRejects: 0,
-    branchFeasibilitySampledCalls: 0,
-    branchFeasibilitySampledMs: 0,
-    upperBoundCalls: 0,
-    upperBoundPrunes: 0,
-    upperBoundSampledCalls: 0,
-    upperBoundSampledMs: 0,
-    childrenPushed: 0,
-    nextItemsSampledCalls: 0,
-    nextItemsSampledMs: 0,
-    nextIdsSampledCalls: 0,
-    nextIdsSampledMs: 0,
-    nextPushSampledCalls: 0,
-    nextPushSampledMs: 0,
-    keepDiverseCalls: 0,
-    keepDiverseMs: 0,
-    statesBeforeKeep: 0,
-    statesAfterKeep: 0,
-    architectureAnchorsMs: 0,
-    missingGroupsMs: 0,
-    groupSortingMs: 0,
-    completeFilterMs: 0,
-    completeSortMs: 0,
-    completeFilterSortMs: 0
-  } : null;
-
-  function measure(key, fn) {
-    if (!timing) return fn();
-    const startedAt = nowMs();
-    try {
-      return fn();
-    } finally {
-      timing[key] += nowMs() - startedAt;
-    }
-  }
-
-  const measuredBranchFeasibility = stateExpansionProfile ? (args) => {
-    const callIndex = stateExpansionProfile.branchFeasibilityCalls++;
-    const sampled = callIndex % stateExpansionProfile.sampleRate === 0;
-    if (!sampled) {
-      const result = branchFeasibility(args);
-      if (!result.feasible) stateExpansionProfile.branchFeasibilityRejects++;
-      return result;
-    }
-    const startedAt = nowMs();
-    const result = branchFeasibility(args);
-    stateExpansionProfile.branchFeasibilitySampledMs += nowMs() - startedAt;
-    stateExpansionProfile.branchFeasibilitySampledCalls++;
-    if (!result.feasible) stateExpansionProfile.branchFeasibilityRejects++;
-    return result;
-  } : branchFeasibility;
-
-  const measuredUpperBound = stateExpansionProfile ? (args) => {
-    const callIndex = stateExpansionProfile.upperBoundCalls++;
-    const sampled = callIndex % stateExpansionProfile.sampleRate === 0;
-    if (!sampled) return offensiveUpperBound(args);
-    const startedAt = nowMs();
-    const result = offensiveUpperBound(args);
-    stateExpansionProfile.upperBoundSampledMs += nowMs() - startedAt;
-    stateExpansionProfile.upperBoundSampledCalls++;
-    return result;
-  } : offensiveUpperBound;
-
-  const measuredSpecialSlotRulesAreValid = stateExpansionProfile ? (candidateItems) => {
-    const callIndex = stateExpansionProfile.specialSlotCalls++;
-    const sampled = callIndex % stateExpansionProfile.sampleRate === 0;
-    if (!sampled) return specialSlotRulesAreValid(candidateItems);
-    const startedAt = nowMs();
-    const result = specialSlotRulesAreValid(candidateItems);
-    stateExpansionProfile.specialSlotSampledMs += nowMs() - startedAt;
-    stateExpansionProfile.specialSlotSampledCalls++;
-    return result;
-  } : specialSlotRulesAreValid;
-
-  const eligibility = measure('eligibilityRequiredSetupMs', () => {
-    const trophyEligibility = optimizerTrophyEligibilityCounts(items);
-    const eligibleItems = filterOptimizerEligibleItems(items);
-    const required = requiredConstraint(eligibleItems, requiredItemIds);
-    return { trophyEligibility, eligibleItems, required };
-  });
-  const { trophyEligibility, eligibleItems, required } = eligibility;
+  const trophyEligibility = optimizerTrophyEligibilityCounts(items);
+  const eligibleItems = filterOptimizerEligibleItems(items);
+  const required = requiredConstraint(eligibleItems, requiredItemIds);
   if (!required.valid) {
     const impossible = impossibleRequiredResult(required);
     impossible.diagnostics.trophyEligibility = trophyEligibility;
@@ -407,7 +305,7 @@ export function searchArchitecturesV2({
 
   const profile = getSearchProfile(searchProfile);
   const extraConstraints = positiveConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key));
-  const prefilter = measure('prefilterItemsMs', () => prefilterItems({
+  const prefilter = prefilterItems({
     items: eligibleItems,
     sets,
     selections,
@@ -416,13 +314,13 @@ export function searchArchitecturesV2({
     scenario,
     requiredItemIds: required.ids,
     searchProfile: profile
-  }));
+  });
   const policy = prefilter.policy;
   const offensiveOptimisticItemCache = new Map();
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const context = { policy, profile, selections, constraints, fmPolicy, turnMode, scenario, sets, setsById };
 
-  const synergy = measure('buildSetSynergyIndexMs', () => buildSetSynergyIndex({
+  const synergy = buildSetSynergyIndex({
     items: prefilter.items,
     sets,
     selections,
@@ -433,32 +331,27 @@ export function searchArchitecturesV2({
     maxArchitectures: profile.search.architectureMaxCount,
     policy,
     searchProfile: profile
-  }));
-
-  const slotPreparation = measure('slotProfilePreparationMs', () => {
-    const originalById = new Map(eligibleItems.map((item) => [String(item.id), item]));
-    const slotProfiles = new Map();
-    for (const rule of SLOT_RULES) {
-      const profiles = (prefilter.pools?.[rule.id] || [])
-        .map((item) => policy.profileItem(item))
-        .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
-      slotProfiles.set(rule.id, profiles);
-    }
-    return { originalById, slotProfiles };
   });
-  const { originalById, slotProfiles } = slotPreparation;
+
+  const originalById = new Map(eligibleItems.map((item) => [String(item.id), item]));
+  const slotProfiles = new Map();
+  for (const rule of SLOT_RULES) {
+    const profiles = (prefilter.pools?.[rule.id] || [])
+      .map((item) => policy.profileItem(item))
+      .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+    slotProfiles.set(rule.id, profiles);
+  }
   const profilesFor = (slot) => slotProfiles.get(slot) || [];
 
   const choiceCache = new Map();
   function choicesFor(slot, count) {
     const key = `${slot}:${count}`;
     if (choiceCache.has(key)) return choiceCache.get(key);
-    const choices = measure('buildGroupChoicesMs', () => buildGroupChoices(profilesFor(slot), count, { ...context, slot }));
+    const choices = buildGroupChoices(profilesFor(slot), count, { ...context, slot });
     choiceCache.set(key, choices);
     return choices;
   }
 
-  const architectureWorkStartedAt = timing ? nowMs() : 0;
   const queue = [];
   const standalone = { architecture: null, variant: { label: 'standalones', anchorIds: [] } };
   if (extraConstraints) queue.push(standalone);
@@ -501,28 +394,21 @@ export function searchArchitecturesV2({
 
   for (const entry of queue) {
     const searchOrigin = originForEntry(entry);
-    const anchorsStartedAt = stateExpansionProfile ? nowMs() : 0;
     const optionalAnchors = entry.variant.anchorIds.map((id) => originalById.get(String(id))).filter(Boolean);
     const anchors = mergeRequiredAnchors(required.requiredItems, optionalAnchors);
     const counts = slotCounts(anchors);
-    if (stateExpansionProfile) stateExpansionProfile.architectureAnchorsMs += nowMs() - anchorsStartedAt;
     if (SLOT_RULES.some((rule) => (counts.get(rule.id) || 0) > Number(rule.count || 0))) continue;
 
-    const missingStartedAt = stateExpansionProfile ? nowMs() : 0;
     const missing = SLOT_RULES
       .map((rule) => ({ ...rule, missing: Number(rule.count || 0) - (counts.get(rule.id) || 0) }))
-      .filter((group) => group.missing > 0);
-    if (stateExpansionProfile) stateExpansionProfile.missingGroupsMs += nowMs() - missingStartedAt;
+      .filter((group) => group.missing > 0)
+      .sort((a, b) => {
+        if (a.id === 'dofus' && b.id !== 'dofus') return -1;
+        if (b.id === 'dofus' && a.id !== 'dofus') return 1;
+        return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
+      });
 
-    const groupSortingStartedAt = stateExpansionProfile ? nowMs() : 0;
-    missing.sort((a, b) => {
-      if (a.id === 'dofus' && b.id !== 'dofus') return -1;
-      if (b.id === 'dofus' && a.id !== 'dofus') return 1;
-      return choicesFor(a.id, a.missing).length - choicesFor(b.id, b.missing).length;
-    });
-    if (stateExpansionProfile) stateExpansionProfile.groupSortingMs += nowMs() - groupSortingStartedAt;
-
-    const initialFeasibility = measuredBranchFeasibility({
+    const initialFeasibility = branchFeasibility({
       items: anchors,
       remainingGroups: missing,
       profilesFor,
@@ -553,30 +439,11 @@ export function searchArchitecturesV2({
       const next = [];
       for (const state of states) {
         for (const choice of choices) {
-          if (stateExpansionProfile) stateExpansionProfile.attempts++;
-          if (choice.items.some((item) => state.ids.has(String(item.id)))) {
-            if (stateExpansionProfile) stateExpansionProfile.duplicateItemRejects++;
-            continue;
-          }
+          if (choice.items.some((item) => state.ids.has(String(item.id)))) continue;
+          const nextItems = [...state.items, ...choice.items];
+          if (!specialSlotRulesAreValid(nextItems)) continue;
 
-          const sampleAttempt = stateExpansionProfile
-            && stateExpansionProfile.attempts % stateExpansionProfile.sampleRate === 0;
-          let nextItems;
-          if (sampleAttempt) {
-            const nextItemsStartedAt = nowMs();
-            nextItems = [...state.items, ...choice.items];
-            stateExpansionProfile.nextItemsSampledMs += nowMs() - nextItemsStartedAt;
-            stateExpansionProfile.nextItemsSampledCalls++;
-          } else {
-            nextItems = [...state.items, ...choice.items];
-          }
-
-          if (!measuredSpecialSlotRulesAreValid(nextItems)) {
-            if (stateExpansionProfile) stateExpansionProfile.specialSlotRejects++;
-            continue;
-          }
-
-          const feasibility = measuredBranchFeasibility({
+          const feasibility = branchFeasibility({
             items: nextItems,
             remainingGroups,
             profilesFor,
@@ -598,7 +465,7 @@ export function searchArchitecturesV2({
             ? Number(results[results.length - 1].score || 0)
             : null;
           if (threshold !== null) {
-            const bound = measuredUpperBound({
+            const bound = offensiveUpperBound({
               items: nextItems,
               remainingGroups,
               profilesFor,
@@ -608,39 +475,17 @@ export function searchArchitecturesV2({
               optimisticItemCache: offensiveOptimisticItemCache
             });
             if (Number.isFinite(bound) && bound + 1e-9 < threshold) {
-              if (stateExpansionProfile) stateExpansionProfile.upperBoundPrunes++;
               addCount(pruneReasons, 'offensive upper bound below current threshold');
               safePruned++;
               continue;
             }
           }
 
-          const sampleChild = stateExpansionProfile
-            && (stateExpansionProfile.childrenPushed + 1) % stateExpansionProfile.sampleRate === 0;
-          let nextIds;
-          if (sampleChild) {
-            const nextIdsStartedAt = nowMs();
-            nextIds = new Set([...state.ids, ...choice.items.map((item) => String(item.id))]);
-            stateExpansionProfile.nextIdsSampledMs += nowMs() - nextIdsStartedAt;
-            stateExpansionProfile.nextIdsSampledCalls++;
-          } else {
-            nextIds = new Set([...state.ids, ...choice.items.map((item) => String(item.id))]);
-          }
-
-          const child = {
+          next.push({
             items: nextItems,
-            ids: nextIds,
+            ids: new Set([...state.ids, ...choice.items.map((item) => String(item.id))]),
             heuristic: state.heuristic + choice.score
-          };
-          if (sampleChild) {
-            const nextPushStartedAt = nowMs();
-            next.push(child);
-            stateExpansionProfile.nextPushSampledMs += nowMs() - nextPushStartedAt;
-            stateExpansionProfile.nextPushSampledCalls++;
-          } else {
-            next.push(child);
-          }
-          if (stateExpansionProfile) stateExpansionProfile.childrenPushed++;
+          });
           expandedStates++;
         }
       }
@@ -648,36 +493,19 @@ export function searchArchitecturesV2({
       const stateLimit = group.id === 'dofus'
         ? profile.search.dofusStateBeamWidth
         : profile.search.stateBeamWidth;
-      let kept;
-      if (stateExpansionProfile) {
-        stateExpansionProfile.keepDiverseCalls++;
-        stateExpansionProfile.statesBeforeKeep += next.length;
-        const keepStartedAt = nowMs();
-        kept = keepDiverseStates(next, context, stateLimit);
-        stateExpansionProfile.keepDiverseMs += nowMs() - keepStartedAt;
-        stateExpansionProfile.statesAfterKeep += kept.length;
-      } else {
-        kept = keepDiverseStates(next, context, stateLimit);
-      }
+      const kept = keepDiverseStates(next, context, stateLimit);
       heuristicTrimmed += Math.max(0, next.length - kept.length);
       states = kept;
       if (!states.length) break;
     }
 
-    const completeFilterStartedAt = stateExpansionProfile ? nowMs() : 0;
     const complete = states.filter((state) => fullShape(state.items));
-    if (stateExpansionProfile) stateExpansionProfile.completeFilterMs += nowMs() - completeFilterStartedAt;
-    const completeSortStartedAt = stateExpansionProfile ? nowMs() : 0;
     complete.sort((a, b) => {
       const pa = constraintProgressForStats(progressStats(a.items, setsById, constraints, fmPolicy), constraints);
       const pb = constraintProgressForStats(progressStats(b.items, setsById, constraints, fmPolicy), constraints);
       return Number(pb.ready) - Number(pa.ready)
         || (b.searchRank || b.heuristic) - (a.searchRank || a.heuristic);
     });
-    if (stateExpansionProfile) {
-      stateExpansionProfile.completeSortMs += nowMs() - completeSortStartedAt;
-      stateExpansionProfile.completeFilterSortMs = stateExpansionProfile.completeFilterMs + stateExpansionProfile.completeSortMs;
-    }
 
     legalCandidates += complete.length;
     const evaluationLimit = extraConstraints
@@ -686,7 +514,6 @@ export function searchArchitecturesV2({
     const evaluationPool = complete.slice(0, evaluationLimit);
     heuristicTrimmed += Math.max(0, complete.length - evaluationPool.length);
 
-    const evaluationStartedAt = timing ? nowMs() : 0;
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({
         items: state.items,
@@ -717,42 +544,7 @@ export function searchArchitecturesV2({
       }
       if (evaluated % 12 === 0 || evaluation.result) report(entry.variant.label);
     }
-    if (timing) timing.completeBuildEvaluationMs += nowMs() - evaluationStartedAt;
     report(entry.variant.label);
-  }
-  if (timing) timing.architectureWorkInclusiveMs = nowMs() - architectureWorkStartedAt;
-
-  let architectureTimingResult = null;
-  if (timing) {
-    const totalMs = nowMs() - timing.startedAt;
-    const architectureQueueStateExpansionMs = Math.max(
-      0,
-      timing.architectureWorkInclusiveMs - timing.buildGroupChoicesMs - timing.completeBuildEvaluationMs
-    );
-    const knownMs = timing.eligibilityRequiredSetupMs
-      + timing.prefilterItemsMs
-      + timing.buildSetSynergyIndexMs
-      + timing.slotProfilePreparationMs
-      + timing.buildGroupChoicesMs
-      + architectureQueueStateExpansionMs
-      + timing.completeBuildEvaluationMs;
-    architectureTimingResult = {
-      totalMs,
-      eligibilityRequiredSetupMs: timing.eligibilityRequiredSetupMs,
-      prefilterItemsMs: timing.prefilterItemsMs,
-      buildSetSynergyIndexMs: timing.buildSetSynergyIndexMs,
-      slotProfilePreparationMs: timing.slotProfilePreparationMs,
-      buildGroupChoicesMs: timing.buildGroupChoicesMs,
-      architectureQueueStateExpansionMs,
-      completeBuildEvaluationMs: timing.completeBuildEvaluationMs,
-      otherMs: Math.max(0, totalMs - knownMs),
-      stateExpansionProfile: { ...stateExpansionProfile }
-    };
-    onProgress?.({
-      phase: 'architectures-v2-timing',
-      label: 'timing',
-      architectureTiming: architectureTimingResult
-    });
   }
 
   const searchProfileName = typeof searchProfile === 'string' ? String(searchProfile).toUpperCase() : 'CUSTOM';
@@ -785,7 +577,6 @@ export function searchArchitecturesV2({
       rejected: Object.fromEntries(rejectReasons),
       prefilter: prefilter.diagnostics,
       trophyEligibility,
-      ...(architectureTimingResult ? { architectureTiming: architectureTimingResult } : {}),
       nodes: evaluated,
       visited: valid,
       pruned: safePruned + [...rejectReasons.values()].reduce((sum, value) => sum + value, 0)
