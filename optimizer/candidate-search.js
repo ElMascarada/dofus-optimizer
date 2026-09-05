@@ -1,8 +1,16 @@
 import { BASE_CHARACTER, SLOT_RULES } from '../js/config.js';
+import { maximumElementalCharacteristicGain } from '../js/characteristics.js';
 import { FM_ELIGIBLE_SLOTS } from '../js/fm.js';
 import { optimisticItemStats } from '../js/search-space.js';
 import { evaluateObjectiveUpperBound } from '../js/spells.js';
-import { addStats, emptyStats } from '../js/stats.js';
+import {
+  addStats,
+  constraintStatContribution,
+  effectiveStat,
+  emptyStats,
+  negativeConstraintContribution,
+  positiveConstraintContribution
+} from '../js/stats.js';
 import { applySetBonuses } from '../js/sets.js';
 import { isPrysmaradite } from '../js/build-legality.js';
 import { GENERIC_OFFENSE_KEYS, positiveConstraintKeys } from './candidate-policy.js';
@@ -28,7 +36,8 @@ export function signedConstraintOrderingSignal(stats, constraints = {}, baseline
   let signal = 0;
   for (const key of positiveConstraintKeys(constraints)) {
     const target = Math.max(1, Number(constraints[key] || 0));
-    const value = num(baselineStats, key) + num(stats, key);
+    const value = constraintStatContribution(baselineStats, key)
+      + constraintStatContribution(stats, key);
     // Constraint progress is useful only until the admissibility floor is met.
     // Preserve signed deficits/penalties, but never reward surplus resources.
     signal += Math.min(1, value / target);
@@ -38,29 +47,32 @@ export function signedConstraintOrderingSignal(stats, constraints = {}, baseline
 
 function addSignedConstraintStats(target, candidate, keys = []) {
   for (const key of keys) {
-    const optimistic = num(candidate?.optimisticStats, key);
-    const fixedPenalty = Math.min(0, num(candidate?.item?.stats, key));
+    const optimistic = positiveConstraintContribution(candidate?.optimisticStats || {}, key);
+    const fixedPenalty = negativeConstraintContribution(candidate?.item?.stats || {}, key);
     target[key] = num(target, key) + optimistic + fixedPenalty;
   }
   return target;
 }
 
 function constraintBaselineStats(context = {}) {
-  return {
-    ...(BASE_CHARACTER.baseStats || {}),
-    ap: num(BASE_CHARACTER.baseStats, 'ap') + (Number(context.fmPolicy?.exoAp) === 1 ? 1 : 0),
-    mp: num(BASE_CHARACTER.baseStats, 'mp') + (Number(context.fmPolicy?.exoMp) === 1 ? 1 : 0)
-  };
+  const baseline = { ...(BASE_CHARACTER.baseStats || {}) };
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    baseline[element] = num(baseline, element)
+      + Math.max(0, Number(BASE_CHARACTER.scrolled?.[element] || 0));
+  }
+  baseline.ap = num(BASE_CHARACTER.baseStats, 'ap') + (Number(context.fmPolicy?.exoAp) === 1 ? 1 : 0);
+  baseline.mp = num(BASE_CHARACTER.baseStats, 'mp') + (Number(context.fmPolicy?.exoMp) === 1 ? 1 : 0);
+  return baseline;
 }
 
 function constraintContributionTarget(key, constraints = {}, baselineStats = BASE_CHARACTER.baseStats || {}) {
   const target = Math.max(0, Number(constraints?.[key] || 0));
-  return Math.max(0, target - Math.max(0, num(baselineStats, key)));
+  return Math.max(0, target - Math.max(0, effectiveStat(baselineStats, key)));
 }
 
 function retentionStat(state, key, constraintKeys, constraints = {}, baselineStats = BASE_CHARACTER.baseStats || {}) {
   if (!constraintKeys.has(key)) return num(state.optimisticStats, key);
-  const value = num(state.constraintStats, key);
+  const value = constraintStatContribution(state.constraintStats, key);
   const target = constraintContributionTarget(key, constraints, baselineStats);
   if (!(target > 0)) return Math.min(0, value);
   return Math.min(target, value);
@@ -482,6 +494,10 @@ export function staticBuildStats(items = [], setsById = {}) {
 
 function characteristicUpperAllowance(key) {
   if (key === 'vit') return Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+  if (key === 'initiative') {
+    return positiveConstraintContribution(BASE_CHARACTER.scrolled || {}, 'initiative')
+      + maximumElementalCharacteristicGain(BASE_CHARACTER.characteristicPoints);
+  }
   if (['earth', 'fire', 'water', 'air'].includes(key)) {
     return Math.max(0, Number(BASE_CHARACTER.scrolled?.[key] || 0))
       + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
@@ -494,7 +510,9 @@ function positiveSetBonusCaps(sets = [], keys = []) {
   for (const set of sets || []) {
     for (const key of keys) {
       let best = 0;
-      for (const bonus of Object.values(set?.bonuses || {})) best = Math.max(best, Math.max(0, num(bonus, key)));
+      for (const bonus of Object.values(set?.bonuses || {})) {
+        best = Math.max(best, positiveConstraintContribution(bonus, key));
+      }
       result[key] += best;
     }
   }
@@ -510,7 +528,7 @@ function remainingProfileCaps(groups = [], profilesFor, keys = []) {
     if (profiles.some((entry) => entry.bounded === false)) return { caps, bounded: false, impossibleShape: false };
     for (const key of keys) {
       const values = profiles
-        .map((entry) => Math.max(0, num(entry.optimisticStats, key)))
+        .map((entry) => positiveConstraintContribution(entry.optimisticStats, key))
         .sort((a, b) => b - a);
       for (let index = 0; index < count; index++) caps[key] += Number(values[index] || 0);
     }
@@ -583,7 +601,16 @@ export function branchFeasibility({
       : key === 'mp' && Number(fmPolicy?.exoMp) === 1
         ? 1
         : 0;
-    const actual = num(current, key) + explicitStructuralExo + characteristicUpperAllowance(key);
+    const allowance = characteristicUpperAllowance(key);
+    if (key === 'initiative') {
+      const actualRaw = constraintStatContribution(current, key) + allowance;
+      const remainingPotential = Number(remaining.caps[key] || 0) + Number(setCaps[key] || 0);
+      const actual = Math.max(0, actualRaw);
+      const maximum = Math.max(0, actualRaw + remainingPotential);
+      if (maximum + 1e-9 < target) return { feasible: false, key, actual, maximum, target };
+      continue;
+    }
+    const actual = num(current, key) + explicitStructuralExo + allowance;
     const maximum = actual + Number(remaining.caps[key] || 0) + Number(setCaps[key] || 0);
     if (maximum + 1e-9 < target) return { feasible: false, key, actual, maximum, target };
   }

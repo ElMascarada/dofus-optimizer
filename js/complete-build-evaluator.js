@@ -209,10 +209,17 @@ function evaluateCompleteBuildUncached({
     };
   }
 
+  // Initiative is a permanent build/start-of-combat stat. It has already passed
+  // the static gate above, so temporary elemental bonuses or penalties must not
+  // re-evaluate it during T1/T2/T3 validation. Keep every other turn-aware
+  // constraint unchanged.
+  const temporalConstraints = { ...constraints };
+  delete temporalConstraints.initiative;
+
   const turnConstraints = evaluateTurnConstraints({
     stats: fm.stats,
     items,
-    constraints,
+    constraints: temporalConstraints,
     selections,
     turnMode,
     scenario

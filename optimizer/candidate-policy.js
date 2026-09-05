@@ -6,6 +6,7 @@ import {
   pruneDominatedCandidates,
   relevantStatKeys
 } from '../js/search-space.js';
+import { effectiveStat } from '../js/stats.js';
 import { getSearchProfile } from './search-profiles.js';
 import { buildSetCoreCatalog, rankSetCoresForPolicy } from './set-core-catalog.js';
 
@@ -61,7 +62,7 @@ function constraintOrderingSignal(stats, constraints = {}) {
   let signal = 0;
   for (const key of positiveConstraintKeys(constraints)) {
     const target = Math.max(1, Number(constraints[key] || 0));
-    signal += Math.min(1, Math.max(0, num(stats, key)) / target);
+    signal += Math.min(1, Math.max(0, effectiveStat(stats, key)) / target);
   }
   return signal;
 }
@@ -99,7 +100,7 @@ function specialistDefinitions(policy) {
 }
 
 function specialistValue(entry, definition) {
-  return Math.max(0, ...definition.keys.map((key) => num(entry.optimisticStats, key)));
+  return Math.max(0, ...definition.keys.map((key) => effectiveStat(entry.optimisticStats, key)));
 }
 
 function addReason(reasons, id, reason) {
@@ -127,8 +128,8 @@ function profileIsContextRelevant(entry, policy) {
   if (genericOffenseSignal(stats) > 0) return true;
   if (constraintOrderingSignal(stats, policy.constraints) > 0) return true;
   if (entry.item?.setId || hasUniqueMechanic(entry.item)) return true;
-  if (policy.structuralSpecialistKeys.some((key) => num(stats, key) > 0)) return true;
-  return policy.conditionKeys.some((key) => num(stats, key) > 0);
+  if (policy.structuralSpecialistKeys.some((key) => effectiveStat(stats, key) > 0)) return true;
+  return policy.conditionKeys.some((key) => effectiveStat(stats, key) > 0);
 }
 
 function setCoreHint(core, policy) {
@@ -178,6 +179,9 @@ export function createCandidatePolicy({
   for (const element of elements) {
     paretoKeys.add(element);
     paretoKeys.add(ELEMENT_DAMAGE[element]);
+  }
+  if (initiativeRelevant) {
+    for (const element of ELEMENTS) paretoKeys.add(element);
   }
   for (const key of positiveConstraintKeys(constraints)) paretoKeys.add(key);
 
@@ -273,7 +277,7 @@ export function selectCandidatePoolForSlot({
   for (const key of positiveConstraintKeys(policy.constraints)) {
     const count = reserveTop(
       paretoProfiles,
-      (entry) => Math.max(0, num(entry.optimisticStats, key)),
+      (entry) => Math.max(0, effectiveStat(entry.optimisticStats, key)),
       policy.profile.candidate.constraintReservePerStat,
       selectedIds,
       reasons,
@@ -422,7 +426,7 @@ export function constraintProgressForStats(stats = {}, constraints = {}) {
   const signature = [];
   for (const key of keys) {
     const target = Math.max(1, Number(constraints[key] || 0));
-    const actual = Math.max(0, num(stats, key));
+    const actual = Math.max(0, effectiveStat(stats, key));
     const ratio = Math.min(1, actual / target);
     coverage += ratio;
     missing += 1 - ratio;
