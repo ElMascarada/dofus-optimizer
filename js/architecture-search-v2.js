@@ -1,8 +1,10 @@
 import { BASE_CHARACTER, SLOT_RULES } from './config.js';
+import { maximumElementalCharacteristicGain } from './characteristics.js';
 import { prefilterItems } from './candidate-prefilter.js';
 import { buildSetSynergyIndex } from './set-synergy-index.js';
 import { evaluateCompleteBuild } from './complete-build-evaluator.js';
 import { specialSlotRulesAreValid } from './build-legality.js';
+import { effectiveStat } from './stats.js';
 import {
   constraintProgressForStats,
   positiveConstraintKeys
@@ -158,11 +160,22 @@ function progressStats(items, setsById, constraints, fmPolicy = {}) {
   if (Number(fmPolicy?.exoAp) === 1) stats.ap = num(stats, 'ap') + 1;
   if (Number(fmPolicy?.exoMp) === 1) stats.mp = num(stats, 'mp') + 1;
   if (Number(constraints?.vit || 0) > 0) stats.vit = num(stats, 'vit') + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+
+  const initiativeConstrained = Number(constraints?.initiative || 0) > 0;
+  const elementalConstraintActive = ['earth', 'fire', 'water', 'air']
+    .some((element) => Number(constraints?.[element] || 0) > 0);
   for (const element of ['earth', 'fire', 'water', 'air']) {
-    if (Number(constraints?.[element] || 0) <= 0) continue;
+    const elementConstrained = Number(constraints?.[element] || 0) > 0;
+    if (!initiativeConstrained && !elementConstrained) continue;
     stats[element] = num(stats, element)
-      + Math.max(0, Number(BASE_CHARACTER.scrolled?.[element] || 0))
-      + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+      + Math.max(0, Number(BASE_CHARACTER.scrolled?.[element] || 0));
+    if (elementConstrained) {
+      stats[element] += Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
+    }
+  }
+  if (initiativeConstrained && !elementalConstraintActive) {
+    stats.initiative = num(stats, 'initiative')
+      + maximumElementalCharacteristicGain(BASE_CHARACTER.characteristicPoints);
   }
   return stats;
 }
@@ -214,7 +227,7 @@ function keepDiverseStates(states, context, limit) {
   const specialistReserve = Math.max(0, Number(context.profile.search.groupSpecialistReservePerStat || 0));
 
   function compareSpecialist(a, b, statKey) {
-    return num(b.state.searchStats, statKey) - num(a.state.searchStats, statKey)
+    return effectiveStat(b.state.searchStats, statKey) - effectiveStat(a.state.searchStats, statKey)
       || Number(b.state.constraintReady) - Number(a.state.constraintReady)
       || b.state.searchRank - a.state.searchRank
       || a.stateIndex - b.stateIndex;
@@ -226,7 +239,7 @@ function keepDiverseStates(states, context, limit) {
 
     for (let stateIndex = 0; stateIndex < states.length; stateIndex++) {
       const state = states[stateIndex];
-      if (num(state.searchStats, statKey) <= 0) continue;
+      if (effectiveStat(state.searchStats, statKey) <= 0) continue;
 
       const candidate = { state, stateIndex, key: null };
       let insertionIndex = 0;

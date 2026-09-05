@@ -1,6 +1,6 @@
 import { FM_ELIGIBLE_SLOTS } from './fm.js';
 import { applyPassiveModifiers } from './passives.js';
-import { addStats, stat } from './stats.js';
+import { addStats, constraintStatContribution, stat } from './stats.js';
 
 const OBJECTIVE_COMMON_STATS = [
   'power', 'damage', 'crit', 'critDamage', 'spellDamagePct',
@@ -154,7 +154,7 @@ function stableJson(value) {
 
 function structuralSignature(item, nonMonotoneKeys) {
   const equalityStats = {};
-  for (const key of nonMonotoneKeys || []) equalityStats[key] = stat(item.stats, key);
+  for (const key of nonMonotoneKeys || []) equalityStats[key] = constraintStatContribution(item.stats, key);
   return stableJson({
     slot: item.slot || null,
     slotSubtype: item.slotSubtype || null,
@@ -169,14 +169,14 @@ function structuralSignature(item, nonMonotoneKeys) {
 }
 
 function vectorSignature(item, keys) {
-  return keys.map((key) => stat(item.stats, key)).join('|');
+  return keys.map((key) => constraintStatContribution(item.stats, key)).join('|');
 }
 
 function dominates(a, b, keys) {
   let strictlyBetter = false;
   for (const key of keys) {
-    const av = stat(a.stats, key);
-    const bv = stat(b.stats, key);
+    const av = constraintStatContribution(a.stats, key);
+    const bv = constraintStatContribution(b.stats, key);
     if (av < bv) return false;
     if (av > bv) strictlyBetter = true;
   }
