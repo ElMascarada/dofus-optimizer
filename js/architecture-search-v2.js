@@ -10,7 +10,6 @@ import {
 import {
   branchFeasibility,
   buildGroupChoices,
-  fastPartialRank,
   offensiveUpperBound,
   staticBuildStats
 } from '../optimizer/candidate-search.js';
@@ -153,8 +152,8 @@ function impossibleRequiredResult(required) {
   };
 }
 
-function progressStats(items, setsById, constraints, fmPolicy = {}) {
-  const stats = staticBuildStats(items, setsById);
+function progressStats(items, setsById, constraints, fmPolicy = {}, preparedStaticStats = null) {
+  const stats = preparedStaticStats ? { ...preparedStaticStats } : staticBuildStats(items, setsById);
   if (Number(fmPolicy?.exoAp) === 1) stats.ap = num(stats, 'ap') + 1;
   if (Number(fmPolicy?.exoMp) === 1) stats.mp = num(stats, 'mp') + 1;
   if (Number(constraints?.vit || 0) > 0) stats.vit = num(stats, 'vit') + Math.max(0, Number(BASE_CHARACTER.characteristicPoints || 0));
@@ -167,9 +166,9 @@ function progressStats(items, setsById, constraints, fmPolicy = {}) {
   return stats;
 }
 
-function stateBucket(state, context) {
-  const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
-  const progress = constraintProgressForStats(stats, context.constraints);
+function stateBucket(state, context, preparedStats = null, preparedProgress = null) {
+  const stats = preparedStats || progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
+  const progress = preparedProgress || constraintProgressForStats(stats, context.constraints);
   const setCounts = new Map();
   for (const item of state.items) if (item.setId) setCounts.set(item.setId, (setCounts.get(item.setId) || 0) + 1);
   const setSignature = [...setCounts.entries()]
@@ -182,11 +181,19 @@ function stateBucket(state, context) {
 
 function keepDiverseStates(states, context, limit) {
   for (const state of states) {
-    const stats = progressStats(state.items, context.setsById, context.constraints, context.fmPolicy);
+    const staticStats = staticBuildStats(state.items, context.setsById);
+    const stats = progressStats(
+      state.items,
+      context.setsById,
+      context.constraints,
+      context.fmPolicy,
+      staticStats
+    );
     const progress = constraintProgressForStats(stats, context.constraints);
     state.searchStats = stats;
+    state.searchProgress = progress;
     state.searchRank = state.heuristic
-      + fastPartialRank(state.items, context.policy, context.setsById)
+      + context.policy.rankStats(staticStats).rankScore
       + progress.coverage * context.profile.ranking.constraintProgressWeight;
     state.constraintReady = progress.ready;
   }
@@ -199,7 +206,7 @@ function keepDiverseStates(states, context, limit) {
     if (output.length >= limit) return false;
     const key = [...state.ids].sort().join('|');
     if (seen.has(key)) return false;
-    const bucket = stateBucket(state, context);
+    const bucket = stateBucket(state, context, state.searchStats, state.searchProgress);
     const used = perBucket.get(bucket) || 0;
     if (enforceBucket && used >= context.profile.search.stateBucketLimit) return false;
     seen.add(key);
