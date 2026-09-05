@@ -418,6 +418,7 @@ export function searchArchitecturesV2({
     searchProfile: profile
   }));
   const policy = prefilter.policy;
+  const offensiveOptimisticItemCache = new Map();
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const context = { policy, profile, selections, constraints, fmPolicy, turnMode, scenario, sets, setsById };
 
@@ -603,7 +604,8 @@ export function searchArchitecturesV2({
               profilesFor,
               policy,
               sets,
-              fmPolicy
+              fmPolicy,
+              optimisticItemCache: offensiveOptimisticItemCache
             });
             if (Number.isFinite(bound) && bound + 1e-9 < threshold) {
               if (stateExpansionProfile) stateExpansionProfile.upperBoundPrunes++;
