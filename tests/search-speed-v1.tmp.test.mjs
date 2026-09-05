@@ -18,6 +18,20 @@ function phaseKey(progress = {}) {
   return `${phase}${fallback}`;
 }
 
+function formatArchitectureTiming(timing = {}) {
+  return [
+    'totalMs',
+    'eligibilityRequiredSetupMs',
+    'prefilterItemsMs',
+    'buildSetSynergyIndexMs',
+    'slotProfilePreparationMs',
+    'buildGroupChoicesMs',
+    'architectureQueueStateExpansionMs',
+    'completeBuildEvaluationMs',
+    'otherMs'
+  ].map((key) => `${key}:${Number(timing[key] || 0).toFixed(1)}`).join(';');
+}
+
 test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
   assert.ok(iop, 'Iop absent des données canoniques');
 
@@ -40,6 +54,7 @@ test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
     turnMode: 't1',
     topN: 10
   });
+  request.architectureTiming = true;
 
   let workerHandler = null;
   const messages = [];
@@ -73,10 +88,13 @@ test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
   const events = progressEvents
     .map((entry) => ({ ...entry, t: entry.t - (runStartedAt - startedAt) }))
     .filter((entry) => entry.t >= 0);
+  const architectureTimingEvents = events.filter((entry) => entry.progress?.architectureTiming);
+  assert.ok(architectureTimingEvents.length >= 1, 'instrumentation architecture absente');
+  const phaseEvents = events.filter((entry) => !entry.progress?.architectureTiming);
   const segments = [];
   let current = null;
   const counts = new Map();
-  for (const entry of events) {
+  for (const entry of phaseEvents) {
     const key = phaseKey(entry.progress);
     if (!current) {
       current = { key, start: 0, end: entry.t };
@@ -101,6 +119,10 @@ test('SEARCH SPEED V1 — real Iop Earth T1 product path', async () => {
   const winner = (best.items || []).map((item) => item.name || item.id).join(' | ');
   console.log(`SEARCH_SPEED_V1_TIME_MS=${totalMs.toFixed(1)}`);
   console.log(`SEARCH_SPEED_V1_PHASES=${segments.map((segment) => `${segment.label}:${(segment.end - segment.start).toFixed(1)}`).join(';')}`);
+  for (const entry of architectureTimingEvents) {
+    const kind = String(entry.progress.label || '').startsWith('fallback légal') ? 'fallback' : 'primary';
+    console.log(`ARCHITECTURE_TIMING ${kind}=${formatArchitectureTiming(entry.progress.architectureTiming)}`);
+  }
   console.log(`SEARCH_SPEED_V1_WINNER=${winner}`);
   console.log(`SEARCH_SPEED_V1_SCORE=${String(best.score)}`);
   console.log(`SEARCH_SPEED_V1_DIAGNOSTICS=${JSON.stringify({

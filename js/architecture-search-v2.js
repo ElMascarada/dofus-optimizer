@@ -241,6 +241,10 @@ function originForEntry(entry) {
   return entry?.architecture ? 'set-core' : 'standalone';
 }
 
+function nowMs() {
+  return typeof globalThis.performance?.now === 'function' ? globalThis.performance.now() : Date.now();
+}
+
 export function searchArchitecturesV2({
   items = [],
   sets = [],
@@ -252,11 +256,37 @@ export function searchArchitecturesV2({
   requiredItemIds = [],
   topN = 10,
   searchProfile = 'BALANCED',
-  onProgress = null
+  onProgress = null,
+  architectureTiming = false
 } = {}) {
-  const trophyEligibility = optimizerTrophyEligibilityCounts(items);
-  const eligibleItems = filterOptimizerEligibleItems(items);
-  const required = requiredConstraint(eligibleItems, requiredItemIds);
+  const timing = architectureTiming ? {
+    startedAt: nowMs(),
+    eligibilityRequiredSetupMs: 0,
+    prefilterItemsMs: 0,
+    buildSetSynergyIndexMs: 0,
+    slotProfilePreparationMs: 0,
+    buildGroupChoicesMs: 0,
+    completeBuildEvaluationMs: 0,
+    architectureWorkInclusiveMs: 0
+  } : null;
+
+  function measure(key, fn) {
+    if (!timing) return fn();
+    const startedAt = nowMs();
+    try {
+      return fn();
+    } finally {
+      timing[key] += nowMs() - startedAt;
+    }
+  }
+
+  const eligibility = measure('eligibilityRequiredSetupMs', () => {
+    const trophyEligibility = optimizerTrophyEligibilityCounts(items);
+    const eligibleItems = filterOptimizerEligibleItems(items);
+    const required = requiredConstraint(eligibleItems, requiredItemIds);
+    return { trophyEligibility, eligibleItems, required };
+  });
+  const { trophyEligibility, eligibleItems, required } = eligibility;
   if (!required.valid) {
     const impossible = impossibleRequiredResult(required);
     impossible.diagnostics.trophyEligibility = trophyEligibility;
@@ -265,7 +295,7 @@ export function searchArchitecturesV2({
 
   const profile = getSearchProfile(searchProfile);
   const extraConstraints = positiveConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key));
-  const prefilter = prefilterItems({
+  const prefilter = measure('prefilterItemsMs', () => prefilterItems({
     items: eligibleItems,
     sets,
     selections,
@@ -274,12 +304,12 @@ export function searchArchitecturesV2({
     scenario,
     requiredItemIds: required.ids,
     searchProfile: profile
-  });
+  }));
   const policy = prefilter.policy;
   const setsById = Object.fromEntries((sets || []).map((set) => [set.id, set]));
   const context = { policy, profile, selections, constraints, fmPolicy, turnMode, scenario, sets, setsById };
 
-  const synergy = buildSetSynergyIndex({
+  const synergy = measure('buildSetSynergyIndexMs', () => buildSetSynergyIndex({
     items: prefilter.items,
     sets,
     selections,
@@ -290,27 +320,32 @@ export function searchArchitecturesV2({
     maxArchitectures: profile.search.architectureMaxCount,
     policy,
     searchProfile: profile
-  });
+  }));
 
-  const originalById = new Map(eligibleItems.map((item) => [String(item.id), item]));
-  const slotProfiles = new Map();
-  for (const rule of SLOT_RULES) {
-    const profiles = (prefilter.pools?.[rule.id] || [])
-      .map((item) => policy.profileItem(item))
-      .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
-    slotProfiles.set(rule.id, profiles);
-  }
+  const slotPreparation = measure('slotProfilePreparationMs', () => {
+    const originalById = new Map(eligibleItems.map((item) => [String(item.id), item]));
+    const slotProfiles = new Map();
+    for (const rule of SLOT_RULES) {
+      const profiles = (prefilter.pools?.[rule.id] || [])
+        .map((item) => policy.profileItem(item))
+        .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+      slotProfiles.set(rule.id, profiles);
+    }
+    return { originalById, slotProfiles };
+  });
+  const { originalById, slotProfiles } = slotPreparation;
   const profilesFor = (slot) => slotProfiles.get(slot) || [];
 
   const choiceCache = new Map();
   function choicesFor(slot, count) {
     const key = `${slot}:${count}`;
     if (choiceCache.has(key)) return choiceCache.get(key);
-    const choices = buildGroupChoices(profilesFor(slot), count, { ...context, slot });
+    const choices = measure('buildGroupChoicesMs', () => buildGroupChoices(profilesFor(slot), count, { ...context, slot }));
     choiceCache.set(key, choices);
     return choices;
   }
 
+  const architectureWorkStartedAt = timing ? nowMs() : 0;
   const queue = [];
   const standalone = { architecture: null, variant: { label: 'standalones', anchorIds: [] } };
   if (extraConstraints) queue.push(standalone);
@@ -472,6 +507,7 @@ export function searchArchitecturesV2({
     const evaluationPool = complete.slice(0, evaluationLimit);
     heuristicTrimmed += Math.max(0, complete.length - evaluationPool.length);
 
+    const evaluationStartedAt = timing ? nowMs() : 0;
     for (const state of evaluationPool) {
       const evaluation = evaluateCompleteBuild({
         items: state.items,
@@ -502,7 +538,41 @@ export function searchArchitecturesV2({
       }
       if (evaluated % 12 === 0 || evaluation.result) report(entry.variant.label);
     }
+    if (timing) timing.completeBuildEvaluationMs += nowMs() - evaluationStartedAt;
     report(entry.variant.label);
+  }
+  if (timing) timing.architectureWorkInclusiveMs = nowMs() - architectureWorkStartedAt;
+
+  let architectureTimingResult = null;
+  if (timing) {
+    const totalMs = nowMs() - timing.startedAt;
+    const architectureQueueStateExpansionMs = Math.max(
+      0,
+      timing.architectureWorkInclusiveMs - timing.buildGroupChoicesMs - timing.completeBuildEvaluationMs
+    );
+    const knownMs = timing.eligibilityRequiredSetupMs
+      + timing.prefilterItemsMs
+      + timing.buildSetSynergyIndexMs
+      + timing.slotProfilePreparationMs
+      + timing.buildGroupChoicesMs
+      + architectureQueueStateExpansionMs
+      + timing.completeBuildEvaluationMs;
+    architectureTimingResult = {
+      totalMs,
+      eligibilityRequiredSetupMs: timing.eligibilityRequiredSetupMs,
+      prefilterItemsMs: timing.prefilterItemsMs,
+      buildSetSynergyIndexMs: timing.buildSetSynergyIndexMs,
+      slotProfilePreparationMs: timing.slotProfilePreparationMs,
+      buildGroupChoicesMs: timing.buildGroupChoicesMs,
+      architectureQueueStateExpansionMs,
+      completeBuildEvaluationMs: timing.completeBuildEvaluationMs,
+      otherMs: Math.max(0, totalMs - knownMs)
+    };
+    onProgress?.({
+      phase: 'architectures-v2-timing',
+      label: 'timing',
+      architectureTiming: architectureTimingResult
+    });
   }
 
   const searchProfileName = typeof searchProfile === 'string' ? String(searchProfile).toUpperCase() : 'CUSTOM';
@@ -535,6 +605,7 @@ export function searchArchitecturesV2({
       rejected: Object.fromEntries(rejectReasons),
       prefilter: prefilter.diagnostics,
       trophyEligibility,
+      ...(architectureTimingResult ? { architectureTiming: architectureTimingResult } : {}),
       nodes: evaluated,
       visited: valid,
       pruned: safePruned + [...rejectReasons.values()].reduce((sum, value) => sum + value, 0)
