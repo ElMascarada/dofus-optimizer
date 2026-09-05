@@ -1,7 +1,7 @@
 import { loadDofusData, loadSpellData } from '../data-loader.js';
 import { BuildRepository } from './build-repository.js';
 import { createBuildLibrary } from './build-library.js';
-import { createWorkshopBuild, workshopBuildIsComplete } from './workshop-build.js';
+import { WORKSHOP_SLOTS, createWorkshopBuild, workshopBuildIsComplete } from './workshop-build.js';
 import { WorkshopController } from './workshop-controller.js';
 import { createEquipmentGrid } from './equipment-grid.js';
 import { createItemBrowser } from './item-browser.js';
@@ -13,6 +13,7 @@ import { FIND_BETTER_BUILD_EVENT, OPEN_WORKSHOP_BUILD_EVENT } from './workshop-e
 const workshopView = document.querySelector('#workshop-view');
 const optimizerView = document.querySelector('#optimizer-view');
 const tabs = [...document.querySelectorAll('[data-product-tab]')];
+const WORKSHOP_SLOT_COUNT = WORKSHOP_SLOTS.length;
 let pendingOptimizerBuild = null;
 let openOptimizerBuild = null;
 
@@ -68,7 +69,7 @@ function renderSkeleton() {
           <button type="button" id="workshop-find-better" class="primary" disabled>Trouver mieux</button>
           <button type="button" id="workshop-clear-rejects" class="secondary" hidden>Effacer les rejets</button>
         </div>
-        <small id="workshop-find-better-hint" class="workshop-find-better-hint">Choisis une classe et complète les 16 slots pour lancer une amélioration ciblée.</small>
+        <small id="workshop-find-better-hint" class="workshop-find-better-hint">Choisis une classe et équipe au moins un item pour lancer une optimisation ciblée.</small>
       </div>
     </section>
     <p id="workshop-feedback" class="workshop-feedback" aria-live="polite"></p>
@@ -276,15 +277,20 @@ async function initWorkshop() {
         const rejectedCount = build.rejectedItemIds?.length || 0;
         const filledCount = Object.values(build.equipmentBySlot || {}).filter(Boolean).length;
         const complete = workshopBuildIsComplete(build);
+        const canOptimize = Boolean(build.classId && filledCount > 0);
+        const missingCount = Math.max(0, WORKSHOP_SLOT_COUNT - filledCount);
         clearRejectsButton.hidden = rejectedCount === 0;
         clearRejectsButton.textContent = rejectedCount ? `Effacer les rejets (${rejectedCount})` : 'Effacer les rejets';
-        findBetterButton.disabled = !(build.classId && complete);
-        progressPill.textContent = `${filledCount} / 16`;
+        findBetterButton.disabled = !canOptimize;
+        findBetterButton.textContent = complete ? 'Trouver mieux' : 'Compléter le stuff';
+        progressPill.textContent = `${filledCount} / ${WORKSHOP_SLOT_COUNT}`;
         progressPill.dataset.complete = String(complete);
-        findBetterHint.dataset.ready = String(Boolean(build.classId && complete));
+        findBetterHint.dataset.ready = String(canOptimize);
         findBetterHint.textContent = build.classId && complete
           ? 'Stuff complet : Trouver mieux conserve uniquement les items explicitement verrouillés.'
-          : `Choisis une classe et complète les ${Math.max(0, 16 - filledCount)} slot${16 - filledCount > 1 ? 's' : ''} restant${16 - filledCount > 1 ? 's' : ''}.`;
+          : build.classId && filledCount > 0
+            ? `${filledCount} item(s) conservé(s) · ${missingCount} slot(s) à compléter.`
+            : 'Choisis une classe et équipe au moins un item pour lancer une optimisation ciblée.';
         if (autosave && !suppressAutosave) autosave.queue(build);
       }
     });
@@ -311,8 +317,9 @@ async function initWorkshop() {
     }
 
     findBetterButton.addEventListener('click', () => {
-      if (!controller.build.classId || !workshopBuildIsComplete(controller.build)) {
-        feedback('Complète les 16 slots et choisis une classe avant de chercher mieux.', 'error');
+      const filledCount = Object.values(controller.build.equipmentBySlot || {}).filter(Boolean).length;
+      if (!controller.build.classId || filledCount === 0) {
+        feedback('Choisis une classe et équipe au moins un item avant de lancer l’optimisation.', 'error');
         return;
       }
       const build = controller.build;
