@@ -5,6 +5,7 @@ import { BASE_CHARACTER } from '../js/config.js';
 import {
   derivedInitiative,
   effectiveStat,
+  effectiveStats,
   meetsConstraints,
   constraintDeficits
 } from '../js/stats.js';
@@ -99,6 +100,24 @@ test('derived Initiative sums four characteristics and signed direct Initiative 
   assert.equal(derivedInitiative({ earth: 10, initiative: -50 }), 0);
 });
 
+test('effectiveStats is idempotent without losing the direct Initiative contribution', () => {
+  const raw = {
+    earth: 230,
+    fire: 790,
+    water: 790,
+    air: 790,
+    initiative: 2600
+  };
+
+  const once = effectiveStats(raw);
+  const twice = effectiveStats(once);
+
+  assert.equal(once.initiative, 5200);
+  assert.equal(twice.initiative, 5200);
+  assert.equal(effectiveStat(once, 'initiative'), 5200);
+  assert.equal(effectiveStat(twice, 'initiative'), 5200);
+});
+
 test('Initiative constraints validate against the derived final value', () => {
   const stats = {
     earth: 230,
@@ -145,6 +164,53 @@ test('scrolls and characteristic allocation naturally raise final Initiative wit
 
   assert.ok(evaluation.result, 'final build validation must accept Initiative supplied by scrolls and allocated characteristics');
   assert.equal(evaluation.result.stats.initiative, 4098);
+});
+
+test('temporary elemental penalties cannot invalidate Initiative after the permanent gate passes', () => {
+  const fixture = legalFixture((id) => id === 'hat' ? {
+    earth: 230,
+    fire: 790,
+    water: 790,
+    air: 790,
+    initiative: 2600
+  } : {});
+  fixture.find((entry) => entry.id === 'hat').turnBonuses = {
+    1: { fire: -10000 }
+  };
+
+  const evaluation = evaluateCompleteBuild({
+    items: fixture,
+    sets: [],
+    selections: fireSelections,
+    constraints: { ap: 12, mp: 6, initiative: 5200 },
+    fmPolicy,
+    turnMode: 't1',
+    scenario: { requiredApByTurn: {} }
+  });
+
+  assert.ok(evaluation.result, 'a temporary elemental penalty must not re-evaluate permanent Initiative');
+  assert.ok(evaluation.result.stats.initiative >= 5200);
+});
+
+test('temporary elemental buffs cannot rescue a build below the permanent Initiative minimum', () => {
+  const fixture = legalFixture((id) => id === 'hat' ? { initiative: 3000 } : {});
+  fixture.find((entry) => entry.id === 'hat').turnBonuses = {
+    1: { fire: 10000 }
+  };
+
+  const evaluation = evaluateCompleteBuild({
+    items: fixture,
+    sets: [],
+    selections: fireSelections,
+    constraints: { ap: 12, mp: 6, initiative: 4000 },
+    fmPolicy,
+    turnMode: 't1',
+    scenario: { requiredApByTurn: {} }
+  });
+
+  assert.equal(evaluation.result, null);
+  assert.equal(evaluation.reason, 'constraint');
+  assert.ok(evaluation.constraintDiagnostics.staticConstraintDeficits.initiative > 0);
 });
 
 test('search progress recognizes direct Initiative and elemental characteristics as Initiative contributors', () => {
