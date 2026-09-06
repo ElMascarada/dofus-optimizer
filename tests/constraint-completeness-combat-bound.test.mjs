@@ -46,6 +46,7 @@ function combatOptions(items, classSpells, { bounded = true, sets = [], metric =
     items, sets, selections: damageSelections(classSpells), constraints: { ap: 12 },
     fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, exoAp: 0, exoMp: 0 },
     turnMode: 't1', scenario, searchProfile: 'BALANCED', useOffensiveBound: false, requiredItemIds,
+    equipmentParetoEnabled: false,
     ...(bounded ? { objectiveMode: 'combat', classSpells, combatObjective } : {}),
     scoreValidBuild(build) {
       return refineCombatTurns({
