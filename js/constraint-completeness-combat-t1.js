@@ -52,7 +52,7 @@ function noCritExplorationContext(scenario = {}) {
 }
 function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItems, pruneReasons, orderedGroups,
   firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-  debugHints, equipmentParetoDiagnostics, companionExpansions, dofusExpansions }) {
+  debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions }) {
   return {
     constraintRescueUsed: true,
     constraintRescueGroupOrder: orderedGroups.map((group) => group.id),
@@ -72,6 +72,7 @@ function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItem
     constraintRescueReason: reason,
     constraintRescuePruneReasons: Object.fromEntries(pruneReasons),
     ...equipmentParetoDiagnostics,
+    constraintRescueEquipmentStructuresAtFirstIncumbent: equipmentStructuresAtFirstIncumbent,
     constraintRescueCompanionExpansions: companionExpansions,
     constraintRescueDofusExpansions: dofusExpansions,
     ...(debugHints || {})
@@ -103,6 +104,7 @@ export function searchCombatT1ConstraintRescue({
   let incumbent = null, firstIncumbentAtNode = null, firstIncumbentScore = null;
   let combatBoundCalls = 0, combatBoundPruned = 0, orderedGroups = [];
   let equipmentParetoDiagnostics = emptyEquipmentParetoDiagnostics();
+  let equipmentStructuresAtFirstIncumbent = null;
   let companionExpansions = 0, dofusExpansions = 0;
 
   function finish(reason) {
@@ -111,7 +113,7 @@ export function searchCombatT1ConstraintRescue({
       diagnostics: makeDiagnostics({
         nodes, leaves, pruned, evaluated, valid, eligibleItems: eligibleItems.length, pruneReasons, orderedGroups,
         firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-        debugHints, equipmentParetoDiagnostics, companionExpansions, dofusExpansions
+        debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions
       })
     };
   }
@@ -179,7 +181,9 @@ export function searchCombatT1ConstraintRescue({
   const completionItems = orderedGroups
     .filter((group) => !EQUIPMENT_SLOTS.has(group.id))
     .flatMap((group) => group.profiles.map((profile) => profile.item));
-  const equipmentPareto = combatBoundEnabled && equipmentParetoEnabled
+  const equipmentPareto = combatBoundEnabled
+    && equipmentParetoEnabled
+    && combatBoundContext?.opaqueMechanics !== true
     ? createEquipmentParetoReducer({
         requiredItemIds: required.requiredIds,
         completionItems,
@@ -246,6 +250,9 @@ export function searchCombatT1ConstraintRescue({
     if (firstIncumbentAtNode === null) {
       firstIncumbentAtNode = nodes;
       firstIncumbentScore = Number(candidate.score || 0);
+      equipmentStructuresAtFirstIncumbent = equipmentPareto
+        ? Number(equipmentPareto.diagnostics().constraintRescueEquipmentStructures || 0)
+        : 0;
     }
     if (!incumbent
       || Number(candidate.score || 0) > Number(incumbent.score || 0) + SCORE_EPSILON

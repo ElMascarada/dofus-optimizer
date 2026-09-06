@@ -15,6 +15,7 @@ export function emptyConstraintRescueDiagnostics() {
     constraintRescueCombatBoundCalls: 0,
     constraintRescueCombatBoundPruned: 0,
     constraintRescueEquipmentStructures: 0,
+    constraintRescueEquipmentStructuresAtFirstIncumbent: null,
     constraintRescueParetoComparable: 0,
     constraintRescueParetoDominated: 0,
     constraintRescueParetoFrontier: 0,

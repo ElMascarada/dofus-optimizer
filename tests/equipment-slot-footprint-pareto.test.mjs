@@ -264,6 +264,12 @@ function combatOptions(items, spells, { equipmentParetoEnabled = true, element =
   };
 }
 
+function exhaustiveCombatOptions(items, spells, extra = {}) {
+  const options = combatOptions(items, spells, { ...extra, equipmentParetoEnabled: false });
+  delete options.objectiveMode;
+  return options;
+}
+
 function buildKey(build) {
   return (build?.items || []).map((entry) => String(entry.id)).sort().join('|');
 }
@@ -280,9 +286,10 @@ test('small exact Fire enumeration returns the identical winner and score with s
     item('a-best-hat', 'hat', { ap: 1, fire: 150, power: 30 }),
     item('b-late-hat', 'hat', { ap: 1, fire: 40, power: 5, water: 300, earth: 300 })
   ] });
-  const before = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], { equipmentParetoEnabled: false, element: 'fire' }));
+  const before = exhaustiveCombatOptions(items, [fireSpell], { element: 'fire' });
+  const baseline = searchCombatT1ConstraintRescue(before);
   const after = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], { equipmentParetoEnabled: true, element: 'fire' }));
-  assertExactIdentity(before, after);
+  assertExactIdentity(baseline, after);
   assert.ok(Number(after.diagnostics.constraintRescueParetoDominated || 0) > 0);
 });
 
@@ -292,24 +299,83 @@ test('small exact Multi enumeration returns the identical winner and score with 
     item('b-water-hat', 'hat', { ap: 1, water: 160, power: 15 })
   ] });
   const spells = [fireSpell, waterSpell];
-  const before = searchCombatT1ConstraintRescue(combatOptions(items, spells, { equipmentParetoEnabled: false, element: 'multi' }));
+  const before = searchCombatT1ConstraintRescue(exhaustiveCombatOptions(items, spells, { element: 'multi' }));
   const after = searchCombatT1ConstraintRescue(combatOptions(items, spells, { equipmentParetoEnabled: true, element: 'multi' }));
   assertExactIdentity(before, after);
 });
 
+test('streaming Pareto gets a real incumbent before equipment enumeration ends and skips dominated structures before Companion/Dofus', () => {
+  const hats = [
+    item('a00-best', 'hat', { ap: 1, fire: 120, power: 30 }),
+    item('b01-dominated', 'hat', { ap: 1, fire: 119, power: 30 }),
+    item('b02-dominated', 'hat', { ap: 1, fire: 118, power: 30 }),
+    item('b03-dominated', 'hat', { ap: 1, fire: 117, power: 30 })
+  ];
+  const single = searchCombatT1ConstraintRescue(combatOptions(fixedShape({ hats: [hats[0]] }), [fireSpell]));
+  const streaming = searchCombatT1ConstraintRescue(combatOptions(fixedShape({ hats }), [fireSpell]));
+  const exact = searchCombatT1ConstraintRescue(exhaustiveCombatOptions(fixedShape({ hats }), [fireSpell]));
+
+  assertExactIdentity(exact, streaming);
+  const diagnostics = streaming.diagnostics;
+  assert.ok(Number(diagnostics.constraintRescueEquipmentStructuresAtFirstIncumbent || 0)
+    < Number(diagnostics.constraintRescueEquipmentStructures || 0));
+  assert.ok(Number(diagnostics.constraintRescueParetoDominated || 0) > 0);
+  assert.equal(Number(diagnostics.constraintRescueCompanionExpansions || 0),
+    Number(single.diagnostics.constraintRescueCompanionExpansions || 0));
+  assert.equal(Number(diagnostics.constraintRescueDofusExpansions || 0),
+    Number(single.diagnostics.constraintRescueDofusExpansions || 0));
+});
+
+test('streaming Pareto and Combat/T1 B&B both prune in the same run without changing the exact winner', () => {
+  const hats = [
+    item('a00-best', 'hat', { ap: 1, fire: 10000 }),
+    item('b01-dominated', 'hat', { ap: 1, fire: 100 }),
+    item('c02-bnb-survivor', 'hat', { ap: 1, critDamage: 1 })
+  ];
+  const items = fixedShape({ hats });
+  const exhaustive = searchCombatT1ConstraintRescue(exhaustiveCombatOptions(items, [fireSpell]));
+  const streaming = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell]));
+
+  assertExactIdentity(exhaustive, streaming);
+  assert.ok(Number(streaming.diagnostics.constraintRescueParetoDominated || 0) > 0);
+  assert.ok(Number(streaming.diagnostics.constraintRescueCombatBoundCalls || 0) > 0);
+  assert.ok(Number(streaming.diagnostics.constraintRescueCombatBoundPruned || 0) > 0);
+  assert.ok(Number(streaming.diagnostics.constraintRescueEquipmentStructuresAtFirstIncumbent || 0)
+    < Number(streaming.diagnostics.constraintRescueEquipmentStructures || 0));
+});
+
+test('opaque Combat mechanics disable destructive Equipment Pareto while preserving the exact winner', () => {
+  const opaqueSpell = {
+    ...fireSpell,
+    id: 'pareto-opaque-combat',
+    breedId: 17
+  };
+  const items = fixedShape({ hats: [
+    item('opaque-a', 'hat', { ap: 1, fire: 500 }),
+    item('opaque-b', 'hat', { ap: 1, fire: 10 })
+  ] });
+  const exhaustive = searchCombatT1ConstraintRescue(exhaustiveCombatOptions(items, [opaqueSpell]));
+  const opaque = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueSpell]));
+
+  assertExactIdentity(exhaustive, opaque);
+  assert.equal(Number(opaque.diagnostics.constraintRescueParetoDominated || 0), 0);
+  assert.equal(Number(opaque.diagnostics.constraintRescueParetoFrontier || 0), 0);
+});
+
 test('synthetic dominated equipment fixture reduces Dofus expansion while preserving the exact winner', () => {
-  const opaqueBoundSpell = { ...fireSpell, id: 'pareto-opaque-bound', breedId: 17 };
   const hats = Array.from({ length: 12 }, (_, index) => item(
     index === 0 ? 'a00-best' : `b${String(index).padStart(2, '0')}-dominated`,
     'hat',
-    { ap: 1, fire: 600 - index * 20, power: 120 - index * 3 }
+    { ap: 1, fire: 200 - index, power: 40 }
   ));
   const dofuses = Array.from({ length: 9 }, (_, index) => item(`dofus-${index}`, 'dofus', { fire: 5 + index }));
   const items = fixedShape({ hats, dofuses });
-  const before = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], { equipmentParetoEnabled: false, element: 'fire' }));
-  const after = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], { equipmentParetoEnabled: true, element: 'fire' }));
+  const before = searchCombatT1ConstraintRescue(exhaustiveCombatOptions(items, [fireSpell], { element: 'fire' }));
+  const after = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], { equipmentParetoEnabled: true, element: 'fire' }));
 
   assertExactIdentity(before, after);
+  assert.ok(Number(after.diagnostics.constraintRescueEquipmentStructuresAtFirstIncumbent || 0)
+    < Number(after.diagnostics.constraintRescueEquipmentStructures || 0));
   assert.ok(Number(after.diagnostics.constraintRescueParetoDominated || 0) >= 10);
   assert.ok(Number(after.diagnostics.constraintRescueDofusExpansions || 0)
     < Number(before.diagnostics.constraintRescueDofusExpansions || 0));

@@ -54,15 +54,12 @@ export function runExactCombatGroupDfs({
     return remaining;
   }
 
-  function restoreSelection(items) {
-    selectedItems.splice(0, selectedItems.length, ...items);
-    selectedIds.clear();
-    for (const item of items) selectedIds.add(String(item.id));
-  }
-
   function visitGroup(groupIndex, boundaryIndex = -1) {
     if (boundaryIndex >= 0 && groupIndex === boundaryIndex) {
-      equipmentPareto.consider(selectedItems);
+      const paretoResult = equipmentPareto.consider(selectedItems);
+      if (paretoResult?.dominated) return;
+      if (!safelyPossible(fullRemainingFrom(groupIndex))) return;
+      visitGroup(groupIndex);
       return;
     }
     if (groupIndex >= orderedGroups.length) {
@@ -97,7 +94,12 @@ export function runExactCombatGroupDfs({
           keep = false;
         }
         const left = picksLeft - 1;
-        if (keep) keep = safelyPossible(remainingGroups(groupIndex, left, profiles, suffix, index + 1));
+        const reachesEquipmentBoundary = boundaryIndex >= 0
+          && left === 0
+          && groupIndex + 1 === boundaryIndex;
+        if (keep && !reachesEquipmentBoundary) {
+          keep = safelyPossible(remainingGroups(groupIndex, left, profiles, suffix, index + 1));
+        }
         if (keep) choose(index + 1, left);
         selectedIds.delete(id);
         selectedItems.pop();
@@ -114,18 +116,6 @@ export function runExactCombatGroupDfs({
   }
 
   const firstNonEquipmentIndex = orderedGroups.findIndex((group) => !EQUIPMENT_SLOTS.has(group.id));
-  if (firstNonEquipmentIndex < 0) {
-    visitGroup(0);
-    return;
-  }
-
-  const initialSelection = [...selectedItems];
-  visitGroup(0, firstNonEquipmentIndex);
-  const structures = equipmentPareto.entries();
-  for (const structure of structures) {
-    restoreSelection(structure.items);
-    if (!safelyPossible(fullRemainingFrom(firstNonEquipmentIndex))) continue;
-    visitGroup(firstNonEquipmentIndex);
-  }
-  restoreSelection(initialSelection);
+  const equipmentBoundaryIndex = firstNonEquipmentIndex < 0 ? orderedGroups.length : firstNonEquipmentIndex;
+  visitGroup(0, equipmentBoundaryIndex);
 }
