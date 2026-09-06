@@ -4,6 +4,11 @@ import { refineCombatTurns } from './combat-turn-refiner.js';
 import { repairFinalDofusBuild } from './final-dofus-local-repair.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 import { diversifyBuilds } from './result-diversity.js';
+import {
+  emptyConstraintRescueDiagnostics,
+  searchConstraintCompletenessRescue,
+  shouldUseConstraintCompletenessRescue
+} from './constraint-completeness-rescue.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
@@ -227,6 +232,31 @@ self.addEventListener('message', (event) => {
     }
 
     output.results = keepRequiredBuilds(output.results, requiredIds);
+    if (shouldUseConstraintCompletenessRescue({ results: output.results, constraints: normalizedPayload.constraints })) {
+      const rescue = searchConstraintCompletenessRescue({
+        ...normalizedPayload,
+        onProgress: (progress) => self.postMessage({
+          type: 'progress',
+          requestId,
+          progress: { ...progress, label: progress.label || 'rescue contraintes' }
+        })
+      });
+      output = {
+        ...output,
+        results: keepRequiredBuilds(rescue.results, requiredIds),
+        candidateItems: rescue.candidateItems,
+        diagnostics: {
+          ...(output.diagnostics || {}),
+          ...rescue.diagnostics
+        }
+      };
+    } else {
+      output.diagnostics = {
+        ...(output.diagnostics || {}),
+        ...emptyConstraintRescueDiagnostics()
+      };
+    }
+
     const candidateItems = output.candidateItems?.length ? output.candidateItems : normalizedPayload.items;
 
     if (output.results?.length) {
