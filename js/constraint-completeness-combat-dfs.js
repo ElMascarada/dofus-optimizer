@@ -1,6 +1,8 @@
 import { specialSlotRulesAreValid } from './build-legality.js';
 import { buildSuffixCaps, dynamicProfiles } from './constraint-completeness-combat-helpers.js';
 
+const EQUIPMENT_SLOTS = new Set(['hat', 'cape', 'amulet', 'belt', 'boots', 'weapon', 'ring', 'shield']);
+
 export function runExactCombatGroupDfs({
   orderedGroups,
   selectedItems,
@@ -14,7 +16,9 @@ export function runExactCombatGroupDfs({
   onNode,
   onPrune,
   onProgressNode,
-  debugHints = null
+  debugHints = null,
+  equipmentPareto = null,
+  onGroupExpansion = null
 }) {
   function remainingGroups(groupIndex, picksLeft = 0, profiles = null, suffix = null, nextStart = 0) {
     const remaining = [];
@@ -37,7 +41,30 @@ export function runExactCombatGroupDfs({
     return remaining;
   }
 
-  function visitGroup(groupIndex) {
+  function fullRemainingFrom(groupIndex) {
+    const remaining = [];
+    for (let index = groupIndex; index < orderedGroups.length; index++) {
+      remaining.push({
+        id: orderedGroups[index].id,
+        missing: orderedGroups[index].missing,
+        profileCaps: orderedGroups[index].fullProfileCaps,
+        availableProfiles: orderedGroups[index].profiles
+      });
+    }
+    return remaining;
+  }
+
+  function restoreSelection(items) {
+    selectedItems.splice(0, selectedItems.length, ...items);
+    selectedIds.clear();
+    for (const item of items) selectedIds.add(String(item.id));
+  }
+
+  function visitGroup(groupIndex, boundaryIndex = -1) {
+    if (boundaryIndex >= 0 && groupIndex === boundaryIndex) {
+      equipmentPareto.consider(selectedItems);
+      return;
+    }
     if (groupIndex >= orderedGroups.length) {
       evaluateLeaf();
       return;
@@ -48,7 +75,7 @@ export function runExactCombatGroupDfs({
 
     function choose(startIndex, picksLeft) {
       if (picksLeft === 0) {
-        visitGroup(groupIndex + 1);
+        visitGroup(groupIndex + 1, boundaryIndex);
         return;
       }
       const lastStart = profiles.length - picksLeft;
@@ -61,6 +88,7 @@ export function runExactCombatGroupDfs({
         const id = String(item.id);
         if (selectedIds.has(id)) continue;
         const nodes = onNode();
+        if (onGroupExpansion) onGroupExpansion(group.id);
         selectedItems.push(item);
         selectedIds.add(id);
         let keep = true;
@@ -80,5 +108,24 @@ export function runExactCombatGroupDfs({
     choose(0, group.missing);
   }
 
-  visitGroup(0);
+  if (!equipmentPareto) {
+    visitGroup(0);
+    return;
+  }
+
+  const firstNonEquipmentIndex = orderedGroups.findIndex((group) => !EQUIPMENT_SLOTS.has(group.id));
+  if (firstNonEquipmentIndex < 0) {
+    visitGroup(0);
+    return;
+  }
+
+  const initialSelection = [...selectedItems];
+  visitGroup(0, firstNonEquipmentIndex);
+  const structures = equipmentPareto.entries();
+  for (const structure of structures) {
+    restoreSelection(structure.items);
+    if (!safelyPossible(fullRemainingFrom(firstNonEquipmentIndex))) continue;
+    visitGroup(firstNonEquipmentIndex);
+  }
+  restoreSelection(initialSelection);
 }

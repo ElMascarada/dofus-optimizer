@@ -19,11 +19,22 @@ import {
   sortGroupsCombat
 } from './constraint-completeness-combat-helpers.js';
 import { runExactCombatGroupDfs } from './constraint-completeness-combat-dfs.js';
+import { createEquipmentParetoReducer } from './equipment-slot-footprint-pareto.js';
 
 const EQUIPMENT_SLOTS = new Set(['hat', 'cape', 'amulet', 'belt', 'boots', 'weapon', 'ring', 'shield']);
 const SCORE_EPSILON = 1e-9;
 const PROGRESS_NODE_INTERVAL = 4096;
 const DEBUG_HINT_LIMIT = 8;
+
+function emptyEquipmentParetoDiagnostics() {
+  return {
+    constraintRescueEquipmentStructures: 0,
+    constraintRescueParetoComparable: 0,
+    constraintRescueParetoDominated: 0,
+    constraintRescueParetoFrontier: 0,
+    constraintRescueParetoOpaqueKept: 0
+  };
+}
 
 function clockMs() {
   return typeof globalThis.performance?.now === 'function' ? globalThis.performance.now() : Date.now();
@@ -41,7 +52,7 @@ function noCritExplorationContext(scenario = {}) {
 }
 function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItems, pruneReasons, orderedGroups,
   firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-  debugHints }) {
+  debugHints, equipmentParetoDiagnostics, companionExpansions, dofusExpansions }) {
   return {
     constraintRescueUsed: true,
     constraintRescueGroupOrder: orderedGroups.map((group) => group.id),
@@ -60,6 +71,9 @@ function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItem
     constraintRescueEligibleItems: eligibleItems,
     constraintRescueReason: reason,
     constraintRescuePruneReasons: Object.fromEntries(pruneReasons),
+    ...equipmentParetoDiagnostics,
+    constraintRescueCompanionExpansions: companionExpansions,
+    constraintRescueDofusExpansions: dofusExpansions,
     ...(debugHints || {})
   };
 }
@@ -68,7 +82,7 @@ export function searchCombatT1ConstraintRescue({
   items = [], sets = [], selections = [], constraints = {}, fmPolicy = {}, turnMode = 't1', scenario = {},
   requiredItemIds = [], rejectedItemIds = [], searchProfile = 'BALANCED', scoreValidBuild = null,
   classSpells = [], combatObjective = {}, objectiveMode = null, onProgress = null,
-  debugExplorationHints = false
+  debugExplorationHints = false, equipmentParetoEnabled = true
 } = {}) {
   const startedAt = clockMs();
   const pruneReasons = new Map();
@@ -88,6 +102,8 @@ export function searchCombatT1ConstraintRescue({
   let nodes = 1, leaves = 0, pruned = 0, evaluated = 0, valid = 0;
   let incumbent = null, firstIncumbentAtNode = null, firstIncumbentScore = null;
   let combatBoundCalls = 0, combatBoundPruned = 0, orderedGroups = [];
+  let equipmentParetoDiagnostics = emptyEquipmentParetoDiagnostics();
+  let companionExpansions = 0, dofusExpansions = 0;
 
   function finish(reason) {
     return {
@@ -95,7 +111,7 @@ export function searchCombatT1ConstraintRescue({
       diagnostics: makeDiagnostics({
         nodes, leaves, pruned, evaluated, valid, eligibleItems: eligibleItems.length, pruneReasons, orderedGroups,
         firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-        debugHints
+        debugHints, equipmentParetoDiagnostics, companionExpansions, dofusExpansions
       })
     };
   }
@@ -159,6 +175,20 @@ export function searchCombatT1ConstraintRescue({
   const setEnvelope = createBranchFeasibilityEnvelope({ remainingGroups: [], profilesFor, constraints, sets });
   const combatBoundContext = combatBoundEnabled
     ? createCombatT1UpperBoundContext({ classSpells, combatObjective, scenario, searchProfile, sets, fmPolicy })
+    : null;
+  const completionItems = orderedGroups
+    .filter((group) => !EQUIPMENT_SLOTS.has(group.id))
+    .flatMap((group) => group.profiles.map((profile) => profile.item));
+  const equipmentPareto = combatBoundEnabled && equipmentParetoEnabled
+    ? createEquipmentParetoReducer({
+        requiredItemIds: required.requiredIds,
+        completionItems,
+        setsById,
+        selections,
+        constraints,
+        scenario,
+        fmPolicy
+      })
     : null;
 
   function progress(label = 'rescue contraintes') {
@@ -235,12 +265,21 @@ export function searchCombatT1ConstraintRescue({
   function onProgressNode(currentNodes) {
     if (currentNodes % PROGRESS_NODE_INTERVAL === 0) progress();
   }
+  function onGroupExpansion(groupId) {
+    if (groupId === 'companion') companionExpansions++;
+    if (groupId === 'dofus') dofusExpansions++;
+  }
 
   if (!safelyPossible(initialRemaining())) return finish('constraints-impossible-by-upper-envelope');
   runExactCombatGroupDfs({
     orderedGroups, selectedItems, selectedIds, setsById, policy, constraints, suffixKeys,
-    safelyPossible, evaluateLeaf, onNode, onPrune, onProgressNode, debugHints
+    safelyPossible, evaluateLeaf, onNode, onPrune, onProgressNode, debugHints,
+    equipmentPareto, onGroupExpansion
   });
+  if (equipmentPareto) {
+    equipmentParetoDiagnostics = equipmentPareto.diagnostics();
+    if (debugHints) debugHints.topEquipmentParetoStructures = equipmentPareto.debugTop(DEBUG_HINT_LIMIT);
+  }
   progress(incumbent ? 'rescue contraintes · terminé' : 'rescue contraintes · impossible');
   return finish(incumbent ? 'feasible' : 'exhaustively-impossible');
 }

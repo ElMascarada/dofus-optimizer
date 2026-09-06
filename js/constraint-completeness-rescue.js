@@ -13,7 +13,14 @@ export function emptyConstraintRescueDiagnostics() {
     constraintRescueFirstIncumbentScore: null,
     constraintRescueFinalIncumbentScore: null,
     constraintRescueCombatBoundCalls: 0,
-    constraintRescueCombatBoundPruned: 0
+    constraintRescueCombatBoundPruned: 0,
+    constraintRescueEquipmentStructures: 0,
+    constraintRescueParetoComparable: 0,
+    constraintRescueParetoDominated: 0,
+    constraintRescueParetoFrontier: 0,
+    constraintRescueParetoOpaqueKept: 0,
+    constraintRescueCompanionExpansions: 0,
+    constraintRescueDofusExpansions: 0
   };
 }
 
