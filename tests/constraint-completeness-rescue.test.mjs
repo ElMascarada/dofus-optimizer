@@ -281,6 +281,20 @@ test('companion exploration responds generically to crit saturation, crit defici
   assert.equal(firstHint(vitality, 'topCompanionExplorationHints'), 'vitality-companion');
 });
 
+test('multi-pick feasibility bound uses only the still-accessible suffix', () => {
+  const dofuses = [
+    item('suffix-ap', 'dofus', { ap: 1 }, { typeName: 'Dofus' }),
+    ...Array.from({ length: 6 }, (_, index) => item(`suffix-damage-${index}`, 'dofus', { fire: 20 + index }, { typeName: 'Dofus' }))
+  ];
+  const output = runRescue(fixedShape({ dofuses }), { ap: 12 }, {
+    useOffensiveBound: false
+  });
+  assert.ok(output.results.length === 1);
+  assert.ok(ids(output.results[0]).has('suffix-ap'));
+  assert.ok(Number(output.diagnostics.constraintRescuePruneReasons?.['constraint:ap'] || 0) > 0,
+    'once the AP candidate is behind startIndex, the suffix bound must stop counting it');
+});
+
 test('guided and legacy exploration orders preserve the exact final optimum', (t) => {
   const items = fixedShape({
     hats: [item('low-hat', 'hat', { ap: 1, fire: 10 }), item('high-hat', 'hat', { ap: 1, fire: 70 })],
