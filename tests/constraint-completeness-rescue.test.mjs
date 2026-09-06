@@ -53,8 +53,8 @@ function fixedShape({ hats, companions = [item('companion', 'companion', { fire:
   ];
 }
 
-function runRescue(items, constraints) {
-  return searchConstraintCompletenessRescue({
+function rescueOptions(items, constraints) {
+  return {
     items,
     sets: [],
     selections,
@@ -63,14 +63,18 @@ function runRescue(items, constraints) {
     turnMode: 't1',
     scenario: { requiredApByTurn: {} },
     searchProfile: 'BALANCED'
-  });
+  };
+}
+
+function runRescue(items, constraints) {
+  return searchConstraintCompletenessRescue(rescueOptions(items, constraints));
 }
 
 function ids(build) {
   return new Set((build?.items || []).map((entry) => String(entry.id)));
 }
 
-test('generic rescue ignores stronger invalid offense and returns the best T1 among multiple AP-valid builds', () => {
+test('generic rescue ignores stronger invalid offense and returns the best objective among multiple AP-valid builds', () => {
   const items = fixedShape({
     hats: [
       item('invalid-offense', 'hat', { fire: 500 }),
@@ -86,6 +90,28 @@ test('generic rescue ignores stronger invalid offense and returns the best T1 am
   assert.ok(output.diagnostics.constraintRescueValid >= 2, 'both valid lower-offense lineages must remain reachable');
   assert.equal(output.diagnostics.constraintRescueUsed, true);
   assert.equal(output.diagnostics.constraintRescueExhausted, true);
+});
+
+test('a canonical final scorer, not equipment ranking, selects the rescue T1 incumbent', () => {
+  const items = fixedShape({
+    hats: [
+      item('invalid-offense', 'hat', { fire: 500 }),
+      item('valid-low', 'hat', { ap: 1, fire: 30 }),
+      item('valid-high', 'hat', { ap: 1, fire: 60 })
+    ]
+  });
+
+  const output = searchConstraintCompletenessRescue({
+    ...rescueOptions(items, { ap: 12 }),
+    useOffensiveBound: false,
+    scoreValidBuild(build) {
+      return { ...build, score: ids(build).has('valid-low') ? 900 : 100 };
+    }
+  });
+
+  assert.equal(output.results.length, 1);
+  assert.ok(ids(output.results[0]).has('valid-low'), 'final product T1 scoring must be allowed to disagree with equipment ranking');
+  assert.ok(output.diagnostics.constraintRescueValid >= 2);
 });
 
 test('the same rescue mechanism protects a Vitality minimum without stat-specific branching', () => {
@@ -126,15 +152,8 @@ test('normal search keeps its winner and does not trigger rescue when a valid re
     ]
   });
   const normal = searchArchitecturesV2({
-    items,
-    sets: [],
-    selections,
-    constraints: { ap: 12 },
-    fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, exoAp: 0, exoMp: 0 },
-    turnMode: 't1',
-    scenario: { requiredApByTurn: {} },
-    topN: 3,
-    searchProfile: 'BALANCED'
+    ...rescueOptions(items, { ap: 12 }),
+    topN: 3
   });
 
   assert.ok(normal.results.length > 0);
