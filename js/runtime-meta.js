@@ -1,6 +1,6 @@
 const RUNTIME_META = Object.freeze({
-  appVersion: '0.14.5',
-  serviceWorkerCache: 'dofus-optimizer-v0.14.5-v2-final-ui-1',
+  appVersion: '0.14.6',
+  serviceWorkerCache: 'dofus-optimizer-v0.14.6-constraint-completeness-1',
   searchCache: Object.freeze({
     storageKey: 'dofus-optimizer.search-cache.v1',
     requiredItemsKey: 'dofus-optimizer.required-items.v1',

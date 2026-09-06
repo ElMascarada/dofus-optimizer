@@ -4,6 +4,11 @@ import { refineCombatTurns } from './combat-turn-refiner.js';
 import { repairFinalDofusBuild } from './final-dofus-local-repair.js';
 import { buildCombatFeedbackSelections, preferCompanionVitalityOnTies } from './combat-feedback.js';
 import { diversifyBuilds } from './result-diversity.js';
+import {
+  emptyConstraintRescueDiagnostics,
+  searchConstraintCompletenessRescue,
+  shouldUseConstraintCompletenessRescue
+} from './constraint-completeness-rescue.js';
 import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 const IGNORED_COMPLEX_DOFUS_PASSIVES = [
@@ -227,9 +232,48 @@ self.addEventListener('message', (event) => {
     }
 
     output.results = keepRequiredBuilds(output.results, requiredIds);
+    if (shouldUseConstraintCompletenessRescue({ results: output.results, constraints: normalizedPayload.constraints })) {
+      const rescue = searchConstraintCompletenessRescue({
+        ...normalizedPayload,
+        scoreValidBuild: combatMode ? (build) => {
+          const scored = refineCombatTurns({
+            results: [build],
+            spells: combatSpells,
+            combatObjective: { ...combatObjective, turnMode },
+            scenario,
+            topN: 1,
+            preservePrysmaradites: false,
+            searchProfile: searchProfileName
+          });
+          return scored.results?.[0] || null;
+        } : null,
+        useOffensiveBound: !combatMode,
+        onProgress: (progress) => self.postMessage({
+          type: 'progress',
+          requestId,
+          progress: { ...progress, label: progress.label || 'rescue contraintes' }
+        })
+      });
+      output = {
+        ...output,
+        results: keepRequiredBuilds(rescue.results, requiredIds),
+        candidateItems: rescue.candidateItems,
+        diagnostics: {
+          ...(output.diagnostics || {}),
+          ...rescue.diagnostics
+        }
+      };
+    } else {
+      output.diagnostics = {
+        ...(output.diagnostics || {}),
+        ...emptyConstraintRescueDiagnostics()
+      };
+    }
+
+    const rescueUsed = output.diagnostics?.constraintRescueUsed === true;
     const candidateItems = output.candidateItems?.length ? output.candidateItems : normalizedPayload.items;
 
-    if (output.results?.length) {
+    if (!rescueUsed && output.results?.length) {
       const beforeRefine = output.results;
       const refined = refineOffensiveSlots({
         ...normalizedPayload,
@@ -249,7 +293,7 @@ self.addEventListener('message', (event) => {
       };
     }
 
-    if (combatMode && output.results?.length) {
+    if (!rescueUsed && combatMode && output.results?.length) {
       const feedbackPlanCount = multiTurn
         ? Math.min(searchTopN, capped(budget.multiFeedbackFloor, budget.multiFeedbackMultiplier, requestedTopN))
         : Math.min(searchTopN, capped(budget.singleFeedbackFloor, budget.singleFeedbackMultiplier, requestedTopN));
