@@ -7,6 +7,7 @@ import { positiveConstraintKeys } from '../optimizer/candidate-policy.js';
 const EQUIPMENT_SLOT_ORDER = Object.freeze(['hat', 'cape', 'amulet', 'belt', 'boots', 'weapon', 'ring', 'shield']);
 const EQUIPMENT_SLOT_RANK = new Map(EQUIPMENT_SLOT_ORDER.map((slot, index) => [slot, index]));
 const EQUIPMENT_SLOTS = new Set(EQUIPMENT_SLOT_ORDER);
+const MONO_ELEMENTS = new Set(['earth', 'fire', 'water', 'air']);
 const NON_MONOTONE_OPERATORS = new Set(['lt', 'lte', 'eq', 'neq']);
 const LOWER_BOUND_OPERATORS = new Set(['gt', 'gte']);
 const SCORE_EPSILON = 1e-9;
@@ -18,30 +19,6 @@ function stableJson(value) {
   return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(',')}}`;
 }
 
-function normalizeNoCrit(scenario = {}) {
-  return scenario?.noCrit === true
-    || String(scenario?.critMode || '').toLowerCase() === 'no-crit'
-    || String(scenario?.criticalMode || '').toLowerCase() === 'no-crit';
-}
-
-function rangeEndpoint(range, index) {
-  if (Array.isArray(range)) return Number(range[index] ?? range[0] ?? 0);
-  return Number(range || 0);
-}
-
-function critIsMonotoneForSelections(selections = []) {
-  for (const selection of selections || []) {
-    if (!selection?.enabled) continue;
-    for (const hit of selection.spell?.hits || []) {
-      const normal = hit.normal || [0, 0];
-      const critical = hit.crit ?? normal;
-      if (rangeEndpoint(critical, 0) < rangeEndpoint(normal, 0)) return false;
-      if (rangeEndpoint(critical, 1) < rangeEndpoint(normal, 1)) return false;
-    }
-  }
-  return true;
-}
-
 function damageElementStat(element = 'earth') {
   return element === 'neutral' ? 'earth' : element;
 }
@@ -51,21 +28,51 @@ function flatDamageStat(element = 'earth') {
   return `damage${element.charAt(0).toUpperCase()}${element.slice(1)}`;
 }
 
-export function combatT1ParetoDimensions(selections = [], constraints = {}, scenario = {}) {
+function enabledDamageSelections(selections = []) {
+  return (selections || []).filter((selection) => selection?.enabled && (selection.spell?.hits || []).length > 0);
+}
+
+function objectiveSemantics(selections = [], combatObjective = {}) {
+  const requested = String(combatObjective?.element || '').toLowerCase();
+  if (MONO_ELEMENTS.has(requested)) {
+    // Destructive Pareto must match the canonical scorer. A mixed-hit spell can
+    // still score its off-element lines in refineCombatTurns(), so until the
+    // scorer has an explicit mono-element variant contract we keep such states.
+    const certified = enabledDamageSelections(selections).every((selection) => {
+      return (selection.spell?.hits || []).every((hit) => damageElementStat(hit?.element || 'earth') === requested);
+    });
+    return { mode: 'mono', element: requested, certified };
+  }
+  if (requested === 'multi') return { mode: 'multi', element: null, certified: true };
+  return { mode: 'unsupported', element: null, certified: false };
+}
+
+function offensiveHitsForObjective(spell = {}, objective = {}) {
+  const hits = spell.hits || [];
+  if (objective.mode === 'mono') {
+    return hits.filter((hit) => damageElementStat(hit?.element || 'earth') === objective.element);
+  }
+  if (objective.mode === 'multi') return hits;
+  return [];
+}
+
+export function combatT1ParetoDimensions(selections = [], constraints = {}, combatObjective = {}) {
   const dimensions = new Set(positiveConstraintKeys(constraints));
-  const equalityKeys = new Set(['ap']);
-  const noCrit = normalizeNoCrit(scenario);
+  // AP has a hard upper legality cap and Crit is not proven monotone once
+  // critDamage (including negative values) participates in final damage.
+  const equalityKeys = new Set(['ap', 'crit']);
+  const objective = objectiveSemantics(selections, combatObjective);
   let hasDamage = false;
 
   for (const selection of selections || []) {
     if (!selection?.enabled) continue;
     const spell = selection.spell || {};
-    const hits = spell.hits || [];
+    const hits = offensiveHitsForObjective(spell, objective);
     if (!hits.length) continue;
     hasDamage = true;
     dimensions.add('power');
     dimensions.add('damage');
-    if (!noCrit) dimensions.add('critDamage');
+    dimensions.add('critDamage');
     dimensions.add('finalDamagePct');
     dimensions.add('finalDamagePctT1');
     dimensions.add(spell.damageSource === 'weapon' ? 'weaponDamagePct' : 'spellDamagePct');
@@ -78,17 +85,20 @@ export function combatT1ParetoDimensions(selections = [], constraints = {}, scen
     if (options.includes('ranged')) dimensions.add('rangedDamagePct');
   }
 
-  if (!noCrit && hasDamage) {
-    if (critIsMonotoneForSelections(selections)) dimensions.add('crit');
-    else equalityKeys.add('crit');
-  } else if (positiveConstraintKeys(constraints).includes('crit')) {
-    dimensions.add('crit');
-  }
-
-  // Permanent AP has an enforced upper legality cap. Never use AP as a
-  // monotone destructive dimension, even when it is also an active floor.
+  // Crit is deliberately equality-only in destructive V1. A minimum Crit
+  // constraint is therefore protected more conservatively than a Pareto axis.
+  dimensions.delete('crit');
   dimensions.delete('ap');
-  return { dimensions, equalityKeys, noCrit, critMonotone: noCrit || critIsMonotoneForSelections(selections) };
+  return {
+    dimensions,
+    equalityKeys,
+    hasDamage,
+    objectiveMode: objective.mode,
+    objectiveElement: objective.element,
+    objectiveCertified: objective.certified,
+    critMonotone: false,
+    noCritDestructiveHeuristic: false
+  };
 }
 
 function walkCondition(node, visit) {
@@ -141,10 +151,6 @@ function dynamicEffectIsOpaque(item = {}) {
     || Object.keys(item.turnBonuses || {}).length
     || (item.pendingDynamicEffects || []).length
   );
-}
-
-function unknownCommonDynamicEffect(item = {}) {
-  return Boolean((item.effects || []).length || (item.pendingDynamicEffects || []).length);
 }
 
 function conditionSignature(items = []) {
@@ -213,6 +219,7 @@ export function createEquipmentParetoProfile({
   selections = [],
   constraints = {},
   scenario = {},
+  combatObjective = {},
   fmPolicy = {},
   structureResolved = true
 } = {}) {
@@ -221,7 +228,7 @@ export function createEquipmentParetoProfile({
   const variableEquipment = equipmentItems.filter((item) => !required.has(String(item?.id)));
   const commonRequired = items.filter((item) => required.has(String(item?.id)));
   const footprint = canonicalEquipmentFootprint(equipmentItems);
-  const objective = combatT1ParetoDimensions(selections, constraints, scenario);
+  const objective = combatT1ParetoDimensions(selections, constraints, combatObjective);
   const conditionItems = [...commonRequired, ...variableEquipment, ...(completionItems || [])];
   const conditionSemantics = collectConditionSemantics(conditionItems);
   const equalityKeys = new Set([...objective.equalityKeys, ...conditionSemantics.equalityKeys]);
@@ -230,15 +237,17 @@ export function createEquipmentParetoProfile({
   const futureSetContinuation = completionHasSetContinuation(completionItems);
   const opaqueReason = !structureResolved
     ? 'partial-equipment-structure'
-    : !conditionSemantics.understood
-      ? 'opaque-condition'
-      : futureSetContinuation
-        ? 'future-set-continuation'
-        : commonRequired.some(unknownCommonDynamicEffect)
-          ? 'opaque-common-dynamic-effect'
-          : variableEquipment.some(dynamicEffectIsOpaque)
-            ? 'opaque-dynamic-effect'
-            : null;
+    : !objective.objectiveCertified
+      ? 'uncertified-objective-semantics'
+      : !conditionSemantics.understood
+        ? 'opaque-condition'
+        : futureSetContinuation
+          ? 'future-set-continuation'
+          : commonRequired.some(dynamicEffectIsOpaque)
+            ? 'opaque-common-dynamic-effect'
+            : variableEquipment.some(dynamicEffectIsOpaque)
+              ? 'opaque-dynamic-effect'
+              : null;
   const stats = staticBuildStats(items, setsById);
   const key = compatibilityKey({
     footprint,
@@ -258,8 +267,10 @@ export function createEquipmentParetoProfile({
     vector: valuesForKeys(stats, dimensions),
     opaque: Boolean(opaqueReason),
     opaqueReason,
-    noCrit: objective.noCrit,
-    critMonotone: objective.critMonotone
+    objectiveMode: objective.objectiveMode,
+    objectiveElement: objective.objectiveElement,
+    critMonotone: false,
+    noCritDestructiveHeuristic: false
   };
 }
 
@@ -347,6 +358,8 @@ export function createEquipmentParetoReducer(options = {}) {
       legalityCompatibilityKey: entry.profile.compatibilityKey,
       opaque: entry.profile.opaque,
       opaqueReason: entry.profile.opaqueReason,
+      objectiveMode: entry.profile.objectiveMode,
+      objectiveElement: entry.profile.objectiveElement,
       vector: { ...entry.profile.vector }
     }));
   }

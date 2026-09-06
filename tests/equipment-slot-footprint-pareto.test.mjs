@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   canonicalEquipmentFootprint,
+  combatT1ParetoDimensions,
   createEquipmentParetoProfile,
   createEquipmentParetoReducer,
   equipmentProfileDominates
@@ -24,11 +25,25 @@ const fireSpell = {
   hits: [{ element: 'fire', normal: [28, 30], crit: [42, 45] }],
   distanceOptions: ['ranged']
 };
+const waterSpell = {
+  id: 'pareto-water', name: 'Pareto water', apCost: 3, baseCritPct: 10,
+  hits: [{ element: 'water', normal: [27, 31], crit: [41, 46] }],
+  distanceOptions: ['ranged']
+};
+const earthSpell = {
+  id: 'pareto-earth', name: 'Pareto earth', apCost: 3, baseCritPct: 5,
+  hits: [{ element: 'earth', normal: [26, 32], crit: [40, 48] }],
+  distanceOptions: ['ranged']
+};
 const selections = [{ enabled: true, weight: 1, spell: fireSpell, casts: { 1: 1, 2: 0, 3: 0 } }];
+
+function spellSelections(spells = []) {
+  return spells.map((spell) => ({ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 0, 3: 0 } }));
+}
 
 function reducer(constraints = {}, extra = {}) {
   return createEquipmentParetoReducer({
-    setsById: {}, selections, constraints, scenario: {},
+    setsById: {}, selections, constraints, scenario: {}, combatObjective: { turnMode: 't1', element: 'fire' },
     fmPolicy: { spellDamagePct: 0, allowCritDamage: false, exoAp: 0, exoMp: 0 },
     ...extra
   });
@@ -86,14 +101,76 @@ test('Initiative hard floor protects an Initiative structure without turning the
   assert.equal(withFloor.entries().length, 2);
 });
 
+test('mono Fire ignores off-element offense that has no constraint or legality role', () => {
+  const offense = item('a-fire', 'hat', { ap: 1, fire: 120, power: 40 });
+  const offElement = item('b-off-element', 'hat', { ap: 1, fire: 20, water: 150, earth: 100 });
+  const pareto = reducer();
+  pareto.consider([offense]);
+  pareto.consider([offElement]);
+  assert.deepEqual(ids(pareto.entries()), ['a-fire']);
+  const profile = pareto.entries()[0].profile;
+  assert.ok(profile.dimensions.includes('fire'));
+  assert.equal(profile.dimensions.includes('water'), false);
+  assert.equal(profile.dimensions.includes('earth'), false);
+});
+
+test('mono Fire off-elements re-enter only through an active Initiative floor', () => {
+  const offense = item('a-fire', 'hat', { ap: 1, fire: 120, power: 40 });
+  const initiative = item('b-initiative', 'hat', { ap: 1, fire: 20, water: 250, earth: 250 });
+
+  const withoutFloor = reducer();
+  withoutFloor.consider([offense]);
+  withoutFloor.consider([initiative]);
+  assert.deepEqual(ids(withoutFloor.entries()), ['a-fire']);
+
+  const withFloor = reducer({ initiative: 4000 });
+  withFloor.consider([offense]);
+  withFloor.consider([initiative]);
+  assert.equal(withFloor.entries().length, 2);
+  assert.equal(withFloor.entries()[0].profile.dimensions.includes('water'), false);
+  assert.ok(withFloor.entries()[0].profile.dimensions.includes('initiative'));
+});
+
+test('Multi keeps real multi-element value from enabled damage spells', () => {
+  const multiSelections = spellSelections([fireSpell, waterSpell, earthSpell]);
+  const pareto = reducer({}, {
+    selections: multiSelections,
+    combatObjective: { turnMode: 't1', element: 'multi' }
+  });
+  pareto.consider([item('a-fire', 'hat', { ap: 1, fire: 150, power: 20 })]);
+  pareto.consider([item('b-water-earth', 'hat', { ap: 1, fire: 20, water: 140, earth: 140 })]);
+  assert.equal(pareto.entries().length, 2);
+  const dimensions = combatT1ParetoDimensions(multiSelections, {}, { turnMode: 't1', element: 'multi' }).dimensions;
+  assert.ok(dimensions.has('fire'));
+  assert.ok(dimensions.has('water'));
+  assert.ok(dimensions.has('earth'));
+});
+
+test('Multi critDamage versus flat/power context stays on the real primitive frontier without a hardcoded winner', () => {
+  const multiLineFire = {
+    id: 'multi-line-fire', name: 'Multi-line fire', apCost: 4, baseCritPct: 20,
+    hits: [
+      { element: 'fire', normal: [15, 15], crit: [22, 22] },
+      { element: 'fire', normal: [15, 15], crit: [22, 22] }
+    ]
+  };
+  const multiSelections = spellSelections([multiLineFire, waterSpell]);
+  const pareto = reducer({}, {
+    selections: multiSelections,
+    combatObjective: { turnMode: 't1', element: 'multi' }
+  });
+  pareto.consider([item('a-flat-power', 'hat', { ap: 1, power: 55, damage: 20, crit: 10 })]);
+  pareto.consider([item('b-crit-damage', 'hat', { ap: 1, power: 20, critDamage: 90, crit: 10 })]);
+  assert.equal(pareto.entries().length, 2);
+});
+
 test('permanent AP cap safety makes different AP states legally incompatible for destructive dominance', () => {
+  const base = { setsById: {}, selections, constraints: {}, scenario: {}, combatObjective: { turnMode: 't1', element: 'fire' }, fmPolicy: {} };
   const moreAp = createEquipmentParetoProfile({
-    items: [item('a-more-ap', 'hat', { ap: 2, power: 40 })],
-    setsById: {}, selections, constraints: {}, scenario: {}, fmPolicy: {}
+    ...base, items: [item('a-more-ap', 'hat', { ap: 2, power: 40 })]
   });
   const lessAp = createEquipmentParetoProfile({
-    items: [item('b-less-ap', 'hat', { ap: 1, power: 10 })],
-    setsById: {}, selections, constraints: {}, scenario: {}, fmPolicy: {}
+    ...base, items: [item('b-less-ap', 'hat', { ap: 1, power: 10 })]
   });
   assert.notEqual(moreAp.compatibilityKey, lessAp.compatibilityKey);
   assert.equal(equipmentProfileDominates(moreAp, lessAp), false);
@@ -102,7 +179,7 @@ test('permanent AP cap safety makes different AP states legally incompatible for
 test('partial equipment/core continuation is never Pareto-pruned before the final equipment subset is resolved', () => {
   const partial = createEquipmentParetoProfile({
     items: [item('partial-2-piece', 'hat', { power: 1 })],
-    setsById: {}, selections, constraints: {}, scenario: {}, fmPolicy: {}, structureResolved: false
+    setsById: {}, selections, constraints: {}, scenario: {}, combatObjective: { turnMode: 't1', element: 'fire' }, fmPolicy: {}, structureResolved: false
   });
   assert.equal(partial.opaque, true);
   assert.equal(partial.opaqueReason, 'partial-equipment-structure');
@@ -118,11 +195,43 @@ test('opaque dynamic effects keep the structure even when its static vector look
   assert.equal(pareto.diagnostics().constraintRescueParetoOpaqueKept, 1);
 });
 
-test('NO CRIT context does not let Crit or Crit Damage save an otherwise dominated structure', () => {
+test('NO CRIT scenario heuristic cannot remove Crit/CritDamage from destructive safety', () => {
   const pareto = reducer({}, { scenario: { noCrit: true } });
-  pareto.consider([item('a-offense', 'hat', { ap: 1, power: 40 })]);
-  pareto.consider([item('b-crit', 'hat', { ap: 1, power: 10, crit: 100, critDamage: 100 })]);
-  assert.deepEqual(ids(pareto.entries()), ['a-offense']);
+  pareto.consider([item('a-power', 'hat', { ap: 1, power: 40, crit: 10 })]);
+  pareto.consider([item('b-crit-damage', 'hat', { ap: 1, power: 10, crit: 10, critDamage: 100 })]);
+  assert.equal(pareto.entries().length, 2);
+  const profile = pareto.entries()[0].profile;
+  assert.ok(profile.dimensions.includes('critDamage'));
+  assert.equal(profile.noCritDestructiveHeuristic, false);
+});
+
+test('Crit is equality-required for destructive dominance even when critical base damage is higher', () => {
+  const base = { setsById: {}, selections, constraints: {}, scenario: {}, combatObjective: { turnMode: 't1', element: 'fire' }, fmPolicy: {} };
+  const moreCritNegativeDamage = createEquipmentParetoProfile({
+    ...base,
+    items: [item('a-more-crit-negative-damage', 'hat', { ap: 1, power: 40, crit: 60, critDamage: -200 })]
+  });
+  const lessCrit = createEquipmentParetoProfile({
+    ...base,
+    items: [item('b-less-crit', 'hat', { ap: 1, power: 10, crit: 10, critDamage: 0 })]
+  });
+  assert.equal(moreCritNegativeDamage.critMonotone, false);
+  assert.notEqual(moreCritNegativeDamage.compatibilityKey, lessCrit.compatibilityKey);
+  assert.equal(equipmentProfileDominates(moreCritNegativeDamage, lessCrit), false);
+});
+
+test('required common passive or turn bonus disables destructive Pareto as opaque', () => {
+  const required = item('required-dynamic', 'companion', {}, {
+    passives: [{ id: 'required-passive', rules: [{ trigger: { type: 'always' }, stats: { power: 10 } }] }],
+    turnBonuses: { 1: { fire: 30 } }
+  });
+  const pareto = reducer({}, { requiredItemIds: [required.id] });
+  pareto.consider([required, item('a-strong', 'hat', { ap: 1, power: 40 })]);
+  pareto.consider([required, item('b-weak', 'hat', { ap: 1, power: 10 })]);
+  assert.equal(pareto.entries().length, 2);
+  assert.equal(pareto.diagnostics().constraintRescueParetoDominated, 0);
+  assert.equal(pareto.diagnostics().constraintRescueParetoOpaqueKept, 2);
+  assert.ok(pareto.entries().every((entry) => entry.profile.opaqueReason === 'opaque-common-dynamic-effect'));
 });
 
 function fixedShape({ hats, dofuses } = {}) {
@@ -138,11 +247,11 @@ function fixedShape({ hats, dofuses } = {}) {
   ];
 }
 
-function combatOptions(items, spells, equipmentParetoEnabled = true) {
-  const combatObjective = { turnMode: 't1', element: 'fire', targetMode: 'single', allowSupport: true, metric: 'total-damage' };
+function combatOptions(items, spells, { equipmentParetoEnabled = true, element = 'fire' } = {}) {
+  const combatObjective = { turnMode: 't1', element, targetMode: 'single', allowSupport: true, metric: 'total-damage' };
   const scenario = { requiredApByTurn: {} };
   return {
-    items, sets: [], selections: spells.map((spell) => ({ enabled: true, weight: 1, spell, casts: { 1: 1, 2: 0, 3: 0 } })),
+    items, sets: [], selections: spellSelections(spells),
     constraints: { ap: 12 }, fmPolicy: { spellDamagePct: 0, allowCritDamage: false, critDamageAmount: 8, exoAp: 0, exoMp: 0 },
     turnMode: 't1', scenario, searchProfile: 'BALANCED', objectiveMode: 'combat', classSpells: spells, combatObjective,
     equipmentParetoEnabled,
@@ -159,21 +268,36 @@ function buildKey(build) {
   return (build?.items || []).map((entry) => String(entry.id)).sort().join('|');
 }
 
-test('small exact enumeration returns the identical winner and score with slot-footprint Pareto enabled', () => {
-  const items = fixedShape({ hats: [
-    item('a-best-hat', 'hat', { ap: 1, fire: 150, power: 30 }),
-    item('b-late-hat', 'hat', { ap: 1, fire: 40, power: 5 })
-  ] });
-  const before = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], false));
-  const after = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], true));
+function assertExactIdentity(before, after) {
   assert.equal(before.results.length, 1);
   assert.equal(after.results.length, 1);
   assert.equal(buildKey(after.results[0]), buildKey(before.results[0]));
   assert.ok(Math.abs(Number(after.results[0].score || 0) - Number(before.results[0].score || 0)) <= EPSILON);
+}
+
+test('small exact Fire enumeration returns the identical winner and score with slot-footprint Pareto enabled', () => {
+  const items = fixedShape({ hats: [
+    item('a-best-hat', 'hat', { ap: 1, fire: 150, power: 30 }),
+    item('b-late-hat', 'hat', { ap: 1, fire: 40, power: 5, water: 300, earth: 300 })
+  ] });
+  const before = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], { equipmentParetoEnabled: false, element: 'fire' }));
+  const after = searchCombatT1ConstraintRescue(combatOptions(items, [fireSpell], { equipmentParetoEnabled: true, element: 'fire' }));
+  assertExactIdentity(before, after);
   assert.ok(Number(after.diagnostics.constraintRescueParetoDominated || 0) > 0);
 });
 
-test('synthetic dominated equipment fixture massively reduces Dofus expansion while preserving the exact winner', () => {
+test('small exact Multi enumeration returns the identical winner and score with contextual dimensions', () => {
+  const items = fixedShape({ hats: [
+    item('a-fire-hat', 'hat', { ap: 1, fire: 150, power: 20 }),
+    item('b-water-hat', 'hat', { ap: 1, water: 160, power: 15 })
+  ] });
+  const spells = [fireSpell, waterSpell];
+  const before = searchCombatT1ConstraintRescue(combatOptions(items, spells, { equipmentParetoEnabled: false, element: 'multi' }));
+  const after = searchCombatT1ConstraintRescue(combatOptions(items, spells, { equipmentParetoEnabled: true, element: 'multi' }));
+  assertExactIdentity(before, after);
+});
+
+test('synthetic dominated equipment fixture reduces Dofus expansion while preserving the exact winner', () => {
   const opaqueBoundSpell = { ...fireSpell, id: 'pareto-opaque-bound', breedId: 17 };
   const hats = Array.from({ length: 12 }, (_, index) => item(
     index === 0 ? 'a00-best' : `b${String(index).padStart(2, '0')}-dominated`,
@@ -182,12 +306,13 @@ test('synthetic dominated equipment fixture massively reduces Dofus expansion wh
   ));
   const dofuses = Array.from({ length: 9 }, (_, index) => item(`dofus-${index}`, 'dofus', { fire: 5 + index }));
   const items = fixedShape({ hats, dofuses });
-  const before = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], false));
-  const after = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], true));
+  const before = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], { equipmentParetoEnabled: false, element: 'fire' }));
+  const after = searchCombatT1ConstraintRescue(combatOptions(items, [opaqueBoundSpell], { equipmentParetoEnabled: true, element: 'fire' }));
 
-  assert.equal(buildKey(after.results[0]), buildKey(before.results[0]));
-  assert.ok(Math.abs(Number(after.results[0].score || 0) - Number(before.results[0].score || 0)) <= EPSILON);
+  assertExactIdentity(before, after);
   assert.ok(Number(after.diagnostics.constraintRescueParetoDominated || 0) >= 10);
   assert.ok(Number(after.diagnostics.constraintRescueDofusExpansions || 0)
     < Number(before.diagnostics.constraintRescueDofusExpansions || 0));
+  assert.equal(Number(after.diagnostics.constraintRescueEquipmentStructures || 0), 12);
+  assert.equal(Number(after.diagnostics.constraintRescueParetoFrontier || 0), 1);
 });

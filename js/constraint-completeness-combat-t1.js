@@ -187,6 +187,7 @@ export function searchCombatT1ConstraintRescue({
         selections,
         constraints,
         scenario,
+        combatObjective,
         fmPolicy
       })
     : null;
