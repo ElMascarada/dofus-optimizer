@@ -18,8 +18,9 @@ import {
   sortGroups,
   sortGroupsCombat
 } from './constraint-completeness-combat-helpers.js';
-import { runExactCombatGroupDfs } from './constraint-completeness-combat-dfs.js';
+import { runSetCoreFirstCombatGroupDfs } from './constraint-completeness-combat-dfs-core-first.js';
 import { createEquipmentParetoReducer } from './equipment-slot-footprint-pareto.js';
+import { buildSetCoreFirstPlan } from './set-core-first-exploration.js';
 
 const EQUIPMENT_SLOTS = new Set(['hat', 'cape', 'amulet', 'belt', 'boots', 'weapon', 'ring', 'shield']);
 const SCORE_EPSILON = 1e-9;
@@ -33,6 +34,17 @@ function emptyEquipmentParetoDiagnostics() {
     constraintRescueParetoDominated: 0,
     constraintRescueParetoFrontier: 0,
     constraintRescueParetoOpaqueKept: 0
+  };
+}
+
+function emptyCoreFirstDiagnostics() {
+  return {
+    constraintRescueSetCoreSeeds: 0,
+    constraintRescueSetCoreFootprints: 0,
+    constraintRescueSetCorePriorityFrontier: 0,
+    constraintRescueSetCoreSeedBranches: 0,
+    constraintRescueSetCoreStandaloneBranches: 0,
+    constraintRescueFirstIncumbentCoreRank: null
   };
 }
 
@@ -52,11 +64,13 @@ function noCritExplorationContext(scenario = {}) {
 }
 function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItems, pruneReasons, orderedGroups,
   firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-  debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions }) {
+  debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions,
+  coreFirstDiagnostics }) {
   return {
     constraintRescueUsed: true,
     constraintRescueGroupOrder: orderedGroups.map((group) => group.id),
     constraintRescueFirstIncumbentAtNode: firstIncumbentAtNode,
+    constraintRescueNodesAtFirstIncumbent: firstIncumbentAtNode,
     constraintRescueFirstIncumbentScore: firstIncumbentScore,
     constraintRescueFinalIncumbentScore: incumbent ? Number(incumbent.score || 0) : null,
     constraintRescueCombatBoundCalls: combatBoundCalls,
@@ -75,6 +89,7 @@ function makeDiagnostics({ nodes, leaves, pruned, evaluated, valid, eligibleItem
     constraintRescueEquipmentStructuresAtFirstIncumbent: equipmentStructuresAtFirstIncumbent,
     constraintRescueCompanionExpansions: companionExpansions,
     constraintRescueDofusExpansions: dofusExpansions,
+    ...coreFirstDiagnostics,
     ...(debugHints || {})
   };
 }
@@ -83,7 +98,8 @@ export function searchCombatT1ConstraintRescue({
   items = [], sets = [], selections = [], constraints = {}, fmPolicy = {}, turnMode = 't1', scenario = {},
   requiredItemIds = [], rejectedItemIds = [], searchProfile = 'BALANCED', scoreValidBuild = null,
   classSpells = [], combatObjective = {}, objectiveMode = null, onProgress = null,
-  debugExplorationHints = false, equipmentParetoEnabled = true
+  debugExplorationHints = false, equipmentParetoEnabled = true, coreFirstEnabled = true,
+  contextualDofusGuidance = true
 } = {}) {
   const startedAt = clockMs();
   const pruneReasons = new Map();
@@ -104,8 +120,10 @@ export function searchCombatT1ConstraintRescue({
   let incumbent = null, firstIncumbentAtNode = null, firstIncumbentScore = null;
   let combatBoundCalls = 0, combatBoundPruned = 0, orderedGroups = [];
   let equipmentParetoDiagnostics = emptyEquipmentParetoDiagnostics();
+  let coreFirstDiagnostics = emptyCoreFirstDiagnostics();
   let equipmentStructuresAtFirstIncumbent = null;
   let companionExpansions = 0, dofusExpansions = 0;
+  let activeCoreRank = null;
 
   function finish(reason) {
     return {
@@ -113,7 +131,8 @@ export function searchCombatT1ConstraintRescue({
       diagnostics: makeDiagnostics({
         nodes, leaves, pruned, evaluated, valid, eligibleItems: eligibleItems.length, pruneReasons, orderedGroups,
         firstIncumbentAtNode, firstIncumbentScore, incumbent, combatBoundCalls, combatBoundPruned, startedAt, reason,
-        debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions
+        debugHints, equipmentParetoDiagnostics, equipmentStructuresAtFirstIncumbent, companionExpansions, dofusExpansions,
+        coreFirstDiagnostics
       })
     };
   }
@@ -173,6 +192,34 @@ export function searchCombatT1ConstraintRescue({
 
   const selectedItems = [...required.items];
   const selectedIds = new Set(required.items.map((item) => String(item.id)));
+  const corePlan = buildSetCoreFirstPlan({
+    policy,
+    constraints,
+    selectedItems,
+    setsById,
+    enabled: coreFirstEnabled
+  });
+  coreFirstDiagnostics = {
+    ...coreFirstDiagnostics,
+    constraintRescueSetCoreSeeds: corePlan.seeds.length,
+    constraintRescueSetCoreFootprints: corePlan.footprints,
+    constraintRescueSetCorePriorityFrontier: corePlan.priorityFrontier
+  };
+  if (debugHints) {
+    debugHints.topSetCoreFirstSeeds = corePlan.seeds.slice(0, DEBUG_HINT_LIMIT).map((seed) => ({
+      coreRank: seed.coreRank,
+      coreId: seed.id,
+      setId: seed.setId,
+      pieceCount: seed.pieceCount,
+      footprint: seed.footprint,
+      orderingFrontier: seed.orderingFrontier,
+      constraintGain: seed.constraintGain,
+      expectedT1Gain: seed.expectedT1Gain,
+      policyRank: seed.policyRank,
+      memberIds: [...(seed.itemIds || [])]
+    }));
+  }
+
   const optimisticItemCache = new Map();
   const setEnvelope = createBranchFeasibilityEnvelope({ remainingGroups: [], profilesFor, constraints, sets });
   const combatBoundContext = combatBoundEnabled
@@ -250,6 +297,7 @@ export function searchCombatT1ConstraintRescue({
     if (firstIncumbentAtNode === null) {
       firstIncumbentAtNode = nodes;
       firstIncumbentScore = Number(candidate.score || 0);
+      coreFirstDiagnostics.constraintRescueFirstIncumbentCoreRank = activeCoreRank;
       equipmentStructuresAtFirstIncumbent = equipmentPareto
         ? Number(equipmentPareto.diagnostics().constraintRescueEquipmentStructures || 0)
         : 0;
@@ -277,12 +325,22 @@ export function searchCombatT1ConstraintRescue({
     if (groupId === 'companion') companionExpansions++;
     if (groupId === 'dofus') dofusExpansions++;
   }
+  function onLaneStart({ seed, standalone }) {
+    if (standalone) {
+      coreFirstDiagnostics.constraintRescueSetCoreStandaloneBranches++;
+      activeCoreRank = null;
+      return;
+    }
+    coreFirstDiagnostics.constraintRescueSetCoreSeedBranches++;
+    activeCoreRank = Number(seed?.coreRank || 0) || null;
+  }
 
   if (!safelyPossible(initialRemaining())) return finish('constraints-impossible-by-upper-envelope');
-  runExactCombatGroupDfs({
+  runSetCoreFirstCombatGroupDfs({
     orderedGroups, selectedItems, selectedIds, setsById, policy, constraints, suffixKeys,
     safelyPossible, evaluateLeaf, onNode, onPrune, onProgressNode, debugHints,
-    equipmentPareto, onGroupExpansion
+    equipmentPareto, onGroupExpansion, coreSeeds: corePlan.seeds, onLaneStart,
+    contextualDofusGuidance
   });
   if (equipmentPareto) {
     equipmentParetoDiagnostics = equipmentPareto.diagnostics();

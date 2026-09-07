@@ -21,7 +21,14 @@ export function emptyConstraintRescueDiagnostics() {
     constraintRescueParetoFrontier: 0,
     constraintRescueParetoOpaqueKept: 0,
     constraintRescueCompanionExpansions: 0,
-    constraintRescueDofusExpansions: 0
+    constraintRescueDofusExpansions: 0,
+    constraintRescueSetCoreSeeds: 0,
+    constraintRescueSetCoreFootprints: 0,
+    constraintRescueSetCorePriorityFrontier: 0,
+    constraintRescueSetCoreSeedBranches: 0,
+    constraintRescueSetCoreStandaloneBranches: 0,
+    constraintRescueFirstIncumbentCoreRank: null,
+    constraintRescueNodesAtFirstIncumbent: null
   };
 }
 
