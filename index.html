@@ -122,6 +122,14 @@
           </section>
 
           <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
+          <div id="optimizer-search-timing" class="optimizer-search-timing" hidden>
+            <span id="optimizer-search-spinner" class="optimizer-search-spinner" aria-hidden="true"></span>
+            <span id="optimizer-search-live" class="optimizer-search-live" hidden>
+              <strong>Optimisation en cours…</strong>
+              <span>Temps écoulé : <b id="optimizer-search-elapsed">0.0 s</b></span>
+            </span>
+            <span id="optimizer-search-final" class="optimizer-search-final" hidden aria-live="polite"></span>
+          </div>
           <p id="optimizer-diagnostics" class="diagnostics" aria-live="polite">Prêt après sélection d’une classe.</p>
         </aside>
 
@@ -143,6 +151,7 @@
   <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
   <script type="module" src="js/min-conditions-ui.js?v=20260902-1"></script>
   <script type="module" src="js/optimizer-v2-app.js?v=20260902-2"></script>
+  <script type="module" src="js/search-loading-elapsed-time.js?v=20260907-1"></script>
   <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260827-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
