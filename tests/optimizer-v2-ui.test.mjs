@@ -30,3 +30,18 @@ test('le contrôleur UI V2 ne réimplémente ni solveur ni évaluation métier',
   assert.match(source, /createWorkshopBuildFromOptimizerResult/);
   assert.match(source, /Ouvrir et ajuster dans l’Atelier/);
 });
+
+test('le feedback temporel est visible près du bouton Optimiser et reste une couche UI séparée', async () => {
+  const html = await htmlSource();
+  for (const id of [
+    'optimizer-search-timing', 'optimizer-search-spinner', 'optimizer-search-live',
+    'optimizer-search-elapsed', 'optimizer-search-final'
+  ]) assert.match(html, new RegExp(`id=["']${id}["']`));
+  assert.match(html, /Optimisation en cours…/);
+  assert.match(html, /Temps écoulé/);
+  assert.match(html, /js\/search-loading-elapsed-time\.js/);
+
+  const timingSource = await readFile(new URL('../js/search-loading-elapsed-time.js', import.meta.url), 'utf8');
+  assert.match(timingSource, /Dernière optimisation/);
+  assert.doesNotMatch(timingSource, /optimizer-worker\.js|createOptimizerV2Request|postMessage\s*\(/);
+});
