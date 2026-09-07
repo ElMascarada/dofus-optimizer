@@ -3,6 +3,11 @@ export const SpellEffectSemanticStatus = Object.freeze({
   UNRESOLVED: 'UNRESOLVED'
 });
 
+export const SpellSemanticCertificationStatus = Object.freeze({
+  CERTIFIED: 'CERTIFIED',
+  UNRESOLVED: 'UNRESOLVED'
+});
+
 export const SpellEffectSemanticType = Object.freeze({
   DAMAGE: 'damage',
   STAT_MODIFIER: 'stat_modifier',
@@ -20,6 +25,7 @@ export const SpellEffectSemanticType = Object.freeze({
 
 const KNOWN_TYPES = new Set(Object.values(SpellEffectSemanticType));
 const KNOWN_STATUSES = new Set(Object.values(SpellEffectSemanticStatus));
+const KNOWN_SPELL_CERTIFICATION_STATUSES = new Set(Object.values(SpellSemanticCertificationStatus));
 
 const COMBAT_EFFECT_ALIASES = Object.freeze({
   Damage: SpellEffectSemanticType.DAMAGE,
@@ -51,6 +57,12 @@ function normalizedStatus(value) {
   const raw = String(value || '').trim().toUpperCase();
   if (KNOWN_STATUSES.has(raw)) return raw;
   throw new Error(`Unsupported spell effect semantic status: ${raw || '<empty>'}`);
+}
+
+function normalizedSpellCertificationStatus(value) {
+  const raw = String(value || '').trim().toUpperCase();
+  if (KNOWN_SPELL_CERTIFICATION_STATUSES.has(raw)) return raw;
+  throw new Error(`Unsupported spell semantic certification status: ${raw || '<empty>'}`);
 }
 
 function normalizeOne(effect = {}, inheritedStatus = null) {
@@ -120,6 +132,7 @@ export function unresolvedRelevantSpellSemantics(effects = []) {
   return unresolved;
 }
 
+// Effect-level only: this answers whether the supplied projected effects are supported.
 export function certifiedSpellSemanticEligibility(effects = []) {
   const normalized = normalizeSpellEffectSemantics(effects);
   const unresolved = unresolvedRelevantSpellSemantics(normalized);
@@ -127,6 +140,54 @@ export function certifiedSpellSemanticEligibility(effects = []) {
     eligible: unresolved.length === 0,
     effects: normalized,
     unresolved
+  };
+}
+
+export function normalizeSpellSemanticCertification(certification = {}) {
+  const sourceCompleteClaim = certification.sourceComplete;
+  const explicitStatus = certification.sourceSemanticStatus ?? certification.status ?? null;
+  const claimedStatus = explicitStatus === null
+    ? (sourceCompleteClaim === true
+        ? SpellSemanticCertificationStatus.CERTIFIED
+        : SpellSemanticCertificationStatus.UNRESOLVED)
+    : normalizedSpellCertificationStatus(explicitStatus);
+
+  const sourceComplete = sourceCompleteClaim === false
+    ? false
+    : (sourceCompleteClaim === true || claimedStatus === SpellSemanticCertificationStatus.CERTIFIED);
+  const sourceSemanticStatus = sourceComplete && claimedStatus === SpellSemanticCertificationStatus.CERTIFIED
+    ? SpellSemanticCertificationStatus.CERTIFIED
+    : SpellSemanticCertificationStatus.UNRESOLVED;
+
+  return cloneValue({
+    ...certification,
+    sourceComplete,
+    sourceSemanticStatus
+  });
+}
+
+export function certifiedPlannerSpellEligibility({
+  effects = [],
+  sourceCertification = {}
+} = {}) {
+  const effectEligibility = certifiedSpellSemanticEligibility(effects);
+  const certification = normalizeSpellSemanticCertification(sourceCertification);
+  const effectSupported = effectEligibility.eligible;
+  const spellSemanticallyCertified = certification.sourceComplete === true
+    && certification.sourceSemanticStatus === SpellSemanticCertificationStatus.CERTIFIED;
+
+  const reasons = [];
+  if (!effectSupported) reasons.push('UNRESOLVED_RUNTIME_EFFECTS');
+  if (!spellSemanticallyCertified) reasons.push('SOURCE_SEMANTICS_UNRESOLVED');
+
+  return {
+    eligible: effectSupported && spellSemanticallyCertified,
+    effectSupported,
+    spellSemanticallyCertified,
+    effects: effectEligibility.effects,
+    unresolvedEffects: effectEligibility.unresolved,
+    sourceCertification: certification,
+    reasons
   };
 }
 
