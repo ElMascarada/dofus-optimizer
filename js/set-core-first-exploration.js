@@ -18,6 +18,18 @@ function explorationStats(stats = {}, noCrit = false) {
   return { ...stats, crit: -1000, critDamage: 0 };
 }
 
+function appendUniqueItems(items = [], additions = []) {
+  const seen = new Set((items || []).map((item) => String(item.id)));
+  const merged = [...(items || [])];
+  for (const item of additions || []) {
+    const id = String(item.id);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    merged.push(item);
+  }
+  return merged;
+}
+
 export function setCoreFootprintSignature(occupiedSlots = {}) {
   return Object.entries(occupiedSlots || {})
     .sort(([a], [b]) => String(a).localeCompare(String(b)))
@@ -102,7 +114,7 @@ export function buildSetCoreFirstPlan({
   const constraintKeys = positiveConstraintKeys(constraints);
   const ranked = rankSetCoresForPolicy(policy.setCoreCatalog, policy, { limit: Infinity }).selected;
   const entries = ranked.map((core) => {
-    const projectedItems = [...selectedItems, ...(core.items || [])];
+    const projectedItems = appendUniqueItems(selectedItems, core.items || []);
     const projected = staticBuildStats(projectedItems, setsById);
     const constraint = constraintMetrics(current, projected, constraints);
     return {
