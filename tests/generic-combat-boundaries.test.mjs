@@ -7,6 +7,8 @@ const GENERIC_FILES = [
   new URL('../js/spells.js', import.meta.url),
   new URL('../js/combat-state.js', import.meta.url),
   new URL('../js/combat/effects.js', import.meta.url),
+  new URL('../js/combat/state.js', import.meta.url),
+  new URL('../js/combat/spell-effect-semantic.js', import.meta.url),
   new URL('../js/combat/mechanics/registry.js', import.meta.url)
 ];
 
