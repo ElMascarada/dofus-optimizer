@@ -3,6 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+await import('../js/runtime-meta.js');
+const EXPECTED_VERSION = globalThis.DofusOptimizerRuntime?.appVersion;
+if (!EXPECTED_VERSION) throw new Error('Version runtime introuvable.');
+
 const HTTP_PORT = 4173;
 const DEBUG_PORT = 9222;
 const APP_URL = `http://127.0.0.1:${HTTP_PORT}/`;
@@ -123,7 +127,7 @@ try {
     progress: document.querySelector('#workshop-slot-progress')?.textContent
   }))()`);
   if (!shell.workshopVisible || !shell.optimizerHidden || shell.activeTab !== 'workshop') throw new Error('État initial Atelier incorrect.');
-  if (!shell.version?.startsWith('v0.14.2')) throw new Error(`Version UI inattendue: ${shell.version}`);
+  if (shell.version?.trim() !== `v${EXPECTED_VERSION}`) throw new Error(`Version UI inattendue: ${shell.version} (runtime ${EXPECTED_VERSION})`);
   if (shell.progress?.trim() !== '0 / 16') throw new Error(`Progression Atelier initiale inattendue: ${shell.progress}`);
 
   const keyboardOpen = await client.evaluate(`(async () => {
