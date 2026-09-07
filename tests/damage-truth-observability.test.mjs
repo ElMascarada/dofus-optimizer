@@ -231,8 +231,8 @@ test('C16 — un build respectant tous les minima génériques reste valide', ()
 test('C17 — l’objectif reste le maximum de dégâts parmi les builds faisables', () => {
   const selection = { enabled: true, weight: 1, spell: SIMPLE, casts: { 1: 1 } };
   const candidates = [
-    { id: 'illegal-high-damage', stats: { earth: 300, initiative: 900 } },
-    { id: 'valid-best', stats: { earth: 200, initiative: 1000 } },
+    { id: 'illegal-high-damage', stats: { earth: 300, initiative: 600 } },
+    { id: 'valid-best', stats: { earth: 200, initiative: 800 } },
     { id: 'valid-lower', stats: { earth: 100, initiative: 1200 } }
   ];
   const valid = candidates.filter(({ stats }) => evaluateTurnConstraints({ stats, constraints: { initiative: 1000 }, turnMode: 't1' }).meets);
