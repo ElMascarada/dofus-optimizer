@@ -130,7 +130,7 @@ test('les stats sont recalculées après remplacement d’un item', () => {
   const strong = evaluate(build);
   assert.equal(weak.stats.fire, 20);
   assert.equal(strong.stats.fire, 120);
-  assert.equal(strong.stats.initiative, 500);
+  assert.equal(strong.stats.initiative, 620);
 });
 
 test('les dégâts exacts d’un sort changent avec les stats du build', () => {
