@@ -1,47 +1,81 @@
 # Modèle Dofus courant
 
-Ce document décrit ce que le produit modélise aujourd'hui. Il ne remplace ni les données normalisées ni les règles exécutables.
+Ce document sépare volontairement **ce que le runtime sait faire aujourd'hui** de **ce que le contrat produit exige à terme**. Il ne remplace ni les données normalisées ni les règles exécutables.
 
-## Personnage et équipement
+## 1. Personnage et équipement — état courant
 
-La recherche compose un build à partir des slots définis par le runtime et applique les règles de légalité, conditions d'items, panoplies, caractéristiques et politiques FM/exo prises en charge.
+La recherche compose un build depuis les slots du runtime et applique les règles de légalité, conditions d'items, panoplies, caractéristiques et politiques FM/exo prises en charge.
 
-Les contraintes utilisateur telles que PA, PM, initiative, vitalité, caractéristiques ou résistances sont traitées par le moteur de recherche selon leur contrat courant ; les minima durs doivent être satisfaits avant optimisation de qualité.
+Les minima utilisateur (PA, PM, initiative, vitalité, résistances, etc.) sont traités comme des contraintes dures lorsqu'ils sont actifs. Les heuristiques de recherche servent à trouver plus vite ; elles ne doivent pas redéfinir la légalité.
 
-Les effets d'équipement inconnus ne sont pas inventés. Leur prise en charge doit passer par la normalisation/certification.
+Le produit manipule 16 slots au total dans son build courant, dont 9 slots d'équipement ordinaires éligibles au futur budget FM spécial : coiffe, cape, amulette, deux anneaux, ceinture, bottes, arme, bouclier. Les autres slots incluent le compagnon et six emplacements Dofus/trophées.
 
-## Sorts
+## 2. Sorts — état courant
 
 Le produit possède deux niveaux de connaissance distincts :
 
-- `spell-data.json` : représentation combat directement consommable ;
-- `spell-source-truth.json` : représentation source plus riche, pouvant rester non résolue.
+- `data/normalized/spell-data.json` : représentation combat directement consommable ;
+- `data/normalized/spell-source-truth.json` : représentation source plus riche, pouvant rester non résolue.
 
-La présence d'un sort dans le catalogue combat ne signifie pas nécessairement que tous ses effets source sont compris.
+La présence d'un sort dans le catalogue combat ne signifie pas que tous ses effets source sont compris. Les mécaniques spécifiques explicitement prises en charge peuvent vivre dans `js/combat/mechanics/`.
 
-## Combat
+Le problème P0 actuel est la **couverture d'interprétation**, pas seulement l'import de données.
 
-Le moteur sait notamment raisonner sur le coût PA, les lancers et le temps, ainsi que sur les mécaniques explicitement intégrées au runtime. Des mécaniques de classe spécifiques sont enregistrées dans `js/combat/mechanics/`.
+## 3. Combat — état courant
 
-Le score d'un build découle du plan de sorts évalué, pas d'une simple somme de caractéristiques offensives.
+Le moteur sait raisonner sur le coût PA, les lancers, le temps et les mécaniques explicitement intégrées au runtime. Le score d'un build découle d'un plan de sorts évalué, pas d'une simple somme de caractéristiques offensives.
 
-## Temps
+Ce moteur n'est toutefois pas encore un simulateur exhaustif de toutes les mécaniques Dofus. Les buffs/états/charges/passifs non certifiés doivent rester hors activation plutôt qu'être inventés.
 
-Le runtime définit trois tours de référence : T1, T2 et T3.
+## 4. Temps — état courant vs contrat
 
-Modes disponibles :
+Le runtime définit T1, T2, T3 et les modes `sum`, `average`, `min`, `constant`.
 
-- `t1` : score du T1 ;
-- `t2` : score du T2 avec simulation préalable nécessaire ;
-- `t3` : score du T3 ;
-- `sum` : somme des tours actifs ;
-- `average` : moyenne ;
-- `min` : minimum ;
-- `constant` : agrégation favorisant une performance soutenue.
+Dans `js/temporal-objectives.js` aujourd'hui :
 
-Les formules exactes et les tours simulés sont définis dans `js/temporal-objectives.js`.
+- `t1` score T1 ;
+- `t2` score T2 et demande explicitement une simulation `[T1, T2]` ;
+- `t3` score T3 mais la fonction de tours simulés ne demande actuellement que T3 ;
+- `sum`, `average`, `min`, `constant` évaluent plusieurs tours selon leurs formules courantes.
 
-## Recherche
+**Écart important :** le contrat produit exige que T3 simule T1 puis T2 comme préparation et ne score que T3. Ce n'est pas encore vrai dans le helper temporel courant et ne doit pas être présenté comme implémenté.
+
+## 5. Scénario combat — cible
+
+Le scénario canonique de plafond offensif demandé par le produit est : cible unique, passive, 0 % résistances, placée en mêlée ou à distance selon les besoins du plan. Le placement n'est pas encore une simulation tactique complète ; il sert à comparer les plans offensifs dans leur contexte légal.
+
+La classification mêlée/distance doit appartenir au plan candidat et non à une étiquette fixe sur la classe.
+
+## 6. PA / PM — contrat
+
+PA et PM sont des ressources du plan, pas des scores à maximiser.
+
+Le produit travaille autour d'un maximum permanent de référence 12 PA / 6 PM selon les règles certifiées. Si l'utilisateur n'impose pas 6 PM et qu'un plan à 5 PM permet davantage de dégâts, le moteur cible doit pouvoir le préférer.
+
+Le runtime courant traite encore ses champs PA/PM comme des minima de recherche. La future UI doit distinguer clairement valeur souhaitée/contrainte et permission d'Exo PA/PM.
+
+## 7. FM — état courant vs contrat
+
+### Runtime courant
+
+`js/optimizer-v2-orchestrator.js` normalise encore la politique historique suivante :
+
+- Exo PA : 0 ou +1 ;
+- Exo PM : 0 ou +1 ;
+- dommages sorts : toggle conduisant à `+3 % / slot` ;
+- dommages critiques : `+8` lorsqu'autorisé.
+
+Cette politique est **l'implémentation actuelle**, pas la cible validée.
+
+### Contrat cible
+
+Le moteur doit disposer d'un budget de 9 objets FM spéciaux, un bonus maximum par objet. Un Exo PA ou PM consomme l'emplacement spécial de l'objet qui le porte, laissant respectivement 8 ou 7 emplacements offensifs selon les exos utilisés.
+
+Le domaine offensif cible est 1 % / 2 % dommages sorts, avec possibilité de +8 dommages critiques lorsque plus rentable et lorsque l'objet n'a pas déjà naturellement cette ligne, après certification des règles exactes.
+
+Le moteur doit choisir cette distribution en fonction du plan combat ; l'interface ne doit pas obliger l'utilisateur à optimiser manuellement la FM.
+
+## 8. Recherche — état courant
 
 Le chemin courant combine :
 
@@ -54,16 +88,17 @@ Le chemin courant combine :
 
 Les heuristiques servent à réduire le coût de recherche. Elles ne doivent pas redéfinir la légalité ni rendre impossible un ensemble faisable.
 
-## Limite sémantique actuelle
+## 9. Méthode d'extension du modèle
 
-La principale limite connue n'est pas l'absence de données source : le pipeline conserve déjà beaucoup d'informations riches sur les sorts. La limite est la **couverture d'interprétation** du runtime.
+Pour étendre une mécanique Dofus :
 
-Pour étendre le modèle :
-
-1. prouver le sens de la donnée source ;
-2. définir sa représentation runtime ;
-3. ajouter des tests de vérité mécanique ;
-4. l'intégrer au planner ;
-5. vérifier que la recherche de stuff réagit correctement au nouveau plan.
+1. prouver ce que la source dit réellement ;
+2. préserver la donnée utile dans la normalisation ;
+3. produire une interprétation structurée et traçable ;
+4. définir la primitive runtime nécessaire ;
+5. ajouter des tests de vérité mécanique ;
+6. l'intégrer au planner et à l'état inter-tour ;
+7. vérifier que la recherche d'équipement réagit au nouveau plan ;
+8. seulement alors déclarer la mécanique supportée.
 
 Ne pas contourner cette chaîne par un bonus de scoring ad hoc.
