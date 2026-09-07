@@ -16,6 +16,12 @@ function positiveInt(value, fallback = 1) {
   return Math.max(1, Math.floor(num(value, fallback)));
 }
 
+function positiveLimitOr(value, fallback = Infinity) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.max(1, Math.floor(parsed));
+}
+
 function nonNegativeInt(value, fallback = 0) {
   return Math.max(0, Math.floor(num(value, fallback)));
 }
@@ -129,8 +135,8 @@ export function combatCastEligibility(state = {}, {
   const readyTurn = num(state.cooldowns?.[id], state.turn);
   if (readyTurn > state.turn) return { eligible: false, reason: 'COOLDOWN' };
 
-  const perTurn = positiveInt(castLimit.perTurn ?? castLimit.maxCastPerTurn ?? 999999, 999999);
-  const perTarget = positiveInt(castLimit.perTarget ?? castLimit.maxCastPerTarget ?? perTurn, perTurn);
+  const perTurn = positiveLimitOr(castLimit.perTurn ?? castLimit.maxCastPerTurn, Infinity);
+  const perTarget = positiveLimitOr(castLimit.perTarget ?? castLimit.maxCastPerTarget, perTurn);
   if (num(state.castsThisTurn?.[id], 0) >= perTurn) return { eligible: false, reason: 'CAST_LIMIT_TURN' };
   const targetKey = targetCastKey(id, targetId);
   if (num(state.castsPerTarget?.[targetKey], 0) >= perTarget) return { eligible: false, reason: 'CAST_LIMIT_TARGET' };
