@@ -14,7 +14,14 @@ function compactSourceValue(value, depth = 0) {
 }
 
 function translations(payload = {}) {
-  return payload?.entries && typeof payload.entries === 'object' ? payload.entries : {};
+  const direct = payload?.entries && typeof payload.entries === 'object' ? payload.entries : {};
+  if (Object.keys(direct).length) return direct;
+  const langDatabase = releaseRecords(payload, 'LangDatabaseData')[0];
+  if (!langDatabase) return {};
+  return Object.fromEntries((langDatabase.entries?.Map || []).map((entry) => [
+    String(numericId(entry?.key, -1)),
+    String(entry?.value ?? '')
+  ]));
 }
 
 function metadataIndex(payload = {}, normalizer = (record) => compactSourceValue(record)) {
