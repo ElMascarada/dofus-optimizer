@@ -35,6 +35,52 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.optimizer-search-timing {
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted, #a7aaa8);
+  font-size: .82rem;
+}
+
+.optimizer-search-timing[hidden],
+.optimizer-search-spinner[hidden],
+.optimizer-search-live[hidden],
+.optimizer-search-final[hidden] {
+  display: none;
+}
+
+.optimizer-search-live {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 9px;
+  align-items: baseline;
+}
+
+.optimizer-search-live strong,
+.optimizer-search-final {
+  color: var(--text, #f0f0f0);
+}
+
+.optimizer-search-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: optimizer-search-spin .7s linear infinite;
+}
+
+@keyframes optimizer-search-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .optimizer-search-spinner { animation: none; }
+}
+
 #optimizer-results {
   display: grid;
   gap: 14px;
