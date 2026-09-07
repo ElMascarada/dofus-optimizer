@@ -37,9 +37,16 @@ function castLimitEffect(perTurn, perTarget = perTurn) {
 }
 
 function certification(spellId, semantics = ['damage', 'ap-cost', 'cast-limits', 'crit']) {
+  const sourceEffectIds = semantics.map((semantic) => `fixture:${semantic}`);
   return createPlannerSourceCertification({
     spellId,
     certifiedSemantics: semantics,
+    sourceEffectCoverage: {
+      sourceEffectIds,
+      classifiedEffectIds: sourceEffectIds,
+      unresolvedEffectIds: [],
+      ignoredEffectIds: []
+    },
     evidence: [{
       source: 'fixture:certified-t1-source',
       spellId,
@@ -139,6 +146,7 @@ test('source certification is positive only with structured, spell-bound reviewa
   assert.equal(negative.eligible, false);
   assert.ok(negative.reasons.includes('SOURCE_PROOF_MISSING'));
   assert.ok(negative.reasons.includes('SOURCE_CERTIFICATION_SCHEMA_MISSING'));
+  assert.ok(negative.reasons.includes('SOURCE_EFFECT_COVERAGE_MISSING'));
 });
 
 test('runtime-supported damage is excluded when source semantics remain unresolved', () => {
@@ -147,6 +155,12 @@ test('runtime-supported damage is excluded when source semantics remain unresolv
     spellId: entry.spell.id,
     certifiedSemantics: ['damage', 'ap-cost'],
     unresolvedSemantics: ['secondary-trigger'],
+    sourceEffectCoverage: {
+      sourceEffectIds: ['normal:0:damage', 'normal:1:secondary-trigger'],
+      classifiedEffectIds: ['normal:0:damage'],
+      unresolvedEffectIds: ['normal:1:secondary-trigger'],
+      ignoredEffectIds: []
+    },
     evidence: [{
       source: 'fixture:partial-source',
       spellId: entry.spell.id,
@@ -261,10 +275,20 @@ test('real priority Iop spells remain source-unresolved and cannot enter the cer
     assert.equal(source.runtimeRepresentation.sourceTruthConsumedByRuntime, false);
     assert.ok(source.unresolvedReasons.length > 0, `expected exact blocker for ${name}`);
 
+    const sourceEffectIds = [
+      ...(source.effects || []).map((effect, index) => `normal:${index}:${effect.effectId}`),
+      ...(source.criticalEffects || []).map((effect, index) => `critical:${index}:${effect.effectId}`)
+    ];
     const partialCertification = createPlannerSourceCertification({
       spellId: runtime.id,
       certifiedSemantics: ['runtime-catalog-presence'],
       unresolvedSemantics: source.unresolvedReasons,
+      sourceEffectCoverage: {
+        sourceEffectIds,
+        classifiedEffectIds: [],
+        unresolvedEffectIds: sourceEffectIds,
+        ignoredEffectIds: []
+      },
       evidence: [{
         source: 'data/normalized/spell-source-truth.json',
         spellId: runtime.id,
