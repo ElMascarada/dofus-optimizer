@@ -39,6 +39,7 @@ jobs:
           "$CHROME_BIN" --version
           npm run recipe:browser 2>&1 | tee recipe-v2-browser-output.txt
       - name: Product smoke
+        if: always()
         shell: bash
         run: npm run smoke:product 2>&1 | tee product-smoke-output.txt
       - name: V2 migration baseline benchmark
@@ -67,5 +68,5 @@ jobs:
             benchmark-workshop-output.txt
           if-no-files-found: error
       - name: Fail when tests failed
-        if: steps.tests.outputs.status != '0'
+        if: always() && steps.tests.outputs.status != '0'
         run: exit 1
