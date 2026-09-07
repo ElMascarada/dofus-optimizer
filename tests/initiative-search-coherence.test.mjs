@@ -95,7 +95,7 @@ function syntheticCandidateContext() {
 
 test('Candidate Search retains true Initiative instead of a false derived-Initiative specialist', () => {
   const initiative = gear('initiative-anchor', { initiative: 1000 });
-  const penaltyOffense = gear('surpryz-like', { initiative: -2000, earth: 1000 });
+  const penaltyOffense = gear('surpryz-like', { initiative: -3000, earth: 1000 });
   const neutral = gear('neutral', {});
   const profiles = [
     syntheticProfile(initiative),
