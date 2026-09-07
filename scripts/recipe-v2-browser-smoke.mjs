@@ -3,6 +3,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+await import('../js/runtime-meta.js');
+const EXPECTED_VERSION = globalThis.DofusOptimizerRuntime?.appVersion;
+if (!EXPECTED_VERSION) throw new Error('Version runtime introuvable.');
+
 const HTTP_PORT = 4173;
 const DEBUG_PORT = 9222;
 const APP_URL = `http://127.0.0.1:${HTTP_PORT}/`;
@@ -123,7 +127,7 @@ try {
     progress: document.querySelector('#workshop-slot-progress')?.textContent
   }))()`);
   if (!shell.workshopVisible || !shell.optimizerHidden || shell.activeTab !== 'workshop') throw new Error('État initial Atelier incorrect.');
-  if (!shell.version?.startsWith('v0.14.2')) throw new Error(`Version UI inattendue: ${shell.version}`);
+  if (shell.version?.trim() !== `v${EXPECTED_VERSION}`) throw new Error(`Version UI inattendue: ${shell.version} (runtime ${EXPECTED_VERSION})`);
   if (shell.progress?.trim() !== '0 / 16') throw new Error(`Progression Atelier initiale inattendue: ${shell.progress}`);
 
   const keyboardOpen = await client.evaluate(`(async () => {
@@ -162,27 +166,51 @@ try {
   })()`);
   if (!optimizerReady.optimizerVisible || !optimizerReady.workshopHidden || !optimizerReady.runEnabled) throw new Error('Navigation / activation Optimiseur incorrectes.');
 
-  // Une contrainte volontairement impossible permet de traverser le vrai Worker
-  // jusqu'à un état terminal sans dépendre du temps variable d'une recherche BALANCED complète.
-  await client.evaluate(`(() => {
-    document.querySelector('#optimizer-min-vit').value = '99999';
-    document.querySelector('#optimizer-run').click();
-  })()`);
-  const terminal = await waitFor(() => client.evaluate(`(() => {
-    const button = document.querySelector('#optimizer-run');
-    if (button.classList.contains('is-searching')) return null;
-    const root = document.querySelector('#optimizer-results');
-    return { state: root.dataset.state, text: root.textContent.slice(0, 240), classDisabled: document.querySelector('#optimizer-class').disabled };
-  })()`), { timeout: 20_000, interval: 120, label: 'recherche impossible terminée' });
-  if (terminal.state === 'error') throw new Error(`Optimiseur en erreur: ${terminal.text}`);
-  if (terminal.state !== 'empty') throw new Error(`État terminal inattendu: ${terminal.state} · ${terminal.text}`);
-  if (terminal.classDisabled) throw new Error('Les contrôles Optimiseur ne sont pas restaurés après la recherche.');
+  // Exerce le vrai module Worker de façon déterministe. Un item imposé absent doit
+  // produire immédiatement un résultat impossible, sans transformer cette recette
+  // de shell navigateur en benchmark BALANCED dépendant de la machine.
+  const workerTerminal = await client.evaluate(`new Promise((resolve) => {
+    const requestId = 424242;
+    const worker = new Worker('./js/optimizer-worker.js', { type: 'module' });
+    const finish = (value) => { clearTimeout(timer); worker.terminate(); resolve(value); };
+    const timer = setTimeout(() => finish({ type: 'timeout' }), 8_000);
+    worker.addEventListener('message', (event) => {
+      const message = event.data || {};
+      if (message.requestId !== requestId || !['result', 'error'].includes(message.type)) return;
+      finish({
+        type: message.type,
+        impossible: Boolean(message.output?.diagnostics?.impossible),
+        reason: message.output?.diagnostics?.reason || '',
+        message: message.message || ''
+      });
+    });
+    worker.addEventListener('error', (event) => finish({ type: 'worker-error', message: event.message || 'worker error' }));
+    worker.postMessage({
+      type: 'optimize',
+      requestId,
+      payload: {
+        objectiveMode: 'combat',
+        combatObjective: { element: 'earth', turnMode: 't1', targetMode: 'single', metric: 'total-damage' },
+        turnMode: 't1',
+        classSpells: [{
+          id: 'browser-smoke-hit', name: 'Browser smoke hit', apCost: 3, baseCritPct: 0,
+          maxCastPerTurn: 1, maxCastPerTarget: 1, distanceOptions: ['melee', 'ranged'],
+          hits: [{ element: 'earth', normal: [1, 1], crit: [1, 1] }],
+          combatModifiers: [], combatRelevant: true
+        }],
+        items: [], sets: [], selections: [], constraints: {}, fmPolicy: {}, scenario: {},
+        requiredItemIds: ['__browser_smoke_missing_item__'], diversityMode: 'gear',
+        searchProfile: 'BALANCED', topN: 1
+      }
+    });
+  })`);
+  if (workerTerminal.type !== 'result' || !workerTerminal.impossible || workerTerminal.reason !== 'required-item-missing') {
+    throw new Error(`Worker smoke inattendu: ${JSON.stringify(workerTerminal)}`);
+  }
 
-  // Vérifie aussi le chemin d'arrêt manuel du vrai Worker sans réduire son profil de qualité.
-  await client.evaluate(`(() => {
-    document.querySelector('#optimizer-min-vit').value = '0';
-    document.querySelector('#optimizer-run').click();
-  })()`);
+  // Vérifie le chemin UI réel de démarrage puis d'arrêt sans attendre la fin d'une
+  // recherche qualité complète. Le benchmark dédié mesure ce coût séparément.
+  await client.evaluate(`document.querySelector('#optimizer-run').click()`);
   await waitFor(() => client.evaluate(`document.querySelector('#optimizer-run').classList.contains('is-searching')`), { label: 'recherche libre démarrée' });
   await new Promise((resolve) => setTimeout(resolve, 800));
   const stopped = await client.evaluate(`(async () => {
@@ -198,7 +226,7 @@ try {
   if (stopped.searching || stopped.classDisabled || stopped.state === 'error') throw new Error(`Arrêt manuel incohérent: ${JSON.stringify(stopped)}`);
 
   console.log('V2_BROWSER_RECIPE_PASS');
-  console.log(JSON.stringify({ shell, equipped, optimizerReady, terminal, stopped }, null, 2));
+  console.log(JSON.stringify({ shell, equipped, optimizerReady, workerTerminal, stopped }, null, 2));
 } finally {
   client?.close();
   await Promise.all([stopProcess(browser), stopProcess(server)]);

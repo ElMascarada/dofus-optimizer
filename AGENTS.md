@@ -1,229 +1,71 @@
-# Dofus Optimizer — Agent Guide
+# AGENTS.md
 
-Ce fichier est le point d'entrée canonique pour tout nouvel agent ou toute nouvelle fenêtre ChatGPT qui reprend le dépôt.
+## Rôle
 
-## 1. Reprise obligatoire
+Ce dépôt est un **optimiseur de plan de combat Dofus**. L'équipement est un moyen d'exécuter et de maximiser ce plan, pas l'objectif autonome du produit.
 
-Toujours partir du `main` mergé et vert, sauf si le Directeur impose explicitement une branche et un HEAD précis.
+Avant toute modification, lire :
 
-Avec un checkout local disponible :
+1. `README.md`
+2. `PROJECT_STATE.md`
+3. `docs/PRODUCT_CONTRACT.md`
+4. `docs/ARCHITECTURE_CURRENT.md`
+5. `SOURCE_DATA.md`
+6. `docs/SPELL_KNOWLEDGE.md` si le travail touche aux sorts/combat.
 
-```bash
-git checkout main
-git pull
-git rev-parse HEAD
-```
+GitHub et le code exécutable décrivent l'état réel du runtime. `docs/PRODUCT_CONTRACT.md` décrit la direction produit canonique. Lorsqu'un point du contrat n'est pas encore implémenté, il doit rester identifié comme un écart ; ne jamais réécrire la documentation pour faire croire qu'il fonctionne déjà.
 
-Ne pars jamais d'une ancienne branche d'agent sauf instruction explicite.
+## Invariants produit
 
-Lis ensuite, dans cet ordre :
+- **Combat plan first** : déterminer le meilleur tour offensif `Tn` réellement jouable, puis optimiser les moyens de l'exécuter et de le maximiser.
+- **Préparation Tn** : pour `T2`, T1 ne vaut que par son effet sur T2 ; pour `T3`, T1 et T2 ne valent que par leur effet sur T3. Les dégâts de préparation ne sont pas additionnés au score du tour cible.
+- **Contraintes dures** : si un ensemble légal satisfaisant les minima existe, la recherche doit retourner un résultat satisfaisant tous les minima avant d'optimiser le score combat.
+- **Pas d'invention de vérité Dofus** : une donnée inconnue ou une mécanique non certifiée doit rester explicitement non résolue.
+- **Pas de réduction silencieuse** : un sort dont la sémantique riche n'est pas comprise ne doit pas être assimilé à ses seuls dégâts.
+- **Équipement sans valeur intrinsèque** : PA, PM, stats, Dofus, trophées, compagnon, exos et FM n'ont de valeur que par leur effet sur le plan combat et par les contraintes utilisateur.
+- Les règles d'équipement, FM, panoplies, PA/PM, sorts et combat sont du comportement produit : ne pas les modifier dans une tâche de maintenance sans autorisation explicite.
 
-1. `PROJECT_STATE.md`
-2. `docs/V2_COMPLETION_PLAN.md`
-3. `docs/OPTIMIZER_V2_SPEC.md` uniquement si la cible produit est nécessaire
-4. `docs/ARCHITECTURE_TARGET.md` uniquement si la tranche touche l'architecture
-5. `docs/MIGRATION_PLAN.md` pour l'historique et les dépendances
+## Runtime actuel
 
-Ne relis pas tout le dépôt sans raison. Ouvre ensuite uniquement les modules concernés par la tranche.
+Optimiseur :
 
-## 2. Environnement agent et relais local utilisateur
+`index.html` → `js/optimizer-v2-app.js` → `js/optimizer-worker.js` → `js/architecture-search-v2.js` → `optimizer/candidate-search.js`.
 
-Un agent ChatGPT peut disposer de GitHub sans disposer d'un checkout local utilisable, ou disposer de Git/Node/npm dans son shell mais sans accès réseau vers `github.com`.
+Atelier : `js/workshop/`.
 
-**Cette situation n'est pas, à elle seule, un `ENVIRONMENT_BLOCKED`.**
+Primitives Search Memory : `js/search-memory/`. Le repository instancié sans options par le produit est actuellement inerté ; ne pas présenter cette couche comme un cache persistant actif sans vérifier le code courant.
 
-Le projet distingue deux chemins complémentaires :
+Ne pas conclure qu'un fichier est legacy à cause de son nom (`v2`, `legacy`, date, etc.). Prouver son rôle depuis le runtime, les tests, les scripts, les workflows et le service worker avant suppression. Inversement, un test dédié à une ancienne implémentation ne suffit pas à rendre cette implémentation produit active.
 
-### A. GitHub = lecture / écriture / vérité distante
+## Données
 
-Si les outils GitHub disponibles permettent de :
+- `data/normalized/dofus-data.json` : équipement normalisé/certifié.
+- `data/normalized/spell-data.json` : catalogue combat runtime.
+- `data/normalized/spell-source-truth.json` : vérité source riche ; une sémantique peut y rester `source-unresolved` sans être activée dans le planner.
+- Les données brutes sont temporaires au pipeline de synchronisation et ne sont pas une API runtime.
 
-- lire les fichiers ;
-- inspecter branches, HEAD, PR, diff et CI ;
-- créer ou modifier les fichiers de la branche ;
-- créer des commits / pousser via les opérations GitHub disponibles ;
+Principe : **IMPORTER != COMPRENDRE != ACTIVER**.
 
-alors l'agent doit continuer la mission par ce chemin lorsqu'un shell local n'est pas nécessaire.
+Pour les sorts complexes, le futur enrichissement IA est un travail offline de structuration/certification. Une sortie IA n'est jamais à elle seule une règle runtime : elle doit être traçable, structurée, testée et pouvoir conclure `MECHANIC_UNRESOLVED`.
 
-Ne demande pas Codespaces, Codex, ChatGPT Work ou une autre infrastructure simplement parce que le shell de l'agent ne peut pas cloner GitHub.
+## Tests avant merge
 
-### B. Clone relais utilisateur = exécution locale ponctuelle
-
-Lorsque la mission nécessite réellement Node/npm/Git local, génération de fichiers, tests ou smoke hors CI, le Directeur peut utiliser le clone relais local de l'utilisateur.
-
-Chemin conventionnel actuel :
-
-```text
-~/dofus-agent
-```
-
-Préparation utilisateur, une seule fois :
-
-```bash
-git clone https://github.com/ElMascarada/dofus-optimizer.git ~/dofus-agent
-cd ~/dofus-agent
-npm install
-```
-
-Le relais n'est **pas** un shell distant donné à l'agent. Il fonctionne ainsi :
-
-1. l'agent travaille normalement via GitHub ;
-2. le Directeur fournit une commande locale exacte et courte ;
-3. l'utilisateur exécute cette commande sur sa machine ;
-4. l'utilisateur renvoie la sortie ;
-5. l'agent utilise cette sortie comme preuve de validation pour le HEAD exact concerné.
-
-Exemple de remise à zéro sûre d'une branche :
-
-```bash
-cd ~/dofus-agent \
-&& git fetch origin \
-&& git checkout -B <branche> origin/<branche> \
-&& git reset --hard origin/<branche> \
-&& git clean -fd \
-&& echo "HEAD=$(git rev-parse HEAD)" \
-&& git status --short
-```
-
-Exemple de validation :
-
-```bash
-cd ~/dofus-agent \
-&& git fetch origin \
-&& git reset --hard origin/<branche> \
-&& npm run check \
-&& npm test
-```
-
-### Règles de sécurité du relais
-
-- Pas de daemon ni de boucle qui exécute automatiquement des fichiers récupérés depuis GitHub.
-- Pas de SSH entrant ni de port à ouvrir pour un agent.
-- Pas de `sudo`.
-- Le clone relais reste dédié au dépôt Dofus Optimizer.
-- Une commande locale doit être explicite, courte et liée à une branche / un HEAD précis.
-- Par défaut, le relais valide seulement : il ne commit ni ne push automatiquement.
-- Si une génération locale doit produire puis pousser des fichiers, cela doit être explicitement autorisé par le Directeur et visible dans la commande fournie à l'utilisateur.
-- Une sortie locale ne certifie que le HEAD effectivement affiché par cette exécution.
-
-### Quand utiliser `ENVIRONMENT_BLOCKED`
-
-Utilise `ENVIRONMENT_BLOCKED` uniquement lorsqu'une étape indispensable ne peut être réalisée ni :
-
-- avec les outils GitHub disponibles ;
-- avec la CI GitHub ;
-- ni avec une validation ponctuelle via le relais local utilisateur.
-
-Ne stoppe donc pas une mission uniquement avec :
-
-```text
-aucun checkout local réel disponible dans l'environnement ChatGPT
-```
-
-si GitHub reste accessible et que le reste peut être déporté vers la CI ou le relais local.
-
-## 3. Discipline de travail
-
-- Une branche = une responsabilité claire.
-- Une PR = un scope limité et testable.
-- Pas de refactor opportuniste hors scope.
-- Fais des checkpoints fréquents et garde `PROJECT_STATE.md` à jour en fin de tranche.
-- Ne contourne jamais un test par suppression ou relâchement arbitraire d'un invariant.
-- N'augmente pas simplement les beams/pools pour masquer un défaut de recherche.
-- Par défaut, ne merge pas ta propre PR : passe-la READY et rapporte le HEAD final. Merge uniquement sur instruction explicite de l'utilisateur/lead.
-
-## 4. Sources de vérité à préserver
-
-### Build / stats / légalité
-
-`CompleteBuildEvaluator` reste la vérité finale pour :
-
-- structure des slots ;
-- conditions d'items ;
-- bonus de panoplie ;
-- caractéristiques ;
-- FM ;
-- contraintes finales.
-
-L'UI ne doit pas dupliquer ces calculs.
-
-### Sorts / combat
-
-Le moteur de combat générique et `evaluateSpell` restent la vérité pour les dégâts et effets supportés.
-
-Le moteur générique ne doit pas connaître directement un nom de classe, un nom de sort ou un ID spécial. Les exceptions passent par le registre/mécaniques déclaratives existants.
-
-### Recherche d'équipements
-
-- `CandidatePolicy` = pertinence, Pareto, spécialistes, contraintes et profils de recherche.
-- `CandidatePrefilter` = frontière catalogue → pools de candidats.
-- `SetCoreCatalog` = métadonnées et noyaux de panoplies.
-- `CompleteBuildEvaluator` = validation finale de toute solution.
-
-Un score offensif peut ordonner, jamais éliminer seul un candidat utile.
-
-### Atelier
-
-`WorkshopBuild` → `WorkshopController` → `WorkshopEvaluator` est la frontière applicative Atelier.
-
-Un simple changement d'item ne doit jamais lancer Candidate Search, Architecture Search ou l'Optimizer Worker.
-
-### Persistence
-
-La cible V2 est IndexedDB pour les builds, recherches et résultats persistants. `localStorage` reste réservé aux petits flags/préférences triviales.
-
-## 5. Invariants produit non négociables
-
-1. Un résultat affiché respecte toutes les contraintes demandées.
-2. Une contrainte active influence la conservation des candidats en amont.
-3. Un item spécialiste ne disparaît pas uniquement parce qu'il est moins offensif seul.
-4. La voie standalone reste disponible même lorsque des Set Cores existent.
-5. Un seed ou un résultat en cache repasse les règles de compatibilité/version avant réutilisation.
-6. Les dégâts affichés proviennent du moteur canonique.
-7. Lock/Reject doivent être des données de requête, jamais des hacks DOM/Worker.
-8. La mémoire locale ne doit jamais servir un résultat incompatible avec les versions de données/règles courantes.
-
-## 6. Validation minimale avant READY
-
-Toujours exécuter :
+Pour une modification de code/maintenance générale :
 
 ```bash
 npm run check
 npm test
+npm run recipe:browser
+npm run smoke:product
 ```
 
-Puis les benchmarks concernés :
+Les benchmarks du workflow CI servent à détecter les régressions de coût sur les chemins principaux.
 
-```bash
-npm run benchmark:v2
-npm run benchmark:search
-npm run benchmark:workshop
-```
+Toute modification de normalisation doit aussi exécuter la synchronisation/normalisation concernée et vérifier les rapports de couverture générés.
 
-N'exécute que les benchmarks pertinents pendant les checkpoints, mais la CI finale doit rester verte.
+## Git / PR
 
-Quand une tranche touche les sorts, utilise aussi :
-
-```bash
-npm run report:spell-support
-```
-
-Si l'agent ne possède pas de checkout local exploitable, ces validations peuvent être obtenues par la CI ou par le relais local utilisateur défini en section 2. L'agent doit toujours rapporter clairement la source de la validation et le HEAD exact.
-
-## 7. Définition de READY
-
-Une PR peut passer READY uniquement si :
-
-- le scope annoncé est terminé ;
-- les tests ciblés sont présents ;
-- les tests historiques passent ;
-- les benchmarks concernés ne montrent pas de régression inexpliquée ;
-- la CI GitHub est verte ;
-- `PROJECT_STATE.md` et les docs de migration sont à jour si nécessaire ;
-- aucune dette hors scope n'a été introduite pour aller plus vite.
-
-## 8. Reprise ultra-courte
-
-Si tu dois reprendre sans contexte de conversation :
-
-> Lis `AGENTS.md`, puis `PROJECT_STATE.md`, puis `docs/V2_COMPLETION_PLAN.md`. Prends uniquement la prochaine tranche indiquée, depuis le `main` mergé et vert ou depuis la branche/HEAD exact explicitement imposé par le Directeur. L'absence de checkout local ChatGPT n'est pas bloquante tant que GitHub, la CI ou le relais local utilisateur permettent d'exécuter la mission.
+- Une PR = une tranche cohérente.
+- Ne jamais cacher un échec par suppression de test ou assouplissement arbitraire du contrat.
+- Ne pas garder de branche de certification ou de diagnostic comme documentation permanente : intégrer la preuve utile au test/code courant, puis supprimer la branche quand sa valeur unique a disparu.
+- L'historique Git archive les anciennes directions ; l'arbre courant ne doit contenir qu'une documentation valable maintenant.

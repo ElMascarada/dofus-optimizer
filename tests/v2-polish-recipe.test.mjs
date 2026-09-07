@@ -6,7 +6,7 @@ function source(path) {
   return readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 }
 
-test('final V2 shell uses only the current product entrypoints and neo-retro polish layer', () => {
+test('current shell uses only the product entrypoints and neo-retro polish layer', () => {
   const html = source('index.html');
   assert.match(html, /styles-v2-polish\.css/);
   assert.match(html, /js\/workshop\/workshop-app\.js/);
@@ -56,21 +56,24 @@ test('Atelier and Optimizer expose the complete round-trip and accessible intera
   assert.match(optimizer, /Ouvrir et ajuster dans l’Atelier/);
 });
 
-test('service-worker cache is V2-only while search/rules version stays stable', () => {
+test('service-worker shell excludes retired entrypoints and derives cache identity from runtime metadata', () => {
   const worker = source('service-worker.js');
   const runtime = source('js/runtime-meta.js');
 
   assert.match(worker, /styles-v2-polish\.css/);
-  for (const legacy of [
+  for (const retired of [
     'styles-experimental.css',
     'styles-session.css',
     'app-experimental.js',
     'spell-ui-enhancements.js',
     'optimizer-session-bridge.js',
-    'optimizer-stop-bridge.js'
+    'optimizer-stop-bridge.js',
+    'architecture-search.js',
+    'solver.js'
   ]) {
-    assert.doesNotMatch(worker, new RegExp(legacy.replaceAll('.', '\\.')));
+    assert.doesNotMatch(worker, new RegExp(retired.replaceAll('.', '\\.')));
   }
-  assert.match(runtime, /appVersion:\s*'0\.14\.2'/);
-  assert.match(runtime, /v2-final-ui-1/);
+  assert.match(runtime, /serviceWorkerCache:/);
+  assert.match(worker, /DofusOptimizerRuntime\.serviceWorkerCache/);
+  assert.doesNotMatch(worker, /const CACHE = ['"]dofus-optimizer-v/);
 });

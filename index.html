@@ -17,9 +17,9 @@
 <body>
   <header class="topbar">
     <div class="topbar-brand">
-      <span class="eyebrow">DOFUS · BUILD LAB</span>
+      <span class="eyebrow">DOFUS · COMBAT PLAN LAB</span>
       <h1>Dofus Optimizer</h1>
-      <p>Construis ton stuff dans l’Atelier, mesure ses dégâts exacts, puis laisse l’Optimiseur chercher mieux sous tes contraintes.</p>
+      <p>Optimise le meilleur plan de combat réellement jouable ; le stuff, les PA/PM et la FM sont les moyens de le maximiser sous tes contraintes.</p>
     </div>
     <div class="topbar-meta" aria-label="Version de l’application">
       <span class="pill">V2</span>
@@ -40,7 +40,7 @@
         <div>
           <span class="eyebrow">OPTIMISEUR V2</span>
           <h2>Classe → Élément → Contraintes → Objectif</h2>
-          <p>Définis ce que tu veux obtenir. Les moteurs existants cherchent ensuite des builds complets et certifiés.</p>
+          <p>Choisis l’objectif combat et tes contraintes. Le moteur évalue des plans jouables puis recherche l’équipement qui les rend possibles et les maximise.</p>
         </div>
         <span id="optimizer-data-status" class="status" data-state="loading" aria-live="polite">Chargement des données certifiées…</span>
       </section>
@@ -127,7 +127,7 @@
 
         <section class="optimizer-v2-output" aria-labelledby="optimizer-results-title">
           <div class="section-title">
-            <div><span class="eyebrow">RÉSULTATS</span><h2 id="optimizer-results-title">Top builds</h2></div>
+            <div><span class="eyebrow">RÉSULTATS</span><h2 id="optimizer-results-title">Résultats combat</h2></div>
             <span class="pill">Top 10</span>
           </div>
           <div id="optimizer-results" aria-live="polite" aria-busy="true">

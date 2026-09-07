@@ -1,233 +1,113 @@
-# Dofus Optimizer — Architecture actuelle
+# Architecture courante
 
-## Baseline auditée
+Ce document décrit uniquement l'architecture réellement utilisée par le produit courant. La cible fonctionnelle est dans `docs/PRODUCT_CONTRACT.md`.
 
-Baseline de cette migration : `main` au commit `46720d09ae04a4e7ddff6339a4fa39baaacfcbb8`.
+## Entrée navigateur
 
-Cette architecture est décrite telle qu'elle est réellement exécutée par le navigateur, pas telle qu'elle était décrite dans l'ancien README.
+`index.html` charge l'interface Atelier + Optimiseur et enregistre le service worker.
 
-## Point d'entrée UI
+Deux surfaces produit partagent les mêmes données normalisées :
 
-`index.html` est le shell HTML unique chargé en production.
+- Atelier : construction/édition manuelle d'un build ;
+- Optimiseur : recherche automatisée sous contraintes avec évaluation combat.
 
-Le module UI réellement exécuté et retenu comme entrée canonique pour la migration est :
+Le message produit canonique reste : **le plan de combat est l'objectif, l'équipement est un moyen**.
 
-- `js/app-experimental.js` — orchestration UI actuelle, chargement des données, collecte des paramètres, lancement du Worker et rendu des résultats.
+## Optimiseur
 
-L'ancienne UI `js/app.js` n'était chargée ni par `index.html` ni par le service worker et dépendait encore d'anciens contrôles. Cette duplication clairement morte est supprimée dans la PR de fondation.
-
-Deux scripts classiques s'insèrent actuellement avant l'application :
-
-- `js/optimizer-session-bridge.js` ;
-- `js/optimizer-stop-bridge.js`.
-
-Ils font partie du comportement de production actuel, même si leur architecture est transitoire.
-
-## Flux d'optimisation réellement exécuté
+Chemin principal :
 
 ```text
 index.html
-  -> app-experimental.js
-    -> optimizer-worker.js
-      -> architecture-search-v2.js
-        -> candidate-prefilter.js
-        -> set-synergy-index.js
-        -> complete-build-evaluator.js
-      -> offensive-slot-refiner.js
-      -> combat-turn-refiner.js
-        -> turn-optimizer.js
-      -> combat-feedback.js
-      -> result-diversity.js
-    -> rendu UI / modal build
+  -> js/optimizer-v2-app.js
+  -> js/optimizer-worker.js
+  -> js/architecture-search-v2.js
+  -> optimizer/candidate-search.js
+  -> js/complete-build-evaluator.js / combat
+  -> résultats
 ```
 
-`optimizer-worker.js` est le point d'orchestration de la recherche hors thread UI. Il ne constitue pas le solveur à lui seul : il chaîne plusieurs étapes de génération, raffinement, calcul de rotation et diversification.
+`js/architecture-search-v2.js` est actif malgré son suffixe `v2` : ne pas le traiter comme une ancienne version.
+
+Le worker isole le calcul coûteux de l'UI. Les messages entre UI et worker constituent une frontière produit : les modifier exige de préserver les états d'arrêt/erreur/résultat.
 
 ## Recherche équipement
 
-### Préfiltrage
+`optimizer/` porte les politiques et primitives de recherche récentes : profils, guidance, bornes, Pareto/complétude et sélection de candidats.
 
-`candidate-prefilter.js` possède déjà un préfiltrage conscient :
+Les modules sous `js/` fournissent les règles partagées : légalité, statistiques, FM, sets, caractéristiques, préfiltrage, évaluation de build et recherche d'architectures.
 
-- de l'élément ;
-- des contraintes ;
-- de spécialistes de contraintes ;
-- des panoplies pertinentes ;
-- des statistiques offensives.
-
-Cependant `architecture-search-v2.js` reconstruit ensuite des pools par slot et ses propres réserves. Le préfiltrage n'est donc pas encore une frontière unique de l'architecture.
-
-### Recherche d'architectures
-
-`architecture-search-v2.js` est la voie utilisée par le Worker actuel. Il combine :
-
-- pools de slots ;
-- réserves PA/PM et contraintes défensives ;
-- architectures de panoplies ;
-- mutations ;
-- contraintes d'items imposés ;
-- évaluation finale via `evaluateCompleteBuild`.
-
-Les constantes de largeur/capacité de recherche sont encore dispersées dans plusieurs modules.
-
-### Évaluation finale
-
-`complete-build-evaluator.js` est la barrière de vérité d'un build complet :
-
-- légalité des slots ;
-- bonus de panoplies ;
-- caractéristiques ;
-- conditions d'items ;
-- FM ;
-- contraintes permanentes ;
-- contraintes temporelles ;
-- statistiques par tour ;
-- dégâts par sort.
-
-Les contraintes utilisateur y sont actuellement des règles dures : un build invalide n'est pas remonté comme simple avertissement.
+Les optimisations de recherche sont des heuristiques de performance. Elles ne doivent pas modifier les règles de faisabilité.
 
 ## Combat
 
-### Calcul générique
+Le calcul combat s'appuie notamment sur :
 
-`turn-optimizer.js` explore les séquences de sorts avec :
+- `js/spells.js`
+- `js/spell-selection.js`
+- `js/spell-combat-effects.js`
+- `js/combat-state.js`
+- `js/turn-optimizer.js`
+- `js/combat-turn-refiner.js`
+- `js/combat/`
+- `js/temporal-objectives.js`
 
-- PA disponibles ;
-- limites de lancer ;
-- cooldowns ;
-- buffs/debuffs temporaires ;
-- modificateurs retardés ;
-- états de charge déclaratifs ;
-- dégâts mono-cible/zone ;
-- T1/T2/T3 et agrégats multi-tours.
+Les mécaniques spécifiques explicitement prises en charge vivent sous `js/combat/mechanics/`.
 
-### Dette de spécialisation
+Le but architectural est de faire remonter la vérité sémantique des sorts vers le planner, puis le plan combat vers la recherche d'équipement — jamais de fabriquer une rotation depuis un score statique de stuff.
 
-Le moteur contient encore une mécanique Huppermage codée en dur (`breedId`, nom de classe, combinaison élémentaire Terre/Feu et vulnérabilité). Cela viole la cible V2.
+### Limite temporelle actuelle
 
-Les mécaniques Iop récemment ajoutées passent déjà davantage par les données normalisées (`selfCharge`, modificateurs retardés), ce qui constitue la direction à généraliser.
+`js/temporal-objectives.js` distingue tours scorés et tours simulés. L'objectif T2 demande actuellement `[T1, T2]` en simulation, mais T3 ne demande encore que T3. Le contrat cible `T1/T2 préparation -> score T3` reste donc à implémenter après la certification sémantique.
 
-La fondation ajoute `combat-mechanics-registry.js` comme interface déclarative générique, mais ne migre aucune mécanique existante afin de ne pas changer les rotations.
+## Atelier
 
-## Arrêt manuel
+`js/workshop/` contient l'application Atelier, ses événements, son modèle de build et ses recalculs.
 
-Le bouton d'optimisation sert aussi à arrêter une recherche en cours.
+L'Atelier et l'Optimiseur doivent partager les mêmes règles de légalité/statistiques plutôt que maintenir deux vérités métier.
 
-`optimizer-stop-bridge.js` intercepte actuellement le Worker et le clic d'arrêt afin de :
+## Search Memory
 
-- conserver les derniers candidats partiels ;
-- arrêter la recherche lourde ;
-- lancer `partial-finalizer-worker.js` ;
-- finaliser les rotations des meilleurs candidats déjà trouvés ;
-- renvoyer un résultat complet lorsque possible.
+`js/search-memory/` contient encore les primitives de requête, sérialisation, stockage, distance, seeds et fusion.
 
-Cette fonction produit un comportement utile, mais son implémentation repose sur un patch global de `window.Worker` et une interception DOM. Elle doit être migrée vers un client Worker explicite dans une PR suivante.
+**État produit courant :** `SearchMemoryRepository` instancié sans options utilise un `InertSearchStore`. Le parcours produit n'exploite donc pas actuellement de cache persistant par défaut, même si les primitives et tests de stockage restent disponibles pour outils/tests.
 
-## Session / cache
-
-`optimizer-session-bridge.js` gère aujourd'hui :
-
-- cache exact de recherches dans `localStorage` ;
-- empreinte de requête ;
-- liste d'items imposés ;
-- injection des `requiredItemIds` dans les requêtes ;
-- cache hit renvoyé comme faux message Worker ;
-- UI d'équipement imposé ;
-- ajout du bouton « Imposer » dans la modal résultat.
-
-Dette majeure :
-
-- remplacement global de `window.Worker` ;
-- `MutationObserver` pour enrichir la modal après rendu ;
-- second chargement autonome du catalogue d'items ;
-- mélange persistence, transport Worker et UI dans un même fichier.
-
-La PR de fondation centralise les identifiants/version/cache mais conserve ce bridge pour rester comportementalement neutre.
-
-## Version et cache runtime
-
-Avant cette PR, trois versions pouvaient diverger :
-
-- `package.json` ;
-- `config.js` ;
-- `service-worker.js`.
-
-La fondation introduit `js/runtime-meta.js` comme source runtime canonique pour :
-
-- version applicative ;
-- identité du cache service worker ;
-- clé du cache de recherche ;
-- clé des items imposés ;
-- epoch de calcul ;
-- nombre maximal d'entrées.
-
-`package.json` n'expose plus de version applicative indépendante. Les suffixes `?v=YYYYMMDD-N` présents dans `index.html` restent pour cette PR un identifiant de révision d'assets, distinct de la version applicative.
-
-## Interfaces préparatoires
-
-La fondation ajoute sans les brancher sur le comportement courant :
-
-- `optimizer-protocol.js` — forme stable des messages Worker ;
-- `combat-mechanics-registry.js` — registre déclaratif générique destiné à recevoir les mécaniques de classes dans une PR dédiée.
-
-Ces interfaces ne remplacent encore aucun composant de production.
+Cette couche ne doit pas être présentée comme une optimisation active tant que cette inertie est volontaire. Si elle est réactivée un jour, un cache ne devra jamais rendre valide un résultat qui ne l'est plus selon la vérité courante.
 
 ## Données
 
-La source publiée en navigateur est normalisée et certifiée :
+`js/data-loader.js` charge les snapshots normalisés nécessaires au runtime et applique les règles de curation prévues.
 
-- `data/normalized/dofus-data.json` — équipements et panoplies ;
-- `data/normalized/spell-data.json` — classes et sorts de combat.
+Pipeline de maintenance :
 
-`data-loader.js` valide les schémas, exclut le contenu non certifié et applique les règles runtime curatées.
+```text
+Dofusdude
+  -> scripts de sync
+  -> normalisation / conservation de la vérité source
+  -> curation/certification
+  -> snapshots sous data/normalized/
+  -> data-loader
+  -> runtime
+```
 
-Le pipeline `scripts/` synchronise et normalise les données hors navigateur. Il ne fait pas partie du runtime de recherche.
+La vérité source riche des sorts est volontairement séparée du catalogue combat actif tant que son interprétation n'est pas certifiée.
 
-## Tests
+## FM actuelle
 
-La suite Node couvre notamment :
+La politique FM actuellement construite par `js/optimizer-v2-orchestrator.js` reste historique (`+3 % dommages sorts / slot`, +8 do crit, Exo PA/PM). Le budget cible de 9 objets avec arbitrage 1 % / 2 % / do crit n'est pas encore implémenté ; voir `docs/DOFUS_MODEL.md`.
 
-- recherche V2 et PA/PM ;
-- préfiltrage ;
-- évaluation complète ;
-- contraintes de survie ;
-- panoplies ;
-- sorts et passifs ;
-- combat multi-tour ;
-- Huppermage/Iop ;
-- finalisation partielle ;
-- cache/session UI ;
-- garde-fous UI.
+## PWA
 
-La PR ajoute une baseline transversale dédiée V2 et un benchmark reproductible afin de figer les comportements avant migration.
+`service-worker.js` est actif. Il met en cache le shell applicatif et les données nécessaires à l'usage offline.
 
-## Code historique / expérimental
+Toute suppression/renommage de fichier du shell doit mettre à jour `APP_SHELL` dans la même tranche et être validée par la recette navigateur.
 
-### Supprimé comme duplication clairement morte
+## Validation permanente
 
-- `js/app.js` : ancienne UI, non chargée par le runtime actuel et absente de l'APP_SHELL du service worker.
+- `npm run check`
+- `npm test`
+- `npm run recipe:browser`
+- `npm run smoke:product`
+- benchmarks CI des chemins principaux
 
-### Historique mais encore conservé
-
-- `js/architecture-search.js` ;
-- `js/solver.js` ;
-- certaines suites historiques associées.
-
-Ils ne sont pas la voie appelée par `optimizer-worker.js`, mais restent référencés par la suite de tests et/ou l'APP_SHELL. Ils ne sont donc pas supprimés dans cette PR sans audit de parité dédié.
-
-### Build/maintenance, pas runtime
-
-- normaliseurs et synchroniseurs dans `scripts/` ;
-- rapports de couverture ;
-- snapshots sources/intermédiaires.
-
-## Dettes prioritaires après la fondation
-
-1. remplacer les patches globaux `window.Worker` par un `OptimizerClient` explicite ;
-2. déplacer l'UI d'items imposés dans le rendu canonique ;
-3. supprimer le `MutationObserver` de la modal principale ;
-4. migrer Huppermage vers le registre déclaratif ;
-5. rendre le préfiltrage équipement réellement unique ;
-6. centraliser les constantes beam/search ;
-7. remplacer le cache principal `localStorage` par un repository IndexedDB ;
-8. convertir les résultats connus en seeds réutilisables.
+Les workflows GitHub sont une partie de l'architecture de maintenance ; ils ne doivent pas contenir de diagnostics temporaires ni deux propriétaires concurrents pour le même snapshot généré.

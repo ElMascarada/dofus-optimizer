@@ -1,150 +1,59 @@
 # Dofus Optimizer
 
-Web app statique/PWA destinée à construire, analyser et optimiser des équipements Dofus sous contraintes.
+**Dofus Optimizer est un optimiseur de plan de combat Dofus.**
 
-## Produit V2
+Le stuff n'est pas l'objectif du produit et n'a pas de valeur autonome : équipements, PA/PM, Dofus, trophées, compagnon et forgemagie sont des moyens permettant d'exécuter et de maximiser le meilleur plan de combat sous les contraintes du joueur.
 
-L’application finale est organisée autour de deux espaces :
+## Contrat produit
 
-- **Atelier** — construction manuelle d’un stuff 16 slots, recherche intelligente d’items, sauvegarde locale, statistiques live, dégâts exacts et rotation T1–T3 ;
-- **Optimiseur** — recherche de builds complets à partir de la classe, de l’élément, des contraintes et de l’objectif temporel.
+L'ordre logique cible est :
 
-Le parcours canonique est :
+1. charger une vérité de jeu certifiée ;
+2. comprendre les sorts, passifs et mécaniques applicables ;
+3. simuler l'état du combat et construire les séquences réellement jouables ;
+4. maximiser le tour offensif demandé `Tn` ;
+5. rechercher les ressources et l'équipement qui rendent ce plan possible et meilleur ;
+6. respecter toutes les contraintes dures demandées.
 
-```text
-Atelier
-  -> construire / sauvegarder / analyser
-  -> Lock / Reject / Trouver mieux
-Optimiseur
-  -> cache exact / seeds proches / recherche
-  -> résultat certifié
-  -> Ouvrir dans l’Atelier
-```
+Pour un objectif `T2`, les actions du T1 ne valent que par ce qu'elles préparent pour le T2. Pour un objectif `T3`, T1 et T2 ne valent que par ce qu'ils préparent pour le T3. Les dégâts des tours de préparation ne sont pas ajoutés au score du tour cible.
 
-## Runtime actuel
+Une mécanique non comprise ne doit jamais être transformée silencieusement en simple ligne de dégâts.
 
-Le runtime UI de production est :
+Le contrat normatif complet est dans [`docs/PRODUCT_CONTRACT.md`](docs/PRODUCT_CONTRACT.md). Les écarts entre ce contrat et l'implémentation actuelle sont explicités dans [`PROJECT_STATE.md`](PROJECT_STATE.md) et [`docs/DOFUS_MODEL.md`](docs/DOFUS_MODEL.md).
 
-```text
-index.html
-  -> js/workshop/workshop-app.js
-     -> WorkshopController
-     -> WorkshopEvaluator
-     -> BuildRepository / IndexedDB
-     -> moteurs canoniques de stats et combat
+## Application actuelle
 
-  -> js/optimizer-v2-app.js
-     -> js/optimizer-v2-orchestrator.js
-     -> Search Memory V2 / IndexedDB
-     -> js/optimizer-worker.js
-        -> js/architecture-search-v2.js
-        -> js/offensive-slot-refiner.js
-        -> js/combat-turn-refiner.js
-        -> js/result-diversity.js
-     -> js/search-memory/seed-worker.js
-```
+Entrée navigateur : `index.html`.
 
-`js/runtime-meta.js` est la source canonique de version et d’identité des caches runtime.
+Chemin Optimiseur principal :
 
-Les anciens fichiers `app-experimental.js`, `optimizer-session-bridge.js`, `optimizer-stop-bridge.js`, `styles-experimental.css` et `styles-session.css` peuvent rester présents comme historique, mais **ne sont plus des entrypoints de production V2** et ne sont plus préchargés par le service worker final.
+`index.html` → `js/optimizer-v2-app.js` → `js/optimizer-worker.js` → `js/architecture-search-v2.js` → `optimizer/candidate-search.js` → évaluateur combat.
 
-## Frontières métier canoniques
+L'Atelier vit sous `js/workshop/`. Les primitives Search Memory vivent sous `js/search-memory/` ; le stockage produit par défaut est actuellement inerté, voir l'architecture courante.
 
-- `js/complete-build-evaluator.js` — validation et évaluation finale d’un build complet ;
-- `js/candidate-prefilter.js` + `optimizer/candidate-policy.js` — présélection contextuelle ;
-- `optimizer/set-core-catalog.js` + `js/set-synergy-index.js` — noyaux de panoplies / architectures ;
-- `js/architecture-search-v2.js` — recherche libre ;
-- `js/offensive-slot-refiner.js` — raffinement des slots offensifs ;
-- `js/combat-turn-refiner.js` — sélection des finalistes combat ;
-- `js/turn-optimizer.js` — rotation exacte T1/T2/T3 ;
-- `js/temporal-objectives.js` — objectifs T1, T2, T3, cumul, moyenne, pire tour et Constant ;
-- `js/spells.js` / `js/combat-state.js` / `js/combat/` — dégâts et états combat génériques ;
-- `js/sets.js`, `js/build-legality.js`, `js/characteristics.js`, `js/fm.js` — règles de build ;
-- `js/data-loader.js` — validation des snapshots certifiés.
+Voir [`docs/ARCHITECTURE_CURRENT.md`](docs/ARCHITECTURE_CURRENT.md).
 
-L’UI ne doit pas recalculer ces règles.
+## Données et connaissance du jeu
 
-## Données
+Les équipements et sorts sont synchronisés depuis Dofusdude puis normalisés hors navigateur. Le runtime ne doit activer que des données et mécaniques explicitement comprises/certifiées. La vérité source riche des sorts est conservée séparément lorsqu'elle n'est pas encore interprétable avec certitude.
 
-Le navigateur consomme uniquement les snapshots normalisés et certifiés :
+Voir [`SOURCE_DATA.md`](SOURCE_DATA.md), [`docs/DOFUS_MODEL.md`](docs/DOFUS_MODEL.md) et [`docs/SPELL_KNOWLEDGE.md`](docs/SPELL_KNOWLEDGE.md).
 
-- `data/normalized/dofus-data.json` — équipements et panoplies ;
-- `data/normalized/spell-data.json` — classes et sorts de combat ;
-- rapports de couverture associés dans `data/normalized/`.
-
-Le pipeline de maintenance utilise Dofusdude et synchronise équipements/sorts sur une version de jeu cohérente. Voir `SOURCE_DATA.md` pour les règles de certification et de provenance.
-
-Le runtime ne retombe pas silencieusement sur des données de démonstration et exclut les données qu’il ne sait pas interpréter de manière certifiée.
-
-## Search Memory V2
-
-L’Optimiseur conserve localement :
-
-- les résultats exacts compatibles avec une requête normalisée ;
-- des requêtes proches utilisées comme sources de seeds ;
-- uniquement des identifiants d’items pour les seeds, qui sont toujours réhydratés et réévalués avec les moteurs courants.
-
-Les versions de données/règles participent à la compatibilité. Un simple polish UI ne change donc pas `appVersion` ni les fingerprints métier.
-
-## Lock / Reject / Trouver mieux
-
-Depuis l’Atelier :
-
-- **Lock** impose réellement l’item verrouillé à la recherche ;
-- **Reject** exclut réellement l’item ;
-- **Trouver mieux** envoie le stuff complet comme seed/lower bound, mais ne verrouille pas implicitement les autres slots.
-
-Un résultat Optimiseur peut ensuite être rouvert dans l’Atelier en conservant les métadonnées de raffinement utiles.
-
-## Tests, recette et benchmarks
-
-Validation standard :
+## Commandes utiles
 
 ```bash
-npm run check
 npm test
-npm run recipe:v2
+npm run check
+npm run smoke:product
 npm run recipe:browser
 npm run benchmark:v2
 npm run benchmark:search
 npm run benchmark:workshop
-```
-
-- `recipe:v2` verrouille les contrats du shell/UX final ;
-- `recipe:browser` pilote réellement Chrome headless sur l’application servie en HTTP : cold start, Atelier, clavier, équipement, Optimiseur, recherche et retour Atelier ;
-- les benchmarks historiques servent de garde-fou de non-régression.
-
-La recette de clôture détaillée est dans `docs/V2_ACCEPTANCE_RECIPE.md`.
-
-## Documentation V2
-
-Lire en priorité :
-
-1. `AGENTS.md`
-2. `PROJECT_STATE.md`
-3. `docs/OPTIMIZER_V2_SPEC.md`
-4. `docs/ARCHITECTURE_TARGET.md`
-5. `docs/V2_COMPLETION_PLAN.md`
-6. `docs/V2_ACCEPTANCE_RECIPE.md`
-7. `docs/PERFORMANCE_V2.md`
-8. `docs/TEMPORAL_OBJECTIVES_V2.md`
-
-## Lancer localement
-
-Un serveur HTTP est nécessaire pour charger les JSON, modules et Web Workers :
-
-```bash
-python -m http.server 8080
-```
-
-Puis ouvrir `http://localhost:8080`.
-
-## Synchronisation des données
-
-Lorsque la machine a accès au réseau :
-
-```bash
 npm run sync:normalize
 ```
 
-Les normaliseurs doivent préférer l’exclusion explicite à toute approximation silencieuse d’un effet ou d’une condition Dofus inconnue.
+Le CI produit doit s'exécuter sur le runner Dofus self-hosted défini dans `.github/workflows/ci.yml`.
+
+## Règle de maintenance
+
+GitHub et le code exécutable sont la source de vérité sur **ce qui existe aujourd'hui**. `docs/PRODUCT_CONTRACT.md` est la source de vérité sur **ce que le produit doit devenir**. Les documents historiques ne sont pas conservés dans l'arbre courant : l'historique Git remplit ce rôle.
