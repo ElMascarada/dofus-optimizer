@@ -34,11 +34,20 @@ Les informations préservées peuvent inclure :
 
 ## Règle fondamentale
 
-`source-unresolved` signifie : **connu dans la source, pas encore compris de façon suffisante pour être actif**.
+`UNRESOLVED` signifie : **la mécanique n'est pas comprise suffisamment et elle peut encore affecter l'objectif ou la séquence offensive de référence**. Une référence de script, un effet conditionnel, un effet non immédiat ou une applicabilité de cible inconnue reste donc fail-closed dès lors qu'il pourrait modifier dégâts, légalité, ressources, cooldowns, buffs, charges, états, ordre des effets ou toute autre propriété du meilleur plan.
 
-Une référence de script, un effet conditionnel ou un effet non immédiat ne doit jamais être interprété par intuition. La bonne réponse est de conserver la donnée et de marquer la limite.
+`IGNORED` / `certifiedIrrelevantToT1` signifie autre chose : **la mécanique est comprise suffisamment pour démontrer qu'elle ne peut pas affecter l'objectif T1 offensif de référence**. Une occurrence ignorée reste comptée dans la couverture source. Elle doit porter une justification non vide et `certifiedIrrelevantToT1=true`, via le modèle existant `ignoredSource` / `ignoredSemantics` / `ignoredIds`.
 
-> **Une mécanique inconnue n'est jamais équivalente à une mécanique inexistante.**
+> **Une mécanique inconnue n'est jamais équivalente à une mécanique inexistante ou non pertinente.**
+
+L'absence de compréhension n'autorise jamais `ignored`. Un script manquant reste `UNRESOLVED` s'il peut modifier le comportement offensif. De même, le fait que la géométrie exacte d'une zone puisse être sans importance sous l'hypothèse de placement compatible ne dispense pas de connaître l'applicabilité à l'ennemi normal de référence lorsqu'elle conditionne les dégâts.
+
+Pour le scénario offensif canonique actuel, deux exclusions de portée sont explicites :
+
+- l'érosion ne contribue pas au score de dégâts offensifs et peut donc être certifiée sans primitive runtime d'érosion/max-health lorsqu'elle est bien identifiée comme telle ;
+- une branche de dégâts démontrée comme exclusivement réservée aux invocations est sans effet sur la cible ennemie normale de référence et peut être certifiée irrélevante sans simulation d'invocations.
+
+Ces exclusions sont des décisions de pertinence produit, pas des raccourcis d'interprétation. Elles ne permettent notamment pas de déduire la signification d'un masque depuis ses seules lettres ni de déclarer un script inconnu sans effet.
 
 ## Agent IA de compréhension — cible
 

@@ -71,12 +71,18 @@ L'historique nécessaire à une mécanique doit être représenté explicitement
 
 Pour l'optimisation de plafond offensif par défaut :
 
-- cible unique ;
+- cible unique **ennemie normale** (pas une invocation) ;
 - cible passive ;
 - `0 %` de résistances ;
 - aucun comportement adverse à simuler ;
 - placement supposé compatible avec le plan candidat : mêlée si nécessaire, distance si nécessaire ;
 - objectif : maximiser les dégâts du tour cible tout en respectant les vraies règles des sorts et ressources.
+
+Une mécanique source ne bloque la certification offensive que si elle peut changer le score ou la séquence optimale dans ce scénario : dégâts du tour cible, légalité d'action, PA/PM disponibles, limites de lancer/cooldowns, buffs/debuffs offensifs, charges/compteurs, dégâts futurs pertinents pour `Tn`, états requis, ordre des effets ou toute autre propriété pouvant modifier le meilleur plan.
+
+La certification reste **fail-closed** : une mécanique inconnue susceptible d'avoir un tel impact reste `UNRESOLVED`. En revanche, une mécanique suffisamment comprise pour démontrer qu'elle ne peut pas affecter cet objectif peut être conservée dans la couverture source comme `ignoredSource` / `ignoredSemantics`, avec justification explicite et `certifiedIrrelevantToT1=true`. L'ignorance n'est jamais une preuve d'irrélevance.
+
+Pour le scénario de référence, l'érosion est hors objectif : elle ne contribue pas au score de dégâts offensifs et n'impose donc pas de modèle runtime d'érosion/max-health pour certifier un sort autrement utilisable. De même, une différence de dégâts démontrée comme exclusivement applicable aux invocations est hors scénario puisque la cible de référence est une ennemie normale. Cela n'autorise ni à ignorer une branche de cible non comprise, ni à déduire la signification d'un masque depuis ses seules lettres.
 
 La classe n'est pas étiquetée globalement « mêlée » ou « distance » : c'est le **plan candidat** qui détermine son contexte de frappe. Les choix de compagnon associés au contexte mêlée/distance doivent être dérivés de données certifiées. L'acceptation produit prévoit notamment un arbitrage entre les options de compagnon de type Porécypithon pour un plan distance et Mate pour un plan mêlée ; leurs valeurs exactes doivent être vérifiées dans la source courante avant toute règle runtime.
 
