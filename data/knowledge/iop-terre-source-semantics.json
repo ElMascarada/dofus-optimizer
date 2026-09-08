@@ -20,15 +20,17 @@
               "id": "normal:0:776:erosion",
               "type": "stat_modifier",
               "status": "UNRESOLVED",
-              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. The runtime has no erosion/max-health transition, stacking or lifetime contract for this effect; the joined label is not a behavioral specification.",
-              "missingRuntimePrimitive": "Target erosion and maximum-health transitions with certified application order, duration and stacking."
+              "relevantToPlan": false,
+              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. Owner doctrine excludes erosion from the reference offensive damage objective, so no erosion/max-health runtime transition is required for T1 offensive certification.",
+              "certifiedIrrelevantToT1": true,
+              "irrelevanceJustification": "Erosion changes erosion/max-health state but does not contribute to target-turn offensive damage, action legality, resources, cast limits, offensive buffs, charges or ordering in the reference scenario."
             },
             {
               "id": "normal:0:776:target",
               "type": "target",
               "status": "UNRESOLVED",
               "sourceMask": "a,A",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "proof": "The source preserves this mask and zone. Its exact applicability is not declared supported; the complete effect-776 source occurrence is separately certified irrelevant because its demonstrated mechanic is erosion only.",
               "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
             }
           ]
@@ -69,15 +71,17 @@
               "id": "critical:0:776:erosion",
               "type": "stat_modifier",
               "status": "UNRESOLVED",
-              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. The runtime has no erosion/max-health transition, stacking or lifetime contract for this effect; the joined label is not a behavioral specification.",
-              "missingRuntimePrimitive": "Target erosion and maximum-health transitions with certified application order, duration and stacking."
+              "relevantToPlan": false,
+              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. Owner doctrine excludes erosion from the reference offensive damage objective, so no erosion/max-health runtime transition is required for T1 offensive certification.",
+              "certifiedIrrelevantToT1": true,
+              "irrelevanceJustification": "Erosion changes erosion/max-health state but does not contribute to target-turn offensive damage, action legality, resources, cast limits, offensive buffs, charges or ordering in the reference scenario."
             },
             {
               "id": "critical:0:776:target",
               "type": "target",
               "status": "UNRESOLVED",
               "sourceMask": "a,A",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "proof": "The source preserves this mask and zone. Its exact applicability is not declared supported; the complete effect-776 source occurrence is separately certified irrelevant because its demonstrated mechanic is erosion only.",
               "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
             }
           ]
@@ -119,9 +123,37 @@
         }
       ],
       "states": [],
+      "ignoredSemantics": [
+        {
+          "semantic": "normal:0:776:erosion",
+          "justification": "Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.",
+          "certifiedIrrelevantToT1": true
+        },
+        {
+          "semantic": "critical:0:776:erosion",
+          "justification": "Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.",
+          "certifiedIrrelevantToT1": true
+        }
+      ],
+      "ignoredSource": {
+        "effects": [
+          {
+            "sourceOccurrenceId": "normal:0:776",
+            "justification": "The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.",
+            "certifiedIrrelevantToT1": true
+          },
+          {
+            "sourceOccurrenceId": "critical:0:776",
+            "justification": "The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.",
+            "certifiedIrrelevantToT1": true
+          }
+        ],
+        "scripts": [],
+        "states": []
+      },
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
       "criticalSemantics": "SOURCE_UNRESOLVED",
-      "criticalEvidence": "Normal and critical erosion rows are equal except occurrence/order; their behavior and the script remain unresolved."
+      "criticalEvidence": "Normal and critical effect-776 erosion occurrences are certified irrelevant to the reference T1 offensive objective. Earth-damage target applicability and bound script 16115 remain unresolved."
     },
     {
       "spellId": 13123,
@@ -165,7 +197,7 @@
               "id": "normal:1:97:damage-arithmetic",
               "type": "damage",
               "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "proof": "Effect 97 metadata identifies Earth damage; the source range 30-34 is the unique higher normal-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.",
               "range": [
                 30,
                 34
@@ -176,8 +208,8 @@
               "type": "target",
               "status": "UNRESOLVED",
               "sourceMask": "J,j",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+              "proof": "The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher normal-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.",
+              "missingRuntimePrimitive": "A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."
             }
           ]
         },
@@ -217,7 +249,7 @@
               "id": "critical:1:97:damage-arithmetic",
               "type": "damage",
               "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "proof": "Effect 97 metadata identifies Earth damage; the source range 37-42 is the unique higher critical-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.",
               "range": [
                 37,
                 42
@@ -228,8 +260,8 @@
               "type": "target",
               "status": "UNRESOLVED",
               "sourceMask": "J,j",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+              "proof": "The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher critical-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.",
+              "missingRuntimePrimitive": "A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."
             }
           ]
         }
@@ -239,14 +271,31 @@
           "sourceOccurrenceId": "bound:0:16118",
           "status": "UNRESOLVED",
           "scriptId": 16118,
-          "proof": "Bound script 16118 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
+          "proof": "Bound script 16118 has metadataJoinStatus=missing and scriptMetadata=null. The source does not bind it specifically to the invocation-only branch, so the relevance doctrine cannot remove this blocker.",
           "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
         }
       ],
       "states": [],
+      "ignoredSemantics": [],
+      "ignoredSource": {
+        "effects": [
+          {
+            "sourceOccurrenceId": "normal:1:97",
+            "justification": "Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher normal source branch (30-34 versus 20-24), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.",
+            "certifiedIrrelevantToT1": true
+          },
+          {
+            "sourceOccurrenceId": "critical:1:97",
+            "justification": "Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher critical source branch (37-42 versus 25-30), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.",
+            "certifiedIrrelevantToT1": true
+          }
+        ],
+        "scripts": [],
+        "states": []
+      },
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
       "criticalSemantics": "IMMEDIATE_DAMAGE_ONLY",
-      "criticalEvidence": "The explicit normal/critical effect rows differ only in damage ranges and order. Bound script semantics remain unresolved independently."
+      "criticalEvidence": "The unique higher normal and critical damage occurrences are owner-bound to the invocation-only branch and certified irrelevant to the normal-enemy T1 objective. The ordinary-target branch applicability and bound script 16118 remain unresolved."
     },
     {
       "spellId": 13125,
