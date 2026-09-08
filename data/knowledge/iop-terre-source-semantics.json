@@ -1,0 +1,252 @@
+{
+  "scope": "Offline review only; no runtime/planner activation. Only Pression 13106 and Concentration 13123.",
+  "source": "data/normalized/spell-source-truth.json",
+  "gameVersion": "3.6.11.12",
+  "sourceBinding": "SHA-256 of recursively key-sorted compact UTF-8 JSON for the entire selected source spell record.",
+  "spells": [
+    {
+      "spellId": 13106,
+      "name": "Pression",
+      "sourceRecordSha256": "6424e27fd5f8b90f9f2941c8fba9a4e1cf031179b267968d5e99a8d1cc09d784",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {
+          "sourceOccurrenceId": "normal:0:776",
+          "status": "UNRESOLVED",
+          "sourceOrder": 0,
+          "effectId": 776,
+          "semantics": [
+            {
+              "id": "normal:0:776:erosion",
+              "type": "stat_modifier",
+              "status": "UNRESOLVED",
+              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. The runtime has no erosion/max-health transition, stacking or lifetime contract for this effect; the joined label is not a behavioral specification.",
+              "missingRuntimePrimitive": "Target erosion and maximum-health transitions with certified application order, duration and stacking."
+            },
+            {
+              "id": "normal:0:776:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "a,A",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "normal:1:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 1,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "normal:1:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                26,
+                30
+              ]
+            },
+            {
+              "id": "normal:1:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "a,A",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "critical:0:776",
+          "status": "UNRESOLVED",
+          "sourceOrder": 2,
+          "effectId": 776,
+          "semantics": [
+            {
+              "id": "critical:0:776:erosion",
+              "type": "stat_modifier",
+              "status": "UNRESOLVED",
+              "proof": "Effect 776 metadata identifies 10% erosion, immediate application and duration 2. The runtime has no erosion/max-health transition, stacking or lifetime contract for this effect; the joined label is not a behavioral specification.",
+              "missingRuntimePrimitive": "Target erosion and maximum-health transitions with certified application order, duration and stacking."
+            },
+            {
+              "id": "critical:0:776:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "a,A",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "critical:1:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 3,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "critical:1:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                31,
+                36
+              ]
+            },
+            {
+              "id": "critical:1:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "a,A",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        }
+      ],
+      "scripts": [
+        {
+          "sourceOccurrenceId": "bound:0:16115",
+          "status": "UNRESOLVED",
+          "scriptId": 16115,
+          "proof": "Bound script 16115 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
+          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
+        }
+      ],
+      "states": [],
+      "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
+      "criticalSemantics": "SOURCE_UNRESOLVED",
+      "criticalEvidence": "Normal and critical erosion rows are equal except occurrence/order; their behavior and the script remain unresolved."
+    },
+    {
+      "spellId": 13123,
+      "name": "Concentration",
+      "sourceRecordSha256": "e978f2de5d803dbe8e6cb6abbc454513c373ce9d5700b04d2b1c5a6c239b2959",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {
+          "sourceOccurrenceId": "normal:0:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 0,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "normal:0:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                20,
+                24
+              ]
+            },
+            {
+              "id": "normal:0:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "L,M,l,m,c",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "normal:1:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 1,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "normal:1:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                30,
+                34
+              ]
+            },
+            {
+              "id": "normal:1:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "J,j",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "critical:0:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 2,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "critical:0:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                25,
+                30
+              ]
+            },
+            {
+              "id": "critical:0:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "L,M,l,m,c",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        },
+        {
+          "sourceOccurrenceId": "critical:1:97",
+          "status": "UNRESOLVED",
+          "sourceOrder": 3,
+          "effectId": 97,
+          "semantics": [
+            {
+              "id": "critical:1:97:damage-arithmetic",
+              "type": "damage",
+              "status": "SUPPORTED",
+              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
+              "range": [
+                37,
+                42
+              ]
+            },
+            {
+              "id": "critical:1:97:target",
+              "type": "target",
+              "status": "UNRESOLVED",
+              "sourceMask": "J,j",
+              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
+              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
+            }
+          ]
+        }
+      ],
+      "scripts": [
+        {
+          "sourceOccurrenceId": "bound:0:16118",
+          "status": "UNRESOLVED",
+          "scriptId": 16118,
+          "proof": "Bound script 16118 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
+          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
+        }
+      ],
+      "states": [],
+      "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
+      "criticalSemantics": "IMMEDIATE_DAMAGE_ONLY",
+      "criticalEvidence": "The explicit normal/critical effect rows differ only in damage ranges and order. Bound script semantics remain unresolved independently."
+    }
+  ]
+}
