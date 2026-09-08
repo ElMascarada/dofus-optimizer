@@ -145,7 +145,7 @@ function certificationSourceFixture({
   states = []
 } = {}) {
   return {
-    id: 999,
+    id: 'fixture-certified',
     effects: normal.map((effectId) => ({ effectId })),
     criticalEffects: critical.map((effectId) => ({ effectId })),
     scripts: {
@@ -284,16 +284,17 @@ test('actual source with three effects rejects a caller manifest that mentions o
 
   assert.deepEqual(certification.sourceCoverage.effects.actualIds, [...actualEffects].sort());
   assert.equal(certification.sourceComplete, false);
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_EFFECT_COVERAGE_INCOMPLETE'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('actual source with three effects passes when all three occurrences are classified', () => {
   const sourceSpell = certificationSourceFixture();
   const certification = fixtureCertification(sourceSpell);
   assert.equal(certification.sourceComplete, true);
-  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification, sourceSpell).eligible, true);
 });
 
 test('actual bound script omitted from classification fails', () => {
@@ -302,9 +303,10 @@ test('actual bound script omitted from classification fails', () => {
   coverage.scripts = { classifiedIds: [], unresolvedIds: [], ignoredIds: [] };
   const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
 
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_SCRIPT_COVERAGE_INCOMPLETE'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('bound script classified unresolved blocks certification', () => {
@@ -317,9 +319,10 @@ test('bound script classified unresolved blocks certification', () => {
   };
   const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
 
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_SCRIPTS_UNRESOLVED'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('bound script ignored with explicit T1-irrelevance proof passes', () => {
@@ -338,7 +341,7 @@ test('bound script ignored with explicit T1-irrelevance proof passes', () => {
     }
   });
 
-  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification, sourceSpell).eligible, true);
 });
 
 test('actual state reference omitted from classification fails', () => {
@@ -347,9 +350,10 @@ test('actual state reference omitted from classification fails', () => {
   coverage.states = { classifiedIds: [], unresolvedIds: [], ignoredIds: [] };
   const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
 
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_STATE_COVERAGE_INCOMPLETE'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('state reference classified unresolved blocks certification', () => {
@@ -362,9 +366,10 @@ test('state reference classified unresolved blocks certification', () => {
   };
   const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
 
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_STATES_UNRESOLVED'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('state reference ignored with explicit T1-irrelevance proof passes', () => {
@@ -383,7 +388,7 @@ test('state reference ignored with explicit T1-irrelevance proof passes', () => 
     }
   });
 
-  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification, sourceSpell).eligible, true);
 });
 
 test('classification buckets cannot overlap', () => {
@@ -406,9 +411,10 @@ test('classification buckets cannot overlap', () => {
     }
   });
 
-  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification, sourceSpell);
   assert.equal(validation.eligible, false);
   assert.ok(validation.reasons.includes('SOURCE_EFFECT_COVERAGE_OVERLAP'));
+  assert.ok(!validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('certification without a real source entry cannot become source-complete', () => {
