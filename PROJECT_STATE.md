@@ -42,6 +42,8 @@ Le contrat canonique demandé est plus ambitieux que le runtime courant. Ces éc
 
 ## Priorité produit après nettoyage
 
+Première revue sémantique Terre : `data/knowledge/iop-terre-source-semantics.json` classe uniquement Pression (13106) et Concentration (13123), hors runtime. Chacun conserve quatre occurrences d'effets et un script non résolus, sans référence d'état explicite. Le calcul isolé des six lignes Terre normales/critiques est démontré, mais ne certifie pas leur applicabilité aux cibles. Restent non certifiés : masques/zones, érosion de Pression et scripts liés 16115/16118 sans métadonnées. Les deux sorts restent exclus du planner certifié ; aucun comportement runtime n'est modifié. Les assertions déterministes remplacent le diagnostic temporaire.
+
 P0 : **Spell Knowledge Certification**.
 
 1. auditer 100 % de la banque de sorts et les informations réellement disponibles en source ;
