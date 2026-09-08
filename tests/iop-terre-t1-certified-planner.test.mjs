@@ -15,6 +15,9 @@ import {
 } from '../js/combat/state.js';
 import {
   createPlannerSourceCertification,
+  sourceBoundScriptOccurrenceIds,
+  sourceEffectOccurrenceIds,
+  sourceStateReferenceOccurrenceIds,
   validatePlannerSourceCertification
 } from '../js/combat/source-certification.js';
 import {
@@ -37,20 +40,31 @@ function castLimitEffect(perTurn, perTarget = perTurn) {
 }
 
 function certification(spellId, semantics = ['damage', 'ap-cost', 'cast-limits', 'crit']) {
-  const sourceEffectIds = semantics.map((semantic) => `fixture:${semantic}`);
+  const sourceSpell = {
+    id: `fixture-source:${spellId}`,
+    effects: semantics.map((semantic) => ({ effectId: `fixture:${semantic}` })),
+    criticalEffects: [],
+    scripts: { bound: [] },
+    stateReferences: []
+  };
+  const sourceEffectIds = sourceEffectOccurrenceIds(sourceSpell);
   return createPlannerSourceCertification({
     spellId,
+    sourceSpell,
     certifiedSemantics: semantics,
-    sourceEffectCoverage: {
-      sourceEffectIds,
-      classifiedEffectIds: sourceEffectIds,
-      unresolvedEffectIds: [],
-      ignoredEffectIds: []
+    sourceCoverage: {
+      effects: {
+        classifiedIds: sourceEffectIds,
+        unresolvedIds: [],
+        ignoredIds: []
+      },
+      scripts: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] },
+      states: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] }
     },
     evidence: [{
       source: 'fixture:certified-t1-source',
       spellId,
-      proof: 'Fixture explicitly declares the complete T1-relevant source semantics used by this test.',
+      proof: 'Fixture binds occurrence coverage to its real source entry and separately proves the T1 spell-level semantics.',
       semantics
     }]
   });
@@ -146,20 +160,32 @@ test('source certification is positive only with structured, spell-bound reviewa
   assert.equal(negative.eligible, false);
   assert.ok(negative.reasons.includes('SOURCE_PROOF_MISSING'));
   assert.ok(negative.reasons.includes('SOURCE_CERTIFICATION_SCHEMA_MISSING'));
-  assert.ok(negative.reasons.includes('SOURCE_EFFECT_COVERAGE_MISSING'));
+  assert.ok(negative.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
 
 test('runtime-supported damage is excluded when source semantics remain unresolved', () => {
   const entry = attack({ id: 'spell-unresolved', name: 'Unresolved', apCost: 2, damage: 50, perTurn: 2 });
+  const sourceSpell = {
+    id: 'fixture-source:spell-unresolved',
+    effects: [{ effectId: 'damage' }, { effectId: 'secondary-trigger' }],
+    criticalEffects: [],
+    scripts: { bound: [] },
+    stateReferences: []
+  };
+  const sourceEffectIds = sourceEffectOccurrenceIds(sourceSpell);
   entry.sourceCertification = createPlannerSourceCertification({
     spellId: entry.spell.id,
+    sourceSpell,
     certifiedSemantics: ['damage', 'ap-cost'],
     unresolvedSemantics: ['secondary-trigger'],
-    sourceEffectCoverage: {
-      sourceEffectIds: ['normal:0:damage', 'normal:1:secondary-trigger'],
-      classifiedEffectIds: ['normal:0:damage'],
-      unresolvedEffectIds: ['normal:1:secondary-trigger'],
-      ignoredEffectIds: []
+    sourceCoverage: {
+      effects: {
+        classifiedIds: [sourceEffectIds[0]],
+        unresolvedIds: [sourceEffectIds[1]],
+        ignoredIds: []
+      },
+      scripts: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] },
+      states: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] }
     },
     evidence: [{
       source: 'fixture:partial-source',
@@ -275,19 +301,30 @@ test('real priority Iop spells remain source-unresolved and cannot enter the cer
     assert.equal(source.runtimeRepresentation.sourceTruthConsumedByRuntime, false);
     assert.ok(source.unresolvedReasons.length > 0, `expected exact blocker for ${name}`);
 
-    const sourceEffectIds = [
-      ...(source.effects || []).map((effect, index) => `normal:${index}:${effect.effectId}`),
-      ...(source.criticalEffects || []).map((effect, index) => `critical:${index}:${effect.effectId}`)
-    ];
+    const sourceEffectIds = sourceEffectOccurrenceIds(source);
+    const sourceScriptIds = sourceBoundScriptOccurrenceIds(source);
+    const sourceStateIds = sourceStateReferenceOccurrenceIds(source);
     const partialCertification = createPlannerSourceCertification({
       spellId: runtime.id,
+      sourceSpell: source,
       certifiedSemantics: ['runtime-catalog-presence'],
       unresolvedSemantics: source.unresolvedReasons,
-      sourceEffectCoverage: {
-        sourceEffectIds,
-        classifiedEffectIds: [],
-        unresolvedEffectIds: sourceEffectIds,
-        ignoredEffectIds: []
+      sourceCoverage: {
+        effects: {
+          classifiedIds: [],
+          unresolvedIds: sourceEffectIds,
+          ignoredIds: []
+        },
+        scripts: {
+          classifiedIds: [],
+          unresolvedIds: sourceScriptIds,
+          ignoredIds: []
+        },
+        states: {
+          classifiedIds: [],
+          unresolvedIds: sourceStateIds,
+          ignoredIds: []
+        }
       },
       evidence: [{
         source: 'data/normalized/spell-source-truth.json',
