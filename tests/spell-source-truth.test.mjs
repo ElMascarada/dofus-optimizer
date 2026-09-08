@@ -1,17 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { normalizeSpellSourceTruthWithMetadata } from '../js/dofus-spell-source-semantics.js';
 
 const sourceTruthPath = new URL('../data/normalized/spell-source-truth.json', import.meta.url);
 const runtimePath = new URL('../data/normalized/spell-data.json', import.meta.url);
 
 async function readJson(url) {
   return JSON.parse(await readFile(url, 'utf8'));
-}
-
-function gitBlobSha(bytes) {
-  return createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex');
 }
 
 function spellById(artifact, id) {
@@ -32,7 +28,23 @@ function scriptIds(spell) {
 
 test('source truth artifact stays separate from the certified runtime combat catalog', async () => {
   const runtimeBytes = await readFile(runtimePath);
-  assert.equal(gitBlobSha(runtimeBytes), 'fff4e51dd61ab8cfe67ea73d50ac15e1e7d37358');
+  const runtimeCatalog = JSON.parse(runtimeBytes);
+  const before = structuredClone(runtimeCatalog);
+  const spell = runtimeCatalog.spells[0];
+  const payload = (name, data) => ({ references: { RefIds: [{ type: { class: name }, data }] } });
+  // Exercise the source/runtime join against the current catalog, independently
+  // of release timestamps and of the snapshot's already-applied curation.
+  const generated = normalizeSpellSourceTruthWithMetadata({
+    runtimeCatalog,
+    spellsPayload: payload('SpellData', { id: spell.ankamaId, spellLevels: [1] }),
+    levelsPayload: payload('SpellLevelData', { id: 1, grade: 1, minPlayerLevel: 1, effects: [] }),
+    breedsPayload: payload('BreedData', { id: 1, breedSpellsId: [spell.ankamaId] })
+  });
+  assert.equal(generated.spells.length, 1);
+  assert.equal(generated.spells[0].runtimeRepresentation.presentInCombatCatalog, true);
+  assert.equal(generated.spells[0].runtimeRepresentation.sourceTruthConsumedByRuntime, false);
+  assert.deepEqual(runtimeCatalog, before, 'source normalization must not mutate runtime data');
+  assert.deepEqual(await readFile(runtimePath), runtimeBytes, 'source normalization must not write the runtime snapshot');
   const artifact = await readJson(sourceTruthPath);
   assert.notEqual(sourceTruthPath.pathname, runtimePath.pathname);
   assert.ok(artifact.spells.length > 0);
@@ -52,7 +64,19 @@ test('coverage is internally coherent and reports the pinned source dataset', as
   assert.equal(artifact.source.rawAssetCounts.spellScripts, 14929);
   assert.equal(artifact.source.rawAssetCounts.spellStates, 6375);
   assert.equal(artifact.source.rawAssetCounts.spellTypes, 3260);
-  assert.equal(artifact.source.standaloneScriptMetadataJoin, 'source-unresolved');
+  assert.equal(artifact.schemaVersion, 2);
+  assert.equal(artifact.source.standaloneScriptMetadataJoin, 'script-id');
+  assert.equal(artifact.source.effectMetadataJoin, 'effect-id');
+  const effects = artifact.spells.flatMap((spell) => [...spell.effects, ...spell.criticalEffects]);
+  const scripts = artifact.spells.flatMap((spell) => spell.scripts.bound);
+  assert.equal(coverage.effectMetadataMissing, effects.filter((entry) => entry.metadataJoinStatus !== 'joined').length);
+  assert.equal(coverage.scriptMetadataMissing, scripts.filter((entry) => entry.metadataJoinStatus !== 'joined').length);
+  for (const entry of effects.filter((entry) => entry.metadataJoinStatus === 'joined')) {
+    assert.equal(entry.effectMetadata.id, entry.effectId);
+  }
+  for (const entry of scripts.filter((entry) => entry.metadataJoinStatus === 'joined')) {
+    assert.equal(entry.scriptMetadata.id, entry.scriptId);
+  }
 });
 
 test('Tirs Puissants preserves rich source truth without activating script semantics', async () => {
