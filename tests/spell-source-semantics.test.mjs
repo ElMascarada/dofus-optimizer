@@ -4,6 +4,9 @@ import test from 'node:test';
 import { normalizeSpellSourceTruthWithMetadata } from '../js/dofus-spell-source-semantics.js';
 import {
   createPlannerSourceCertification,
+  sourceBoundScriptOccurrenceIds,
+  sourceEffectOccurrenceIds,
+  sourceStateReferenceOccurrenceIds,
   validatePlannerSourceCertification
 } from '../js/combat/source-certification.js';
 
@@ -135,6 +138,66 @@ function makeSourceTruth({
   });
 }
 
+function certificationSourceFixture({
+  normal = [700, 701],
+  critical = [702],
+  scripts = [],
+  states = []
+} = {}) {
+  return {
+    id: 999,
+    effects: normal.map((effectId) => ({ effectId })),
+    criticalEffects: critical.map((effectId) => ({ effectId })),
+    scripts: {
+      bound: scripts.map((scriptId, index) => ({ scriptId, order: index }))
+    },
+    stateReferences: states.map((stateId, index) => ({
+      path: `fixture.state${index}Id`,
+      ids: [stateId]
+    }))
+  };
+}
+
+function completeCoverage(sourceSpell) {
+  return {
+    effects: {
+      classifiedIds: sourceEffectOccurrenceIds(sourceSpell),
+      unresolvedIds: [],
+      ignoredIds: []
+    },
+    scripts: {
+      classifiedIds: sourceBoundScriptOccurrenceIds(sourceSpell),
+      unresolvedIds: [],
+      ignoredIds: []
+    },
+    states: {
+      classifiedIds: sourceStateReferenceOccurrenceIds(sourceSpell),
+      unresolvedIds: [],
+      ignoredIds: []
+    }
+  };
+}
+
+function fixtureCertification(sourceSpell, {
+  sourceCoverage = completeCoverage(sourceSpell),
+  ignoredSource = {}
+} = {}) {
+  const spellId = 'fixture-certified';
+  return createPlannerSourceCertification({
+    spellId,
+    sourceSpell,
+    certifiedSemantics: ['damage', 'ap-cost', 'crit', 'range', 'cast-limits', 'cooldown', 'targeting'],
+    sourceCoverage,
+    ignoredSource,
+    evidence: [{
+      source: 'fixture:source-bound-certification',
+      spellId,
+      proof: 'Spell-level T1 semantics remain independently source-backed while occurrence coverage is source-bound.',
+      semantics: ['damage', 'ap-cost', 'crit', 'range', 'cast-limits', 'cooldown', 'targeting']
+    }]
+  });
+}
+
 test('effectId joins exact effect metadata, proven translations, and preserves source effect fields', () => {
   const artifact = makeSourceTruth();
   const entry = artifact.spells[0];
@@ -204,97 +267,174 @@ test('missing script metadata is explicit and cannot be mistaken for joined sema
   assert.equal(artifact.coverage.scriptMetadataMissing, 1);
 });
 
-test('source completeness manifest certifies only an exact, gap-free classification', () => {
-  const spellId = 'fixture-complete';
-  const sourceEffectIds = ['normal:0:700', 'critical:0:700'];
-  const certification = createPlannerSourceCertification({
-    spellId,
-    certifiedSemantics: ['damage', 'ap-cost', 'cast-limits', 'crit'],
-    sourceEffectCoverage: {
-      sourceEffectIds,
-      classifiedEffectIds: sourceEffectIds,
-      unresolvedEffectIds: [],
-      ignoredEffectIds: []
-    },
-    evidence: [{
-      source: 'fixture:complete-source',
-      spellId,
-      proof: 'Every source effect occurrence is classified by this fixture.',
-      semantics: ['damage', 'ap-cost', 'cast-limits', 'crit']
-    }]
+test('actual source with three effects rejects a caller manifest that mentions only two', () => {
+  const sourceSpell = certificationSourceFixture();
+  const actualEffects = sourceEffectOccurrenceIds(sourceSpell);
+  const certification = fixtureCertification(sourceSpell, {
+    sourceCoverage: {
+      ...completeCoverage(sourceSpell),
+      effects: {
+        actualIds: actualEffects.slice(0, 2),
+        classifiedIds: actualEffects.slice(0, 2),
+        unresolvedIds: [],
+        ignoredIds: []
+      }
+    }
   });
 
-  assert.equal(certification.sourceComplete, true);
-  assert.equal(validatePlannerSourceCertification(spellId, certification).eligible, true);
+  assert.deepEqual(certification.sourceCoverage.effects.actualIds, [...actualEffects].sort());
+  assert.equal(certification.sourceComplete, false);
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_EFFECT_COVERAGE_INCOMPLETE'));
 });
 
-test('source completeness manifest rejects an unclassified relevant source effect', () => {
-  const spellId = 'fixture-incomplete';
+test('actual source with three effects passes when all three occurrences are classified', () => {
+  const sourceSpell = certificationSourceFixture();
+  const certification = fixtureCertification(sourceSpell);
+  assert.equal(certification.sourceComplete, true);
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+});
+
+test('actual bound script omitted from classification fails', () => {
+  const sourceSpell = certificationSourceFixture({ scripts: [77] });
+  const coverage = completeCoverage(sourceSpell);
+  coverage.scripts = { classifiedIds: [], unresolvedIds: [], ignoredIds: [] };
+  const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
+
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_SCRIPT_COVERAGE_INCOMPLETE'));
+});
+
+test('bound script classified unresolved blocks certification', () => {
+  const sourceSpell = certificationSourceFixture({ scripts: [77] });
+  const coverage = completeCoverage(sourceSpell);
+  coverage.scripts = {
+    classifiedIds: [],
+    unresolvedIds: sourceBoundScriptOccurrenceIds(sourceSpell),
+    ignoredIds: []
+  };
+  const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
+
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_SCRIPTS_UNRESOLVED'));
+});
+
+test('bound script ignored with explicit T1-irrelevance proof passes', () => {
+  const sourceSpell = certificationSourceFixture({ scripts: [77] });
+  const scriptId = sourceBoundScriptOccurrenceIds(sourceSpell)[0];
+  const coverage = completeCoverage(sourceSpell);
+  coverage.scripts = { classifiedIds: [], unresolvedIds: [], ignoredIds: [scriptId] };
+  const certification = fixtureCertification(sourceSpell, {
+    sourceCoverage: coverage,
+    ignoredSource: {
+      scripts: [{
+        sourceOccurrenceId: scriptId,
+        justification: 'Fixture certifies this script cannot execute or affect the T1 result.',
+        certifiedIrrelevantToT1: true
+      }]
+    }
+  });
+
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+});
+
+test('actual state reference omitted from classification fails', () => {
+  const sourceSpell = certificationSourceFixture({ states: [321] });
+  const coverage = completeCoverage(sourceSpell);
+  coverage.states = { classifiedIds: [], unresolvedIds: [], ignoredIds: [] };
+  const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
+
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_STATE_COVERAGE_INCOMPLETE'));
+});
+
+test('state reference classified unresolved blocks certification', () => {
+  const sourceSpell = certificationSourceFixture({ states: [321] });
+  const coverage = completeCoverage(sourceSpell);
+  coverage.states = {
+    classifiedIds: [],
+    unresolvedIds: sourceStateReferenceOccurrenceIds(sourceSpell),
+    ignoredIds: []
+  };
+  const certification = fixtureCertification(sourceSpell, { sourceCoverage: coverage });
+
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_STATES_UNRESOLVED'));
+});
+
+test('state reference ignored with explicit T1-irrelevance proof passes', () => {
+  const sourceSpell = certificationSourceFixture({ states: [321] });
+  const stateId = sourceStateReferenceOccurrenceIds(sourceSpell)[0];
+  const coverage = completeCoverage(sourceSpell);
+  coverage.states = { classifiedIds: [], unresolvedIds: [], ignoredIds: [stateId] };
+  const certification = fixtureCertification(sourceSpell, {
+    sourceCoverage: coverage,
+    ignoredSource: {
+      states: [{
+        sourceOccurrenceId: stateId,
+        justification: 'Fixture certifies this state reference is outside T1 and cannot affect the T1 result.',
+        certifiedIrrelevantToT1: true
+      }]
+    }
+  });
+
+  assert.equal(validatePlannerSourceCertification('fixture-certified', certification).eligible, true);
+});
+
+test('classification buckets cannot overlap', () => {
+  const sourceSpell = certificationSourceFixture();
+  const actualEffects = sourceEffectOccurrenceIds(sourceSpell);
+  const coverage = completeCoverage(sourceSpell);
+  coverage.effects = {
+    classifiedIds: actualEffects,
+    unresolvedIds: [],
+    ignoredIds: [actualEffects[0]]
+  };
+  const certification = fixtureCertification(sourceSpell, {
+    sourceCoverage: coverage,
+    ignoredSource: {
+      effects: [{
+        sourceOccurrenceId: actualEffects[0],
+        justification: 'Proof exists, but overlap itself remains invalid.',
+        certifiedIrrelevantToT1: true
+      }]
+    }
+  });
+
+  const validation = validatePlannerSourceCertification('fixture-certified', certification);
+  assert.equal(validation.eligible, false);
+  assert.ok(validation.reasons.includes('SOURCE_EFFECT_COVERAGE_OVERLAP'));
+});
+
+test('certification without a real source entry cannot become source-complete', () => {
+  const spellId = 'fixture-no-source';
   const certification = createPlannerSourceCertification({
     spellId,
     certifiedSemantics: ['damage'],
-    sourceEffectCoverage: {
-      sourceEffectIds: ['normal:0:700', 'normal:1:701'],
-      classifiedEffectIds: ['normal:0:700'],
-      unresolvedEffectIds: [],
-      ignoredEffectIds: []
+    sourceCoverage: {
+      effects: {
+        actualIds: ['normal:0:700'],
+        classifiedIds: ['normal:0:700'],
+        unresolvedIds: [],
+        ignoredIds: []
+      }
     },
     evidence: [{
-      source: 'fixture:incomplete-source',
+      source: 'fixture:caller-only',
       spellId,
-      proof: 'Only one of two source effects is deliberately classified.',
+      proof: 'Caller-provided universe is intentionally not accepted as source truth.',
       semantics: ['damage']
     }]
   });
 
   assert.equal(certification.sourceComplete, false);
+  assert.equal(certification.sourceBound, false);
   const validation = validatePlannerSourceCertification(spellId, certification);
   assert.equal(validation.eligible, false);
-  assert.ok(validation.reasons.includes('SOURCE_EFFECT_COVERAGE_INCOMPLETE'));
-});
-
-test('ignored source effects require explicit T1-irrelevance proof', () => {
-  const spellId = 'fixture-ignored';
-  const incomplete = createPlannerSourceCertification({
-    spellId,
-    certifiedSemantics: ['damage'],
-    sourceEffectCoverage: {
-      sourceEffectIds: ['normal:0:700', 'normal:1:999'],
-      classifiedEffectIds: ['normal:0:700'],
-      unresolvedEffectIds: [],
-      ignoredEffectIds: ['normal:1:999']
-    },
-    evidence: [{
-      source: 'fixture:ignored-source',
-      spellId,
-      proof: 'Damage semantics are source-backed.',
-      semantics: ['damage']
-    }]
-  });
-  assert.equal(incomplete.sourceComplete, false);
-  assert.ok(validatePlannerSourceCertification(spellId, incomplete).reasons.includes('IGNORED_SOURCE_EFFECTS_UNCERTIFIED'));
-
-  const complete = createPlannerSourceCertification({
-    spellId,
-    certifiedSemantics: ['damage'],
-    sourceEffectCoverage: {
-      sourceEffectIds: ['normal:0:700', 'normal:1:999'],
-      classifiedEffectIds: ['normal:0:700'],
-      unresolvedEffectIds: [],
-      ignoredEffectIds: ['normal:1:999']
-    },
-    ignoredSourceEffects: [{
-      sourceEffectId: 'normal:1:999',
-      justification: 'Fixture proves this source effect occurs after T1 and cannot affect the T1 result.',
-      certifiedIrrelevantToT1: true
-    }],
-    evidence: [{
-      source: 'fixture:ignored-source',
-      spellId,
-      proof: 'Damage semantics are source-backed.',
-      semantics: ['damage']
-    }]
-  });
-  assert.equal(complete.sourceComplete, true);
-  assert.equal(validatePlannerSourceCertification(spellId, complete).eligible, true);
+  assert.ok(validation.reasons.includes('SOURCE_TRUTH_MISSING'));
 });
