@@ -4,13 +4,58 @@ import {
 
 export const PlannerSourceCertificationSchemaVersion = 2;
 
+const SOURCE_COVERAGE_KINDS = Object.freeze(['effects', 'scripts', 'states']);
+
 function cloneValue(value) {
   if (value === undefined || value === null || typeof value !== 'object') return value;
   return structuredClone(value);
 }
 
 function asSortedStrings(values = []) {
-  return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))].sort();
+  return [...new Set((values || []).map((value) => String(value ?? '').trim()).filter(Boolean))].sort();
+}
+
+function occurrenceValue(value) {
+  if (value === undefined || value === null || value === '') return 'unknown';
+  return String(value);
+}
+
+export function sourceEffectOccurrenceIds(sourceSpell = {}) {
+  return [
+    ...(sourceSpell.effects || []).map((effect, index) => `normal:${index}:${occurrenceValue(effect?.effectId)}`),
+    ...(sourceSpell.criticalEffects || []).map((effect, index) => `critical:${index}:${occurrenceValue(effect?.effectId)}`)
+  ];
+}
+
+export function sourceBoundScriptOccurrenceIds(sourceSpell = {}) {
+  return (sourceSpell.scripts?.bound || [])
+    .map((usage, index) => `bound:${index}:${occurrenceValue(usage?.scriptId)}`);
+}
+
+export function sourceStateReferenceOccurrenceIds(sourceSpell = {}) {
+  return (sourceSpell.stateReferences || []).flatMap((reference, referenceIndex) => {
+    const ids = Array.isArray(reference?.ids) ? reference.ids : [];
+    if (!ids.length) return [`state:${referenceIndex}:0:unknown`];
+    return ids.map((stateId, stateIndex) => `state:${referenceIndex}:${stateIndex}:${occurrenceValue(stateId)}`);
+  });
+}
+
+export function sourceCoverageFingerprint(sourceSpell = null) {
+  if (!sourceSpell || typeof sourceSpell !== 'object') return '';
+  return JSON.stringify({
+    effects: asSortedStrings(sourceEffectOccurrenceIds(sourceSpell)),
+    scripts: asSortedStrings(sourceBoundScriptOccurrenceIds(sourceSpell)),
+    states: asSortedStrings(sourceStateReferenceOccurrenceIds(sourceSpell))
+  });
+}
+
+function actualSourceCoverage(sourceSpell = null) {
+  if (!sourceSpell || typeof sourceSpell !== 'object') return null;
+  return {
+    effects: asSortedStrings(sourceEffectOccurrenceIds(sourceSpell)),
+    scripts: asSortedStrings(sourceBoundScriptOccurrenceIds(sourceSpell)),
+    states: asSortedStrings(sourceStateReferenceOccurrenceIds(sourceSpell))
+  };
 }
 
 function normalizeEvidence(evidence = []) {
@@ -30,54 +75,60 @@ function normalizeIgnoredSemantics(entries = []) {
   }));
 }
 
-function normalizeIgnoredSourceEffects(entries = []) {
+function normalizeIgnoredSourceEntries(entries = []) {
   return (entries || []).map((entry) => ({
-    sourceEffectId: String(entry?.sourceEffectId || entry?.effectId || entry?.id || '').trim(),
+    sourceOccurrenceId: String(entry?.sourceOccurrenceId || entry?.sourceEffectId || entry?.id || '').trim(),
     justification: String(entry?.justification || '').trim(),
     certifiedIrrelevantToT1: entry?.certifiedIrrelevantToT1 === true
-  })).filter((entry) => entry.sourceEffectId || entry.justification || entry.certifiedIrrelevantToT1);
+  })).filter((entry) => entry.sourceOccurrenceId || entry.justification || entry.certifiedIrrelevantToT1);
 }
 
-function normalizeSourceEffectCoverage(coverage = null) {
-  if (!coverage || typeof coverage !== 'object') return null;
+function normalizeClassificationBucket(coverage = null) {
+  const value = coverage && typeof coverage === 'object' ? coverage : {};
   return {
-    sourceEffectIds: asSortedStrings(coverage.sourceEffectIds || []),
-    classifiedEffectIds: asSortedStrings(coverage.classifiedEffectIds || []),
-    unresolvedEffectIds: asSortedStrings(coverage.unresolvedEffectIds || []),
-    ignoredEffectIds: asSortedStrings(coverage.ignoredEffectIds || [])
+    classifiedIds: asSortedStrings(value.classifiedIds || value.classifiedEffectIds || []),
+    unresolvedIds: asSortedStrings(value.unresolvedIds || value.unresolvedEffectIds || []),
+    ignoredIds: asSortedStrings(value.ignoredIds || value.ignoredEffectIds || [])
   };
 }
 
-function sourceEffectCoverageAnalysis(coverage = null, ignoredSourceEffects = []) {
-  const normalized = normalizeSourceEffectCoverage(coverage);
-  if (!normalized || !normalized.sourceEffectIds.length) {
-    return {
-      coverage: normalized,
-      complete: false,
-      overlaps: [],
-      missingEffectIds: [],
-      extraEffectIds: []
-    };
-  }
+function normalizeDeclaredSourceCoverage(sourceCoverage = null) {
+  const value = sourceCoverage && typeof sourceCoverage === 'object' ? sourceCoverage : {};
+  return Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+    kind,
+    normalizeClassificationBucket(value[kind])
+  ]));
+}
 
-  const buckets = [
-    normalized.classifiedEffectIds,
-    normalized.unresolvedEffectIds,
-    normalized.ignoredEffectIds
-  ];
+function normalizeIgnoredSource(ignoredSource = null) {
+  const value = ignoredSource && typeof ignoredSource === 'object' ? ignoredSource : {};
+  return Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+    kind,
+    normalizeIgnoredSourceEntries(value[kind] || [])
+  ]));
+}
+
+function coverageAnalysis(actualIds = [], declaredCoverage = null, ignoredEntries = []) {
+  const normalized = normalizeClassificationBucket(declaredCoverage);
+  const actual = asSortedStrings(actualIds);
+  const buckets = [normalized.classifiedIds, normalized.unresolvedIds, normalized.ignoredIds];
   const seen = new Map();
+
   for (const bucket of buckets) {
     for (const id of bucket) seen.set(id, (seen.get(id) || 0) + 1);
   }
 
-  const source = new Set(normalized.sourceEffectIds);
+  const actualSet = new Set(actual);
   const union = new Set(buckets.flat());
-  const overlaps = [...seen.entries()].filter(([, count]) => count > 1).map(([id]) => id).sort();
-  const missingEffectIds = [...source].filter((id) => !union.has(id)).sort();
-  const extraEffectIds = [...union].filter((id) => !source.has(id)).sort();
-  const ignoredProofById = new Map(normalizeIgnoredSourceEffects(ignoredSourceEffects)
-    .map((entry) => [entry.sourceEffectId, entry]));
-  const ignoredCertified = normalized.ignoredEffectIds.every((id) => {
+  const overlaps = [...seen.entries()]
+    .filter(([, count]) => count > 1)
+    .map(([id]) => id)
+    .sort();
+  const missingIds = [...actualSet].filter((id) => !union.has(id)).sort();
+  const extraIds = [...union].filter((id) => !actualSet.has(id)).sort();
+  const ignoredProofById = new Map(normalizeIgnoredSourceEntries(ignoredEntries)
+    .map((entry) => [entry.sourceOccurrenceId, entry]));
+  const ignoredCertified = normalized.ignoredIds.every((id) => {
     const proof = ignoredProofById.get(id);
     return proof
       && proof.justification.length > 0
@@ -85,17 +136,65 @@ function sourceEffectCoverageAnalysis(coverage = null, ignoredSourceEffects = []
   });
 
   return {
-    coverage: normalized,
+    actualIds: actual,
+    ...normalized,
     complete: overlaps.length === 0
-      && missingEffectIds.length === 0
-      && extraEffectIds.length === 0
-      && normalized.unresolvedEffectIds.length === 0
+      && missingIds.length === 0
+      && extraIds.length === 0
+      && normalized.unresolvedIds.length === 0
       && ignoredCertified,
     overlaps,
-    missingEffectIds,
-    extraEffectIds,
+    missingIds,
+    extraIds,
     ignoredCertified
   };
+}
+
+function sourceCoverageAnalysis(sourceSpell = null, sourceCoverage = null, ignoredSource = null) {
+  const actual = actualSourceCoverage(sourceSpell);
+  const declared = normalizeDeclaredSourceCoverage(sourceCoverage);
+  const ignored = normalizeIgnoredSource(ignoredSource);
+
+  if (!actual) {
+    return {
+      sourceBound: false,
+      fingerprint: '',
+      coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+        kind,
+        coverageAnalysis([], declared[kind], ignored[kind])
+      ])),
+      ignored
+    };
+  }
+
+  return {
+    sourceBound: true,
+    fingerprint: sourceCoverageFingerprint(sourceSpell),
+    coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+      kind,
+      coverageAnalysis(actual[kind], declared[kind], ignored[kind])
+    ])),
+    ignored
+  };
+}
+
+function freezeCoverage(coverage = {}) {
+  return Object.freeze(Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => {
+    const entry = coverage[kind] || coverageAnalysis();
+    return [kind, Object.freeze({
+      actualIds: Object.freeze([...entry.actualIds]),
+      classifiedIds: Object.freeze([...entry.classifiedIds]),
+      unresolvedIds: Object.freeze([...entry.unresolvedIds]),
+      ignoredIds: Object.freeze([...entry.ignoredIds])
+    })];
+  })));
+}
+
+function freezeIgnoredSource(ignored = {}) {
+  return Object.freeze(Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+    kind,
+    Object.freeze((ignored[kind] || []).map((entry) => Object.freeze(entry)))
+  ])));
 }
 
 function evidenceIsReviewable(entry, spellId) {
@@ -116,14 +215,72 @@ function ignoredSemanticIsCertified(entry) {
     && entry.certifiedIrrelevantToT1 === true;
 }
 
+function storedCoverageAnalysis(certification = {}) {
+  const sourceCoverage = certification.sourceCoverage && typeof certification.sourceCoverage === 'object'
+    ? certification.sourceCoverage
+    : {};
+  const ignoredSource = normalizeIgnoredSource(certification.ignoredSource);
+  return {
+    sourceBound: certification.sourceBound === true,
+    fingerprint: String(certification.sourceFingerprint || ''),
+    coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => {
+      const stored = sourceCoverage[kind] && typeof sourceCoverage[kind] === 'object'
+        ? sourceCoverage[kind]
+        : {};
+      return [kind, coverageAnalysis(
+        stored.actualIds || [],
+        stored,
+        ignoredSource[kind]
+      )];
+    }))
+  };
+}
+
+function sourceCoverageIsComplete(analysis) {
+  return analysis.sourceBound === true
+    && analysis.fingerprint.length > 0
+    && SOURCE_COVERAGE_KINDS.every((kind) => analysis.coverage[kind].complete);
+}
+
+function appendCoverageReasons(reasons, analysis) {
+  const configs = {
+    effects: {
+      prefix: 'SOURCE_EFFECT',
+      unresolved: 'SOURCE_EFFECTS_UNRESOLVED',
+      ignored: 'IGNORED_SOURCE_EFFECTS_UNCERTIFIED'
+    },
+    scripts: {
+      prefix: 'SOURCE_SCRIPT',
+      unresolved: 'SOURCE_SCRIPTS_UNRESOLVED',
+      ignored: 'IGNORED_SOURCE_SCRIPTS_UNCERTIFIED'
+    },
+    states: {
+      prefix: 'SOURCE_STATE',
+      unresolved: 'SOURCE_STATES_UNRESOLVED',
+      ignored: 'IGNORED_SOURCE_STATES_UNCERTIFIED'
+    }
+  };
+
+  for (const kind of SOURCE_COVERAGE_KINDS) {
+    const entry = analysis.coverage[kind];
+    const config = configs[kind];
+    if (entry.missingIds.length) reasons.push(`${config.prefix}_COVERAGE_INCOMPLETE`);
+    if (entry.extraIds.length) reasons.push(`${config.prefix}_COVERAGE_EXTRA`);
+    if (entry.overlaps.length) reasons.push(`${config.prefix}_COVERAGE_OVERLAP`);
+    if (entry.unresolvedIds.length) reasons.push(config.unresolved);
+    if (!entry.ignoredCertified) reasons.push(config.ignored);
+  }
+}
+
 export function createPlannerSourceCertification({
   spellId,
+  sourceSpell = null,
   evidence = [],
   certifiedSemantics = [],
   unresolvedSemantics = [],
   ignoredSemantics = [],
-  sourceEffectCoverage = null,
-  ignoredSourceEffects = [],
+  sourceCoverage = null,
+  ignoredSource = null,
   criticalSemantics = 'IMMEDIATE_DAMAGE_ONLY'
 } = {}) {
   const id = String(spellId || '').trim();
@@ -133,8 +290,7 @@ export function createPlannerSourceCertification({
   const normalizedCertified = asSortedStrings(certifiedSemantics);
   const normalizedUnresolved = asSortedStrings(unresolvedSemantics);
   const normalizedIgnored = normalizeIgnoredSemantics(ignoredSemantics);
-  const normalizedIgnoredSourceEffects = normalizeIgnoredSourceEffects(ignoredSourceEffects);
-  const coverageAnalysis = sourceEffectCoverageAnalysis(sourceEffectCoverage, normalizedIgnoredSourceEffects);
+  const coverageAnalysis = sourceCoverageAnalysis(sourceSpell, sourceCoverage, ignoredSource);
   const reviewableEvidence = normalizedEvidence.length > 0
     && normalizedEvidence.every((entry) => evidenceIsReviewable(entry, id));
   const evidenceCoverageComplete = evidenceCoversCertifiedSemantics(normalizedEvidence, normalizedCertified);
@@ -144,11 +300,16 @@ export function createPlannerSourceCertification({
     && normalizedCertified.length > 0
     && normalizedUnresolved.length === 0
     && ignoredAreCertified
-    && coverageAnalysis.complete;
+    && sourceCoverageIsComplete(coverageAnalysis);
 
   return Object.freeze({
     schemaVersion: PlannerSourceCertificationSchemaVersion,
     spellId: id,
+    sourceSpellId: sourceSpell && sourceSpell.id !== undefined && sourceSpell.id !== null
+      ? String(sourceSpell.id)
+      : null,
+    sourceBound: coverageAnalysis.sourceBound,
+    sourceFingerprint: coverageAnalysis.fingerprint,
     sourceComplete,
     sourceSemanticStatus: sourceComplete
       ? SpellSemanticCertificationStatus.CERTIFIED
@@ -157,15 +318,8 @@ export function createPlannerSourceCertification({
     certifiedSemantics: normalizedCertified,
     unresolvedSemantics: normalizedUnresolved,
     ignoredSemantics: normalizedIgnored.map((entry) => Object.freeze(entry)),
-    sourceEffectCoverage: coverageAnalysis.coverage
-      ? Object.freeze({
-          sourceEffectIds: Object.freeze([...coverageAnalysis.coverage.sourceEffectIds]),
-          classifiedEffectIds: Object.freeze([...coverageAnalysis.coverage.classifiedEffectIds]),
-          unresolvedEffectIds: Object.freeze([...coverageAnalysis.coverage.unresolvedEffectIds]),
-          ignoredEffectIds: Object.freeze([...coverageAnalysis.coverage.ignoredEffectIds])
-        })
-      : null,
-    ignoredSourceEffects: normalizedIgnoredSourceEffects.map((entry) => Object.freeze(entry)),
+    sourceCoverage: freezeCoverage(coverageAnalysis.coverage),
+    ignoredSource: freezeIgnoredSource(coverageAnalysis.ignored),
     evidence: normalizedEvidence.map((entry) => Object.freeze(entry))
   });
 }
@@ -197,19 +351,17 @@ export function validatePlannerSourceCertification(spellId, sourceCertification 
   const ignoredSemantics = normalizeIgnoredSemantics(certification.ignoredSemantics || []);
   if (!ignoredSemantics.every(ignoredSemanticIsCertified)) reasons.push('IGNORED_SEMANTICS_UNCERTIFIED');
 
-  const coverageAnalysis = sourceEffectCoverageAnalysis(
-    certification.sourceEffectCoverage,
-    certification.ignoredSourceEffects || []
-  );
-  if (!coverageAnalysis.coverage || !coverageAnalysis.coverage.sourceEffectIds.length) {
-    reasons.push('SOURCE_EFFECT_COVERAGE_MISSING');
+  const coverageAnalysis = storedCoverageAnalysis(certification);
+  if (!coverageAnalysis.sourceBound || !coverageAnalysis.fingerprint) {
+    reasons.push('SOURCE_TRUTH_MISSING');
   } else {
-    if (coverageAnalysis.missingEffectIds.length) reasons.push('SOURCE_EFFECT_COVERAGE_INCOMPLETE');
-    if (coverageAnalysis.extraEffectIds.length) reasons.push('SOURCE_EFFECT_COVERAGE_EXTRA');
-    if (coverageAnalysis.overlaps.length) reasons.push('SOURCE_EFFECT_COVERAGE_OVERLAP');
-    if (coverageAnalysis.coverage.unresolvedEffectIds.length) reasons.push('SOURCE_EFFECTS_UNRESOLVED');
-    if (!coverageAnalysis.ignoredCertified) reasons.push('IGNORED_SOURCE_EFFECTS_UNCERTIFIED');
+    const expectedFingerprint = JSON.stringify(Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+      kind,
+      coverageAnalysis.coverage[kind].actualIds
+    ])));
+    if (coverageAnalysis.fingerprint !== expectedFingerprint) reasons.push('SOURCE_FINGERPRINT_MISMATCH');
   }
+  appendCoverageReasons(reasons, coverageAnalysis);
 
   if (certification.sourceComplete !== true
     || certification.sourceSemanticStatus !== SpellSemanticCertificationStatus.CERTIFIED) {
