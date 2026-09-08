@@ -20,6 +20,12 @@ function occurrenceValue(value) {
   return String(value);
 }
 
+function sourceSpellIdentity(sourceSpell = null) {
+  if (!sourceSpell || typeof sourceSpell !== 'object') return '';
+  if (sourceSpell.id === undefined || sourceSpell.id === null) return '';
+  return String(sourceSpell.id).trim();
+}
+
 export function sourceEffectOccurrenceIds(sourceSpell = {}) {
   return [
     ...(sourceSpell.effects || []).map((effect, index) => `normal:${index}:${occurrenceValue(effect?.effectId)}`),
@@ -40,12 +46,21 @@ export function sourceStateReferenceOccurrenceIds(sourceSpell = {}) {
   });
 }
 
+function fingerprintFromActual(sourceSpellId, actual = {}) {
+  return JSON.stringify({
+    spellId: String(sourceSpellId || ''),
+    effects: asSortedStrings(actual.effects || []),
+    scripts: asSortedStrings(actual.scripts || []),
+    states: asSortedStrings(actual.states || [])
+  });
+}
+
 export function sourceCoverageFingerprint(sourceSpell = null) {
   if (!sourceSpell || typeof sourceSpell !== 'object') return '';
-  return JSON.stringify({
-    effects: asSortedStrings(sourceEffectOccurrenceIds(sourceSpell)),
-    scripts: asSortedStrings(sourceBoundScriptOccurrenceIds(sourceSpell)),
-    states: asSortedStrings(sourceStateReferenceOccurrenceIds(sourceSpell))
+  return fingerprintFromActual(sourceSpellIdentity(sourceSpell), {
+    effects: sourceEffectOccurrenceIds(sourceSpell),
+    scripts: sourceBoundScriptOccurrenceIds(sourceSpell),
+    states: sourceStateReferenceOccurrenceIds(sourceSpell)
   });
 }
 
@@ -158,6 +173,7 @@ function sourceCoverageAnalysis(sourceSpell = null, sourceCoverage = null, ignor
   if (!actual) {
     return {
       sourceBound: false,
+      sourceSpellId: '',
       fingerprint: '',
       coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
         kind,
@@ -169,6 +185,7 @@ function sourceCoverageAnalysis(sourceSpell = null, sourceCoverage = null, ignor
 
   return {
     sourceBound: true,
+    sourceSpellId: sourceSpellIdentity(sourceSpell),
     fingerprint: sourceCoverageFingerprint(sourceSpell),
     coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
       kind,
@@ -222,6 +239,7 @@ function storedCoverageAnalysis(certification = {}) {
   const ignoredSource = normalizeIgnoredSource(certification.ignoredSource);
   return {
     sourceBound: certification.sourceBound === true,
+    sourceSpellId: String(certification.sourceSpellId || ''),
     fingerprint: String(certification.sourceFingerprint || ''),
     coverage: Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => {
       const stored = sourceCoverage[kind] && typeof sourceCoverage[kind] === 'object'
@@ -272,6 +290,24 @@ function appendCoverageReasons(reasons, analysis) {
   }
 }
 
+function coverageIdsEqual(left = [], right = []) {
+  return JSON.stringify(asSortedStrings(left)) === JSON.stringify(asSortedStrings(right));
+}
+
+function appendLiveSourceMismatchReasons(reasons, storedAnalysis, liveAnalysis) {
+  const configs = {
+    effects: 'SOURCE_EFFECT_COVERAGE_SOURCE_MISMATCH',
+    scripts: 'SOURCE_SCRIPT_COVERAGE_SOURCE_MISMATCH',
+    states: 'SOURCE_STATE_COVERAGE_SOURCE_MISMATCH'
+  };
+  for (const kind of SOURCE_COVERAGE_KINDS) {
+    if (!coverageIdsEqual(
+      storedAnalysis.coverage[kind].actualIds,
+      liveAnalysis.coverage[kind].actualIds
+    )) reasons.push(configs[kind]);
+  }
+}
+
 export function createPlannerSourceCertification({
   spellId,
   sourceSpell = null,
@@ -291,11 +327,14 @@ export function createPlannerSourceCertification({
   const normalizedUnresolved = asSortedStrings(unresolvedSemantics);
   const normalizedIgnored = normalizeIgnoredSemantics(ignoredSemantics);
   const coverageAnalysis = sourceCoverageAnalysis(sourceSpell, sourceCoverage, ignoredSource);
+  const sourceSpellId = sourceSpellIdentity(sourceSpell);
+  const sourceIdentityMatches = coverageAnalysis.sourceBound && sourceSpellId === id;
   const reviewableEvidence = normalizedEvidence.length > 0
     && normalizedEvidence.every((entry) => evidenceIsReviewable(entry, id));
   const evidenceCoverageComplete = evidenceCoversCertifiedSemantics(normalizedEvidence, normalizedCertified);
   const ignoredAreCertified = normalizedIgnored.every(ignoredSemanticIsCertified);
-  const sourceComplete = reviewableEvidence
+  const sourceComplete = sourceIdentityMatches
+    && reviewableEvidence
     && evidenceCoverageComplete
     && normalizedCertified.length > 0
     && normalizedUnresolved.length === 0
@@ -305,9 +344,7 @@ export function createPlannerSourceCertification({
   return Object.freeze({
     schemaVersion: PlannerSourceCertificationSchemaVersion,
     spellId: id,
-    sourceSpellId: sourceSpell && sourceSpell.id !== undefined && sourceSpell.id !== null
-      ? String(sourceSpell.id)
-      : null,
+    sourceSpellId: sourceSpellId || null,
     sourceBound: coverageAnalysis.sourceBound,
     sourceFingerprint: coverageAnalysis.fingerprint,
     sourceComplete,
@@ -324,7 +361,7 @@ export function createPlannerSourceCertification({
   });
 }
 
-export function validatePlannerSourceCertification(spellId, sourceCertification = null) {
+export function validatePlannerSourceCertification(spellId, sourceCertification = null, sourceSpell = null) {
   const id = String(spellId || '').trim();
   const certification = cloneValue(sourceCertification || {});
   const reasons = [];
@@ -333,6 +370,9 @@ export function validatePlannerSourceCertification(spellId, sourceCertification 
     reasons.push('SOURCE_CERTIFICATION_SCHEMA_MISSING');
   }
   if (!id || String(certification.spellId || '') !== id) reasons.push('SOURCE_CERTIFICATION_SPELL_ID_MISMATCH');
+  if (!certification.sourceSpellId || String(certification.sourceSpellId) !== id) {
+    reasons.push('SOURCE_SPELL_ID_MISMATCH');
+  }
 
   const evidence = normalizeEvidence(certification.evidence || []);
   if (!evidence.length || !evidence.every((entry) => evidenceIsReviewable(entry, id))) {
@@ -351,17 +391,38 @@ export function validatePlannerSourceCertification(spellId, sourceCertification 
   const ignoredSemantics = normalizeIgnoredSemantics(certification.ignoredSemantics || []);
   if (!ignoredSemantics.every(ignoredSemanticIsCertified)) reasons.push('IGNORED_SEMANTICS_UNCERTIFIED');
 
-  const coverageAnalysis = storedCoverageAnalysis(certification);
-  if (!coverageAnalysis.sourceBound || !coverageAnalysis.fingerprint) {
+  const storedAnalysis = storedCoverageAnalysis(certification);
+  if (!storedAnalysis.sourceBound || !storedAnalysis.fingerprint) {
     reasons.push('SOURCE_TRUTH_MISSING');
   } else {
-    const expectedFingerprint = JSON.stringify(Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
-      kind,
-      coverageAnalysis.coverage[kind].actualIds
-    ])));
-    if (coverageAnalysis.fingerprint !== expectedFingerprint) reasons.push('SOURCE_FINGERPRINT_MISMATCH');
+    const expectedStoredFingerprint = fingerprintFromActual(
+      storedAnalysis.sourceSpellId,
+      Object.fromEntries(SOURCE_COVERAGE_KINDS.map((kind) => [
+        kind,
+        storedAnalysis.coverage[kind].actualIds
+      ]))
+    );
+    if (storedAnalysis.fingerprint !== expectedStoredFingerprint) reasons.push('SOURCE_FINGERPRINT_MISMATCH');
   }
-  appendCoverageReasons(reasons, coverageAnalysis);
+  appendCoverageReasons(reasons, storedAnalysis);
+
+  if (!sourceSpell || typeof sourceSpell !== 'object') {
+    reasons.push('SOURCE_TRUTH_MISSING');
+  } else {
+    const liveSourceSpellId = sourceSpellIdentity(sourceSpell);
+    if (!liveSourceSpellId || liveSourceSpellId !== id) reasons.push('SOURCE_SPELL_ID_MISMATCH');
+
+    const liveAnalysis = sourceCoverageAnalysis(
+      sourceSpell,
+      certification.sourceCoverage,
+      certification.ignoredSource
+    );
+    if (certification.sourceFingerprint !== liveAnalysis.fingerprint) {
+      reasons.push('SOURCE_FINGERPRINT_MISMATCH');
+    }
+    appendLiveSourceMismatchReasons(reasons, storedAnalysis, liveAnalysis);
+    appendCoverageReasons(reasons, liveAnalysis);
+  }
 
   if (certification.sourceComplete !== true
     || certification.sourceSemanticStatus !== SpellSemanticCertificationStatus.CERTIFIED) {
