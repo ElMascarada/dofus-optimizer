@@ -15,6 +15,9 @@ import {
 } from '../js/combat/state.js';
 import {
   createPlannerSourceCertification,
+  sourceBoundScriptOccurrenceIds,
+  sourceEffectOccurrenceIds,
+  sourceStateReferenceOccurrenceIds,
   validatePlannerSourceCertification
 } from '../js/combat/source-certification.js';
 import {
@@ -37,16 +40,35 @@ function castLimitEffect(perTurn, perTarget = perTurn) {
 }
 
 function certification(spellId, semantics = ['damage', 'ap-cost', 'cast-limits', 'crit']) {
-  return createPlannerSourceCertification({
+  const sourceSpell = {
+    id: spellId,
+    effects: semantics.map((semantic) => ({ effectId: `fixture:${semantic}` })),
+    criticalEffects: [],
+    scripts: { bound: [] },
+    stateReferences: []
+  };
+  const sourceEffectIds = sourceEffectOccurrenceIds(sourceSpell);
+  const sourceCertification = createPlannerSourceCertification({
     spellId,
+    sourceSpell,
     certifiedSemantics: semantics,
+    sourceCoverage: {
+      effects: {
+        classifiedIds: sourceEffectIds,
+        unresolvedIds: [],
+        ignoredIds: []
+      },
+      scripts: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] },
+      states: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] }
+    },
     evidence: [{
       source: 'fixture:certified-t1-source',
       spellId,
-      proof: 'Fixture explicitly declares the complete T1-relevant source semantics used by this test.',
+      proof: 'Fixture binds occurrence coverage to its real source entry and separately proves the T1 spell-level semantics.',
       semantics
     }]
   });
+  return { sourceSpell, sourceCertification };
 }
 
 function attack({ id, name, apCost, damage, critDamage = damage, baseCritPct = 0, perTurn = 99, perTarget = perTurn }) {
@@ -60,7 +82,7 @@ function attack({ id, name, apCost, damage, critDamage = damage, baseCritPct = 0
     hits: [{ element: 'earth', normal: [damage, damage], crit: [critDamage, critDamage] }]
   };
   const effects = [damageEffect(`${id}:damage`), castLimitEffect(perTurn, perTarget)];
-  return { spell, effects, sourceCertification: certification(id) };
+  return { spell, effects, ...certification(id) };
 }
 
 function buff({ id, name, apCost, power, perTurn = 1 }) {
@@ -76,7 +98,7 @@ function buff({ id, name, apCost, power, perTurn = 1 }) {
   return {
     spell,
     effects,
-    sourceCertification: certification(id, ['buff:power', 'ap-cost', 'cast-limits', 'crit:no-state-change'])
+    ...certification(id, ['buff:power', 'ap-cost', 'cast-limits', 'crit:no-state-change'])
   };
 }
 
@@ -126,7 +148,7 @@ function bruteForceOracle({ initialState, entries, stats = {}, targetId = 'targe
 
 test('source certification is positive only with structured, spell-bound reviewable evidence', () => {
   const positive = certification('spell-certified');
-  assert.equal(validatePlannerSourceCertification('spell-certified', positive).eligible, true);
+  assert.equal(validatePlannerSourceCertification('spell-certified', positive.sourceCertification, positive.sourceSpell).eligible, true);
 
   const nakedClaim = {
     spellId: 'spell-certified',
@@ -139,14 +161,48 @@ test('source certification is positive only with structured, spell-bound reviewa
   assert.equal(negative.eligible, false);
   assert.ok(negative.reasons.includes('SOURCE_PROOF_MISSING'));
   assert.ok(negative.reasons.includes('SOURCE_CERTIFICATION_SCHEMA_MISSING'));
+  assert.ok(negative.reasons.includes('SOURCE_TRUTH_MISSING'));
+});
+
+test('certified planner rejects a self-consistent certification when live source is missing', () => {
+  const entry = attack({ id: 'missing-live-source', name: 'Missing Source', apCost: 2, damage: 25, perTurn: 1 });
+  delete entry.sourceSpell;
+  const eligibility = certifiedT1SpellEligibility(entry);
+  assert.equal(eligibility.eligible, false);
+  assert.ok(eligibility.reasons.includes('SOURCE_TRUTH_MISSING'));
+});
+
+test('certified planner accepts certification only with the matching live source', () => {
+  const entry = attack({ id: 'matching-live-source', name: 'Matching Source', apCost: 2, damage: 25, perTurn: 1 });
+  const eligibility = certifiedT1SpellEligibility(entry);
+  assert.equal(eligibility.eligible, true);
 });
 
 test('runtime-supported damage is excluded when source semantics remain unresolved', () => {
   const entry = attack({ id: 'spell-unresolved', name: 'Unresolved', apCost: 2, damage: 50, perTurn: 2 });
+  const sourceSpell = {
+    id: entry.spell.id,
+    effects: [{ effectId: 'damage' }, { effectId: 'secondary-trigger' }],
+    criticalEffects: [],
+    scripts: { bound: [] },
+    stateReferences: []
+  };
+  const sourceEffectIds = sourceEffectOccurrenceIds(sourceSpell);
+  entry.sourceSpell = sourceSpell;
   entry.sourceCertification = createPlannerSourceCertification({
     spellId: entry.spell.id,
+    sourceSpell,
     certifiedSemantics: ['damage', 'ap-cost'],
     unresolvedSemantics: ['secondary-trigger'],
+    sourceCoverage: {
+      effects: {
+        classifiedIds: [sourceEffectIds[0]],
+        unresolvedIds: [sourceEffectIds[1]],
+        ignoredIds: []
+      },
+      scripts: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] },
+      states: { classifiedIds: [], unresolvedIds: [], ignoredIds: [] }
+    },
     evidence: [{
       source: 'fixture:partial-source',
       spellId: entry.spell.id,
@@ -193,7 +249,7 @@ test('cooldown semantics prevent a second same-turn cast even when AP and cast l
     status: SpellEffectSemanticStatus.SUPPORTED,
     intervalTurns: 2
   });
-  entry.sourceCertification = certification(entry.spell.id, ['damage', 'ap-cost', 'cast-limits', 'cooldown', 'crit']);
+  Object.assign(entry, certification(entry.spell.id, ['damage', 'ap-cost', 'cast-limits', 'cooldown', 'crit']));
 
   const result = planCertifiedT1({
     initialState: createCombatState({ baseAp: 5, currentAp: 5 }),
@@ -261,13 +317,35 @@ test('real priority Iop spells remain source-unresolved and cannot enter the cer
     assert.equal(source.runtimeRepresentation.sourceTruthConsumedByRuntime, false);
     assert.ok(source.unresolvedReasons.length > 0, `expected exact blocker for ${name}`);
 
+    const sourceEffectIds = sourceEffectOccurrenceIds(source);
+    const sourceScriptIds = sourceBoundScriptOccurrenceIds(source);
+    const sourceStateIds = sourceStateReferenceOccurrenceIds(source);
+    const sourceIdentity = String(runtime.ankamaId);
     const partialCertification = createPlannerSourceCertification({
-      spellId: runtime.id,
+      spellId: sourceIdentity,
+      sourceSpell: source,
       certifiedSemantics: ['runtime-catalog-presence'],
       unresolvedSemantics: source.unresolvedReasons,
+      sourceCoverage: {
+        effects: {
+          classifiedIds: [],
+          unresolvedIds: sourceEffectIds,
+          ignoredIds: []
+        },
+        scripts: {
+          classifiedIds: [],
+          unresolvedIds: sourceScriptIds,
+          ignoredIds: []
+        },
+        states: {
+          classifiedIds: [],
+          unresolvedIds: sourceStateIds,
+          ignoredIds: []
+        }
+      },
       evidence: [{
         source: 'data/normalized/spell-source-truth.json',
-        spellId: runtime.id,
+        spellId: sourceIdentity,
         proof: `Ankama spell ${ankamaId} (${name}) is preserved but explicitly source-unresolved on this base.`,
         semantics: ['runtime-catalog-presence']
       }]
@@ -280,7 +358,12 @@ test('real priority Iop spells remain source-unresolved and cannot enter the cer
           status: SpellEffectSemanticStatus.SUPPORTED,
           stats: {}
         }];
-    const eligibility = certifiedT1SpellEligibility({ spell: runtime, effects, sourceCertification: partialCertification });
+    const eligibility = certifiedT1SpellEligibility({
+      spell: runtime,
+      effects,
+      sourceCertification: partialCertification,
+      sourceSpell: source
+    });
     assert.equal(eligibility.eligible, false, `${name} must not be planner-certified`);
     assert.ok(eligibility.reasons.includes('SOURCE_SEMANTICS_UNRESOLVED'));
   }

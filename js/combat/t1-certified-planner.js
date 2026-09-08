@@ -70,17 +70,34 @@ function runtimeShapeReasons(spell, effects) {
   return reasons;
 }
 
-function plannerEntry(raw, sourceCertifications = {}) {
-  const spell = raw?.spell || raw;
-  const spellId = String(spell?.id || '');
-  const effects = normalizeSpellEffectSemantics(raw?.effects || spell?.plannerEffects || spell?.effects || []);
-  const sourceCertification = raw?.sourceCertification || sourceCertifications?.[spellId] || null;
-  return { spell, spellId, effects, sourceCertification };
+function canonicalSourceSpellId(spell = {}) {
+  const value = spell?.ankamaId ?? spell?.id ?? '';
+  return String(value || '');
 }
 
-export function certifiedT1SpellEligibility(raw, sourceCertifications = {}) {
-  const entry = plannerEntry(raw, sourceCertifications);
-  const sourceProof = validatePlannerSourceCertification(entry.spellId, entry.sourceCertification);
+function plannerEntry(raw, sourceCertifications = {}, sourceSpells = {}) {
+  const spell = raw?.spell || raw;
+  const spellId = String(spell?.id || '');
+  const sourceSpellId = canonicalSourceSpellId(spell);
+  const effects = normalizeSpellEffectSemantics(raw?.effects || spell?.plannerEffects || spell?.effects || []);
+  const sourceCertification = raw?.sourceCertification
+    || sourceCertifications?.[sourceSpellId]
+    || sourceCertifications?.[spellId]
+    || null;
+  const sourceSpell = raw?.sourceSpell
+    || sourceSpells?.[sourceSpellId]
+    || sourceSpells?.[spellId]
+    || null;
+  return { spell, spellId, sourceSpellId, effects, sourceCertification, sourceSpell };
+}
+
+export function certifiedT1SpellEligibility(raw, sourceCertifications = {}, sourceSpells = {}) {
+  const entry = plannerEntry(raw, sourceCertifications, sourceSpells);
+  const sourceProof = validatePlannerSourceCertification(
+    entry.sourceSpellId,
+    entry.sourceCertification,
+    entry.sourceSpell
+  );
   const officialGate = certifiedPlannerSpellEligibility({
     effects: entry.effects,
     sourceCertification: entry.sourceCertification || {}
@@ -186,6 +203,7 @@ export function planCertifiedT1({
   initialState,
   spells = [],
   sourceCertifications = {},
+  sourceSpells = {},
   stats = {},
   availableAp = null,
   targetId = 'default'
@@ -195,7 +213,7 @@ export function planCertifiedT1({
   const eligible = [];
   const excluded = [];
   for (const raw of spells || []) {
-    const eligibility = certifiedT1SpellEligibility(raw, sourceCertifications);
+    const eligibility = certifiedT1SpellEligibility(raw, sourceCertifications, sourceSpells);
     if (eligibility.eligible) eligible.push(eligibility.entry);
     else excluded.push({
       spellId: eligibility.entry.spellId,
