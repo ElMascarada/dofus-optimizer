@@ -64,4 +64,6 @@ Les gates permanents sont :
 
 Les données et icônes ont une seule chaîne de synchronisation canonique : `.github/workflows/sync-dofus-data.yml`.
 
+Les tests des snapshots synchronisés vérifient le schéma source enrichi v2 et ses jointures de métadonnées, sans assimiler une jointure à une certification sémantique. La séparation source/runtime est protégée par une vérification de non-mutation du catalogue courant ; le snapshot runtime publié est déjà passé par `apply:curated`, dont la réapplication doit être idempotente.
+
 Aucun nouveau travail produit ne doit repartir d'un ancien checkpoint documentaire ou d'une branche historique : repartir de `main`, du code courant et de cette documentation canonique.

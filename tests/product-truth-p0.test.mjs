@@ -107,7 +107,9 @@ test('Flèche d\'Abolition keeps only normal-target damage lines from source tru
   assert.equal(rawHits.length, 6);
   assert.equal(normalTargetHits.length, 2);
   assert.equal(removedHits.length, 4);
-  assert.equal(runtime.hits.length, 6);
+  assert.equal(runtime.hits.length, 2);
+  assert.deepEqual(curated, runtime, 'published snapshot is already curated');
+  assert.deepEqual(applyCuratedSpellRules(curated), curated, 'curation is idempotent');
   assert.equal(curated.hits.length, 2);
   assert.deepEqual(curated.hits.map((hit) => hit.normal), normalTargetHits.map((effect) => [effect.diceNum, effect.diceSide]));
   assert.deepEqual(curated.hits.map((hit) => hit.crit), normalTargetCrits.map((effect) => [effect.diceNum, effect.diceSide]));
