@@ -53,9 +53,16 @@ function certification(review, source) {
   });
 }
 
-test('semantic pass 1 is limited to Pression and Concentration', () => {
-  assert.deepEqual(reviews.map((entry) => entry.spellId), [13106, 13123]);
+test('Iop Terre semantic review is limited to Pression, Concentration, Épée de Iop and Pugilat', () => {
+  assert.deepEqual(reviews.map((entry) => entry.spellId), [13106, 13123, 13125, 13146]);
 });
+
+const expectedOccurrenceCounts = new Map([
+  [13106, { effects: 4, scripts: 1, states: 0 }],
+  [13123, { effects: 4, scripts: 1, states: 0 }],
+  [13125, { effects: 2, scripts: 1, states: 0 }],
+  [13146, { effects: 6, scripts: 2, states: 0 }]
+]);
 
 for (const review of reviews) {
   const source = sourceTruth.spells.find((entry) => entry.id === review.spellId);
@@ -67,11 +74,15 @@ for (const review of reviews) {
     assert.deepEqual(review.effects.map((entry) => entry.sourceOccurrenceId), sourceEffectOccurrenceIds(source));
     assert.deepEqual(review.scripts.map((entry) => entry.sourceOccurrenceId), sourceBoundScriptOccurrenceIds(source));
     assert.deepEqual(review.states.map((entry) => entry.sourceOccurrenceId), sourceStateReferenceOccurrenceIds(source));
-    assert.equal(review.effects.length, 4);
-    assert.equal(review.scripts.length, 1);
+    const expected = expectedOccurrenceCounts.get(review.spellId);
+    assert.equal(review.effects.length, expected.effects);
+    assert.equal(review.scripts.length, expected.scripts);
+    assert.equal(review.states.length, expected.states);
     assert.deepEqual(source.stateReferences, []);
-    assert.equal(source.scripts.bound[0].scriptMetadata, null);
-    assert.equal(source.scripts.bound[0].metadataJoinStatus, 'missing');
+    for (const script of source.scripts.bound) {
+      assert.equal(script.scriptMetadata, null);
+      assert.equal(script.metadataJoinStatus, 'missing');
+    }
     for (const [index, entry] of review.effects.entries()) {
       const raw = [...source.effects, ...source.criticalEffects][index];
       assert.equal(entry.effectId, raw.effectId);
@@ -113,8 +124,6 @@ for (const review of reviews) {
         assert.equal(damage.status, 'SUPPORTED');
         assert.deepEqual(damage.range, [row.diceNum, row.diceSide]);
       }
-      // Each target-dependent range is evaluated in isolation, never added
-      // together or interpreted as proof of which target receives it.
       const projected = { hits: [{ element: 'earth', normal: [effect.diceNum, effect.diceSide], crit: [crit.diceNum, crit.diceSide] }] };
       const plain = spellDamageBreakdown(projected, {});
       assert.deepEqual(plain.normal, projected.hits[0].normal);
@@ -172,4 +181,39 @@ test('Concentration existing first-hit curation is preserved without certifying 
   assert.equal(curated.hits.length, 1);
   assert.deepEqual(curated.hits[0], { element: 'earth', normal: [20, 24], crit: [25, 30] });
   assert.ok(reviews[1].effects.every((entry) => entry.status === 'UNRESOLVED'));
+});
+
+test('Épée de Iop keeps target-zone applicability and bound script 16119 unresolved', () => {
+  const review = reviews.find((entry) => entry.spellId === 13125);
+  const source = sourceTruth.spells.find((entry) => entry.id === 13125);
+  assert.deepEqual(source.effects.map((entry) => entry.effectId), [97]);
+  assert.deepEqual(source.criticalEffects.map((entry) => entry.effectId), [97]);
+  assert.deepEqual(source.effects.map((entry) => entry.targetMask), ['A,g']);
+  assert.deepEqual(source.criticalEffects.map((entry) => entry.targetMask), ['A,g']);
+  assert.equal(source.effects[0].zoneDescr.shape, 88);
+  assert.equal(source.effects[0].zoneDescr.param1, 3);
+  assert.deepEqual(review.scripts.map((entry) => entry.scriptId), [16119]);
+  assert.ok(review.scripts.every((entry) => entry.status === 'UNRESOLVED'));
+  assert.ok(review.effects.flatMap((entry) => entry.semantics).filter((entry) => entry.type === 'target').every((entry) => entry.status === 'UNRESOLVED'));
+});
+
+test('Pugilat effect 293, effect 406 TE trigger and bound scripts remain unresolved', () => {
+  const review = reviews.find((entry) => entry.spellId === 13146);
+  const source = sourceTruth.spells.find((entry) => entry.id === 13146);
+  assert.deepEqual(source.effects.map((entry) => entry.effectId), [97, 293, 406]);
+  assert.deepEqual(source.criticalEffects.map((entry) => entry.effectId), [97, 293, 406]);
+  assert.deepEqual(source.scripts.bound.map((entry) => entry.scriptId), [16122, 16123]);
+  const effect293 = review.effects.filter((entry) => entry.effectId === 293);
+  assert.equal(effect293.length, 2);
+  assert.ok(effect293.every((entry) => entry.status === 'UNRESOLVED'));
+  assert.ok(effect293.flatMap((entry) => entry.semantics).filter((entry) => entry.type === 'next_cast_modifier').every((entry) => entry.status === 'UNRESOLVED'));
+  const effect406 = review.effects.filter((entry) => entry.effectId === 406);
+  assert.equal(effect406.length, 2);
+  assert.ok(effect406.every((entry) => entry.status === 'UNRESOLVED'));
+  for (const entry of effect406) {
+    const trigger = entry.semantics.find((semantic) => semantic.type === 'trigger');
+    assert.equal(trigger.status, 'UNRESOLVED');
+    assert.equal(trigger.trigger, 'TE');
+  }
+  assert.ok(review.scripts.every((entry) => entry.status === 'UNRESOLVED'));
 });
