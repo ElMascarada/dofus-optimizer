@@ -27,23 +27,52 @@ function sortedValue(value) {
   return value;
 }
 
+function ignoredSourceEntries(review, kind) {
+  return review.ignoredSource?.[kind] || [];
+}
+
+function ignoredSourceIds(review, kind) {
+  return ignoredSourceEntries(review, kind).map((entry) => entry.sourceOccurrenceId);
+}
+
 function certification(review, source) {
-  const semantics = review.effects.flatMap((entry) => entry.semantics);
-  const supported = semantics.filter((entry) => entry.status === 'SUPPORTED');
+  const ignoredEffectIds = new Set(ignoredSourceIds(review, 'effects'));
+  const ignoredScriptIds = new Set(ignoredSourceIds(review, 'scripts'));
+  const ignoredSemanticIds = new Set((review.ignoredSemantics || []).map((entry) => entry.semantic));
+  const semantics = review.effects.flatMap((sourceEntry) => sourceEntry.semantics.map((semantic) => ({
+    ...semantic,
+    sourceOccurrenceId: sourceEntry.sourceOccurrenceId
+  })));
+  const relevantSemantics = semantics.filter((entry) =>
+    !ignoredEffectIds.has(entry.sourceOccurrenceId) && !ignoredSemanticIds.has(entry.id));
+  const supported = relevantSemantics.filter((entry) => entry.status === 'SUPPORTED');
+  const unresolvedScripts = review.scripts
+    .filter((entry) => entry.status === 'UNRESOLVED' && !ignoredScriptIds.has(entry.sourceOccurrenceId))
+    .map((entry) => entry.sourceOccurrenceId);
+
   return createPlannerSourceCertification({
     spellId: String(review.spellId),
     sourceSpell: source,
     certifiedSemantics: supported.map((entry) => entry.id),
     unresolvedSemantics: [
-      ...semantics.filter((entry) => entry.status === 'UNRESOLVED').map((entry) => entry.id),
-      ...review.scripts.map((entry) => entry.sourceOccurrenceId)
+      ...relevantSemantics.filter((entry) => entry.status === 'UNRESOLVED').map((entry) => entry.id),
+      ...unresolvedScripts
     ],
+    ignoredSemantics: review.ignoredSemantics || [],
+    ignoredSource: review.ignoredSource || {},
     criticalSemantics: review.criticalSemantics,
-    sourceCoverage: Object.fromEntries(['effects', 'scripts', 'states'].map((kind) => [kind, {
-      classifiedIds: review[kind].filter((entry) => entry.status === 'SUPPORTED').map((entry) => entry.sourceOccurrenceId),
-      unresolvedIds: review[kind].filter((entry) => entry.status === 'UNRESOLVED').map((entry) => entry.sourceOccurrenceId),
-      ignoredIds: []
-    }])),
+    sourceCoverage: Object.fromEntries(['effects', 'scripts', 'states'].map((kind) => {
+      const ignored = new Set(ignoredSourceIds(review, kind));
+      return [kind, {
+        classifiedIds: review[kind]
+          .filter((entry) => entry.status === 'SUPPORTED' && !ignored.has(entry.sourceOccurrenceId))
+          .map((entry) => entry.sourceOccurrenceId),
+        unresolvedIds: review[kind]
+          .filter((entry) => entry.status === 'UNRESOLVED' && !ignored.has(entry.sourceOccurrenceId))
+          .map((entry) => entry.sourceOccurrenceId),
+        ignoredIds: [...ignored]
+      }];
+    })),
     evidence: supported.map((entry) => ({
       source: 'data/normalized/spell-source-truth.json + js/dofus-spell-normalizer.js + js/spells.js',
       spellId: String(review.spellId),
@@ -83,6 +112,8 @@ for (const review of reviews) {
       assert.equal(script.scriptMetadata, null);
       assert.equal(script.metadataJoinStatus, 'missing');
     }
+    const ignoredEffects = new Set(ignoredSourceIds(review, 'effects'));
+    const ignoredSemantics = new Set((review.ignoredSemantics || []).map((entry) => entry.semantic));
     for (const [index, entry] of review.effects.entries()) {
       const raw = [...source.effects, ...source.criticalEffects][index];
       assert.equal(entry.effectId, raw.effectId);
@@ -94,7 +125,11 @@ for (const review of reviews) {
       assert.equal(entry.status, 'UNRESOLVED');
       for (const semantic of semantics) {
         assert.ok(semantic.proof.length > 0);
-        if (semantic.status === 'UNRESOLVED') assert.ok(semantic.missingRuntimePrimitive.length > 0);
+        if (semantic.status === 'UNRESOLVED'
+          && !ignoredEffects.has(entry.sourceOccurrenceId)
+          && !ignoredSemantics.has(semantic.id)) {
+          assert.ok(semantic.missingRuntimePrimitive.length > 0);
+        }
       }
       const target = semantics.find((semantic) => semantic.type === 'target');
       assert.equal(target.status, 'UNRESOLVED');
@@ -134,7 +169,7 @@ for (const review of reviews) {
     }
   });
 
-  test(`${review.name}: complete occurrence accounting does not certify an unresolved spell`, () => {
+  test(`${review.name}: complete occurrence accounting does not certify remaining relevant blockers`, () => {
     const proof = certification(review, source);
     assert.equal(proof.sourceComplete, false);
     assert.equal(proof.sourceSemanticStatus, 'UNRESOLVED');
@@ -143,12 +178,17 @@ for (const review of reviews) {
     assert.ok(validation.reasons.includes('SOURCE_EFFECTS_UNRESOLVED'));
     assert.ok(validation.reasons.includes('SOURCE_SCRIPTS_UNRESOLVED'));
     assert.ok(!validation.reasons.some((reason) => /COVERAGE_(INCOMPLETE|EXTRA|OVERLAP|SOURCE_MISMATCH)/.test(reason)));
-    for (const kind of ['effects', 'scripts', 'states']) assert.deepEqual(proof.sourceCoverage[kind].ignoredIds, []);
+    for (const kind of ['effects', 'scripts', 'states']) {
+      assert.deepEqual(proof.sourceCoverage[kind].ignoredIds, ignoredSourceIds(review, kind).map(String).sort());
+    }
+    const ignoredEffects = new Set(ignoredSourceIds(review, 'effects'));
     const eligibility = certifiedT1SpellEligibility({
       spell,
       sourceSpell: source,
       sourceCertification: proof,
-      effects: review.effects.flatMap((entry) => entry.semantics)
+      effects: review.effects
+        .filter((entry) => !ignoredEffects.has(entry.sourceOccurrenceId))
+        .flatMap((entry) => entry.semantics)
     });
     assert.equal(eligibility.eligible, false);
     assert.ok(eligibility.reasons.includes('UNRESOLVED_RUNTIME_EFFECTS'));
@@ -158,7 +198,42 @@ for (const review of reviews) {
   });
 }
 
-test('Pression erosion is identified by metadata but not reclassified as an irrelevant T1 effect', () => {
+test('certified irrelevant occurrences require explicit proof and remain accounted for', () => {
+  for (const review of reviews.filter((entry) => ignoredSourceIds(entry, 'effects').length > 0)) {
+    const source = sourceTruth.spells.find((entry) => entry.id === review.spellId);
+    const actual = new Set(sourceEffectOccurrenceIds(source));
+    const proof = certification(review, source);
+    for (const entry of ignoredSourceEntries(review, 'effects')) {
+      assert.ok(actual.has(entry.sourceOccurrenceId));
+      assert.ok(entry.justification.trim().length > 0);
+      assert.equal(entry.certifiedIrrelevantToT1, true);
+      assert.ok(proof.sourceCoverage.effects.ignoredIds.includes(entry.sourceOccurrenceId));
+      assert.ok(!proof.sourceCoverage.effects.unresolvedIds.includes(entry.sourceOccurrenceId));
+    }
+    const validation = validatePlannerSourceCertification(String(review.spellId), proof, source);
+    assert.ok(!validation.reasons.includes('IGNORED_SOURCE_EFFECTS_UNCERTIFIED'));
+  }
+
+  const pression = reviews.find((entry) => entry.spellId === 13106);
+  const source = sourceTruth.spells.find((entry) => entry.id === 13106);
+  for (const mutation of [
+    (entry) => { entry.justification = ''; },
+    (entry) => { entry.certifiedIrrelevantToT1 = false; }
+  ]) {
+    const broken = structuredClone(pression);
+    mutation(broken.ignoredSource.effects[0]);
+    const validation = validatePlannerSourceCertification('13106', certification(broken, source), source);
+    assert.ok(validation.reasons.includes('IGNORED_SOURCE_EFFECTS_UNCERTIFIED'));
+  }
+
+  const brokenSemantic = structuredClone(pression);
+  brokenSemantic.ignoredSemantics[0].justification = '';
+  assert.ok(validatePlannerSourceCertification('13106', certification(brokenSemantic, source), source)
+    .reasons.includes('IGNORED_SEMANTICS_UNCERTIFIED'));
+});
+
+test('Pression erosion is certified irrelevant without an erosion runtime primitive', () => {
+  const review = reviews.find((entry) => entry.spellId === 13106);
   const source = sourceTruth.spells.find((entry) => entry.id === 13106);
   const rows = [...source.effects, ...source.criticalEffects].filter((entry) => entry.effectId === 776);
   assert.equal(rows.length, 2);
@@ -168,19 +243,60 @@ test('Pression erosion is identified by metadata but not reclassified as an irre
     assert.equal(row.duration, 2);
     assert.equal(row.triggers, 'I');
   }
-  const erosion = reviews[0].effects.flatMap((entry) => entry.semantics).filter((entry) => entry.type === 'stat_modifier');
+  const erosion = review.effects.flatMap((entry) => entry.semantics).filter((entry) => entry.type === 'stat_modifier');
   assert.equal(erosion.length, 2);
   assert.ok(erosion.every((entry) => entry.status === 'UNRESOLVED'));
+  assert.ok(erosion.every((entry) => entry.relevantToPlan === false));
+  assert.ok(erosion.every((entry) => entry.certifiedIrrelevantToT1 === true));
+  assert.ok(erosion.every((entry) => !('missingRuntimePrimitive' in entry)));
+  assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:0:776', 'normal:0:776']);
+
+  const proof = certification(review, source);
+  assert.ok(!proof.unresolvedSemantics.some((id) => id.includes(':776:')));
+  assert.deepEqual(proof.sourceCoverage.effects.ignoredIds, ['critical:0:776', 'normal:0:776']);
+  assert.deepEqual(proof.sourceCoverage.effects.unresolvedIds, ['critical:1:97', 'normal:1:97']);
+  assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16115, 'UNRESOLVED']]);
 });
 
-test('Concentration existing first-hit curation is preserved without certifying source target masks', () => {
+test('Concentration invocation-only higher-damage occurrences are irrelevant without decoding mask letters', () => {
+  const review = reviews.find((entry) => entry.spellId === 13123);
   const source = sourceTruth.spells.find((entry) => entry.id === 13123);
   const spell = runtime.spells.find((entry) => entry.ankamaId === 13123);
   const curated = applyCuratedSpellRules(spell);
   assert.deepEqual(source.effects.map((entry) => entry.targetMask), ['L,M,l,m,c', 'J,j']);
+  assert.deepEqual(source.effects.map((entry) => [entry.diceNum, entry.diceSide]), [[20, 24], [30, 34]]);
+  assert.deepEqual(source.criticalEffects.map((entry) => [entry.diceNum, entry.diceSide]), [[25, 30], [37, 42]]);
+  assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:97', 'normal:1:97']);
+  assert.ok(ignoredSourceEntries(review, 'effects').every((entry) => /unique higher|higher/.test(entry.justification)));
+  assert.ok(ignoredSourceEntries(review, 'effects').every((entry) => entry.certifiedIrrelevantToT1 === true));
+
+  const proof = certification(review, source);
+  assert.deepEqual(proof.sourceCoverage.effects.ignoredIds, ['critical:1:97', 'normal:1:97']);
+  assert.deepEqual(proof.sourceCoverage.effects.unresolvedIds, ['critical:0:97', 'normal:0:97']);
+  assert.ok(!proof.unresolvedSemantics.some((id) => id.startsWith('normal:1:97:') || id.startsWith('critical:1:97:')));
   assert.equal(curated.hits.length, 1);
   assert.deepEqual(curated.hits[0], { element: 'earth', normal: [20, 24], crit: [25, 30] });
-  assert.ok(reviews[1].effects.every((entry) => entry.status === 'UNRESOLVED'));
+  assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16118, 'UNRESOLVED']]);
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), []);
+});
+
+test('unknown bound scripts cannot be silently moved into ignored source coverage', () => {
+  for (const spellId of [13106, 13123]) {
+    const review = reviews.find((entry) => entry.spellId === spellId);
+    const source = sourceTruth.spells.find((entry) => entry.id === spellId);
+    assert.ok(review.scripts.every((entry) => entry.status === 'UNRESOLVED'));
+    assert.deepEqual(ignoredSourceIds(review, 'scripts'), []);
+
+    const silentlyIgnored = structuredClone(review);
+    const script = silentlyIgnored.scripts[0];
+    silentlyIgnored.ignoredSource.scripts.push({
+      sourceOccurrenceId: script.sourceOccurrenceId,
+      justification: '',
+      certifiedIrrelevantToT1: false
+    });
+    const validation = validatePlannerSourceCertification(String(spellId), certification(silentlyIgnored, source), source);
+    assert.ok(validation.reasons.includes('IGNORED_SOURCE_SCRIPTS_UNCERTIFIED'));
+  }
 });
 
 test('Épée de Iop keeps target-zone applicability and bound script 16119 unresolved', () => {
