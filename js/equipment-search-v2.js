@@ -227,11 +227,13 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     }
     const dedupStates = [...dedup.values()];
     const pickLimit = pick === count - 1 ? finalLimit : intermediateLimit;
-    const diverseStates = keepEquipmentDiversity(dedupStates, pickLimit, {
-      policy: context.policy,
-      constraints: context.constraints,
-      bucketLimit: context.profile.search.groupBucketLimit
-    });
+    const diverseStates = count === 1
+      ? [...dedupStates].sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)))
+      : keepEquipmentDiversity(dedupStates, pickLimit, {
+          policy: context.policy,
+          constraints: context.constraints,
+          bucketLimit: context.profile.search.groupBucketLimit
+        });
 
     if (diagnostic && !diagnostic.firstLoss && witnessChoiceIds.size) {
       const compatible = (state) => state.items.length === pick + 1

@@ -389,7 +389,111 @@ test('later authoritative winner beats an earlier valid heuristic favorite', () 
   assert.equal(search.results[0].buildIdentity, winnerEvaluation.result.buildIdentity);
 });
 
-test('final group diversity preserves a low raw-rank specialist needed for a legal completion', () => {
+test('single-pick group exposes every candidate-pool item beyond the nominal group limit', () => {
+  const base = fixedCatalog();
+  const hats = Array.from({ length: 18 }, (_, index) => item(`single-pick-${String(index).padStart(2, '0')}`, 'hat', { earth: 500 - index }));
+  const items = withSlotVariants(base, 'hat', hats);
+  const requiredItemIds = base.filter((entry) => entry.slot !== 'hat').map((entry) => entry.id);
+  const profile = getSearchProfile('BALANCED');
+  const search = searchEquipmentArchitecturesV2({
+    items,
+    requiredItemIds,
+    syntheticOffense: { elements: ['earth'], profiles: ['large'] },
+    topN: 18,
+    searchProfile: profile
+  });
+  const hatBeam = search.diagnostics.trace.find((entry) => entry.stage === 'beam:hat');
+  const resultHatIds = new Set(search.results.flatMap((result) => result.items.filter((entry) => entry.slot === 'hat').map((entry) => entry.id)));
+
+  assert.equal(profile.search.groupChoiceLimits.hat, 12);
+  assert.equal(search.candidatePools.hat.length, 18);
+  assert.equal(hatBeam?.before, 18);
+  assert.equal(hatBeam?.count, 18);
+  assert.equal(search.diagnostics.completeStates, 18);
+  assert.equal(search.results.length, 18);
+  assert.deepEqual([...resultHatIds].sort(), hats.map((entry) => entry.id).sort());
+  console.log('SINGLE_PICK_INPUT_COUNT=18');
+  console.log('SINGLE_PICK_OUTPUT_COUNT=18');
+  console.log('NO_SINGLE_PICK_GROUP_TRIM=PASS');
+});
+
+test('single-pick bypass preserves rank-11 witness when specialist reservations would fill nominal capacity first', () => {
+  let base = fixedCatalog();
+  base = base.map((entry) => entry.slot === 'amulet'
+    ? {
+        ...entry,
+        setId: 'witness-set',
+        conditions: { kind: 'condition', stat: 'range', operator: 'gte', value: 1 }
+      }
+    : entry);
+
+  const high = [
+    item('high-ap-0', 'hat', { ap: 1 }),
+    item('high-ap-1', 'hat', { ap: 1 }),
+    item('high-crit-0', 'hat', { crit: 100 }),
+    item('high-crit-1', 'hat', { crit: 99 }),
+    item('high-damage-0', 'hat', { damage: 100 }),
+    item('high-damage-1', 'hat', { damage: 99 }),
+    item('high-damage-earth-0', 'hat', { damageEarth: 100 }),
+    item('high-damage-earth-1', 'hat', { damageEarth: 99 }),
+    item('high-earth-0', 'hat', { earth: 500 }),
+    item('high-earth-1', 'hat', { earth: 499 })
+  ];
+  const witness = item('a-witness', 'hat', {}, { setId: 'witness-set' });
+  const neutralSpecialists = Array.from({ length: 7 }, (_, index) => {
+    const stat = `neutralSpecialist${index}`;
+    return item(`z-neutral-${index}`, 'hat', { [stat]: 1 }, {
+      conditions: { kind: 'condition', stat, operator: 'gte', value: 0 }
+    });
+  });
+  const hats = [...high, witness, ...neutralSpecialists];
+  const items = withSlotVariants(base, 'hat', hats);
+  const sets = [{ id: 'witness-set', name: 'Witness Set', bonuses: { '2': { range: 1 } } }];
+  const requiredItemIds = base.filter((entry) => entry.slot !== 'hat').map((entry) => entry.id);
+  const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+  const profile = getSearchProfile('BALANCED');
+  const policy = createEquipmentCandidatePolicy({ items, sets, syntheticOffense, searchProfile: profile });
+  const rankedHats = hats
+    .map((entry) => policy.profileItem(entry))
+    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+  const witnessRawRank = rankedHats.findIndex((entry) => entry.item.id === witness.id) + 1;
+
+  const specialistSeen = new Set();
+  for (const statKey of policy.paretoKeys) {
+    const specialists = rankedHats
+      .filter((entry) => Number(entry.optimisticStats?.[statKey] || 0) > 0)
+      .sort((a, b) => Number(b.optimisticStats?.[statKey] || 0) - Number(a.optimisticStats?.[statKey] || 0)
+        || b.rankScore - a.rankScore
+        || String(a.item.id).localeCompare(String(b.item.id)))
+      .slice(0, Number(profile.search.groupSpecialistReservePerStat));
+    for (const entry of specialists) {
+      specialistSeen.add(String(entry.item.id));
+      if (specialistSeen.size >= Number(profile.search.groupChoiceLimits.hat)) break;
+    }
+    if (specialistSeen.size >= Number(profile.search.groupChoiceLimits.hat)) break;
+  }
+
+  assert.equal(witnessRawRank, 11);
+  assert.equal(specialistSeen.size, 12);
+  assert.equal(specialistSeen.has(witness.id), false);
+
+  const search = searchEquipmentArchitecturesV2({
+    items,
+    sets,
+    requiredItemIds,
+    syntheticOffense,
+    topN: 1,
+    searchProfile: profile
+  });
+  assert.equal(search.candidatePools.hat.length, 18);
+  assert.equal(search.diagnostics.completeStates, 18);
+  assert.equal(search.results.length, 1);
+  assert.equal(search.results[0].items.some((entry) => entry.id === witness.id), true);
+  console.log(`WITNESS_RAW_RANK=${witnessRawRank}`);
+  console.log('WITNESS_GROUP_PRESENT=YES');
+});
+
+test('final group diversity preserves a low raw-rank specialist in a genuine two-pick group', () => {
   let base = fixedCatalog();
   base = base.map((entry) => entry.slot === 'amulet'
     ? {
@@ -397,35 +501,45 @@ test('final group diversity preserves a low raw-rank specialist needed for a leg
         conditions: { kind: 'condition', stat: 'range', operator: 'gte', value: 1 }
       }
     : entry);
-
+  const rings = [];
+  for (let index = 0; index < 19; index++) rings.push(item(`raw-favorite-ring-${String(index).padStart(2, '0')}`, 'ring', { earth: 500 - index }));
+  const witness = item('range-specialist-ring', 'ring', { range: 1 });
+  rings.push(witness);
+  const items = [...base.filter((entry) => entry.slot !== 'ring'), ...rings];
+  const requiredItemIds = base.filter((entry) => entry.slot !== 'ring').map((entry) => entry.id);
   const profile = getSearchProfile('BALANCED');
-  const finalGroupLimit = Number(profile.search.groupChoiceLimits.hat);
-  const rawFavorites = [];
-  for (let index = 0; index < finalGroupLimit; index++) {
-    rawFavorites.push(item(`raw-favorite-${index}`, 'hat', { earth: 500 - index }));
-  }
-  const witness = item('range-specialist-witness', 'hat', { range: 1 });
-  const items = withSlotVariants(base, 'hat', [...rawFavorites, witness]);
   const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
   const policy = createEquipmentCandidatePolicy({ items, syntheticOffense, searchProfile: profile });
-  const rankedHats = items
-    .filter((entry) => entry.slot === 'hat')
-    .map((entry) => policy.profileItem(entry))
-    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
-  const witnessRawRank = rankedHats.findIndex((entry) => entry.item.id === witness.id) + 1;
-
-  assert.ok(witnessRawRank > finalGroupLimit);
+  const rankedPairs = combinations(rings, 2)
+    .map((pair) => ({
+      pair,
+      rankScore: policy.rankStats(sumItemStats(pair)).rankScore,
+      key: pair.map((entry) => String(entry.id)).sort().join('|')
+    }))
+    .sort((a, b) => b.rankScore - a.rankScore || a.key.localeCompare(b.key));
+  const bestWitnessPair = rankedPairs.find((entry) => entry.pair.some((ring) => ring.id === witness.id));
+  const witnessRawRank = rankedPairs.findIndex((entry) => entry.key === bestWitnessPair.key) + 1;
   const oracle = exhaustiveOracle({ items, syntheticOffense, topN: 1 });
+
+  assert.equal(searchEquipmentArchitecturesV2 === undefined, false);
+  assert.equal(rings.length, 20);
+  assert.equal(rankedPairs.length, 190);
+  assert.ok(witnessRawRank > Number(profile.search.groupChoiceLimits.ring));
   assert.equal(oracle.length, 1);
   assert.equal(oracle[0].items.some((entry) => entry.id === witness.id), true);
 
   const search = searchEquipmentArchitecturesV2({
     items,
+    requiredItemIds,
     syntheticOffense,
     topN: 1,
     searchProfile: profile
   });
-  assert.ok(search.results.length > 0, 'final diversity selection must retain the only legal specialist lineage');
+  const ringBeam = search.diagnostics.trace.find((entry) => entry.stage === 'beam:ring');
+  assert.equal(search.candidatePools.ring.length, 20);
+  assert.equal(ringBeam?.before, Number(profile.search.groupChoiceLimits.ring));
+  assert.ok(search.results.length > 0, 'multi-pick diversity selection must retain the legal low-rank range lineage');
   assert.equal(search.results[0].buildIdentity, oracle[0].buildIdentity);
   assert.equal(search.results[0].items.some((entry) => entry.id === witness.id), true);
+  console.log('MULTI_PICK_FINAL_DIVERSITY_REGRESSION=PASS');
 });
