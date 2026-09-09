@@ -1,185 +1,159 @@
 # Contrat produit
 
-Ce document définit la **direction produit canonique**. Il peut être plus ambitieux que le runtime courant ; les écarts réels sont listés dans `PROJECT_STATE.md` et `docs/DOFUS_MODEL.md`.
+Ce document définit la **direction produit canonique active** de Dofus Optimizer à partir du pivot Equipment-First du 9 septembre 2026.
 
-## Objectif primaire
+L'ancien contrat combat-plan-first est conservé intégralement dans `docs/history/PRODUCT_CONTRACT-combat-plan-first-2026-09-09.md`. Il reste une trace historique valide du travail réalisé, mais ses objectifs classe/sorts/T1-T3 sont désormais **PARKED** et ne pilotent plus le chemin produit actif.
 
-Dofus Optimizer est un optimiseur **combat-plan-first**.
+## Objectif primaire actif
 
-> **Le stuff ne veut rien dire tout seul. Le résultat important est le meilleur tour offensif réellement exécutable.**
+Dofus Optimizer est un **optimiseur d'équipement**.
 
-L'ordre logique cible est :
+> **Trouver le meilleur équipement légal sous les contraintes utilisateur, puis classer les builds faisables avec des sondes offensives synthétiques indépendantes des classes et des sorts réels.**
 
-1. comprendre la vérité Dofus pertinente ;
-2. comprendre les sorts, passifs et interactions ;
-3. simuler l'état du combat ;
-4. construire les séquences réellement jouables ;
-5. maximiser le tour offensif demandé `Tn` ;
-6. rechercher les ressources, équipements, Dofus, trophées, compagnon, exos et FM qui permettent et maximisent ce plan sous contraintes.
+Flux produit actif cible :
 
-Aucune statistique ni aucun équipement n'a de valeur intrinsèque pour l'optimiseur. Sa valeur provient de son effet sur le meilleur plan de combat réalisable.
+1. lire les contraintes d'équipement de l'utilisateur ;
+2. ne conserver que les builds légaux qui satisfont toutes les contraintes ;
+3. mesurer chaque build avec les profils offensifs synthétiques demandés ;
+4. maximiser d'abord le plus faible score demandé ;
+5. à égalité, maximiser la moyenne ;
+6. à nouvelle égalité, appliquer un tie-break canonique déterministe.
 
-## Sémantique exacte de l'objectif Tn
+L'identité de classe, les sorts réels, les rotations, T1/T2/T3, la préparation de combat, l'état de combat et la sémantique source des sorts ne font pas partie de l'entrée du produit actif.
 
-### T1
+## Invariant de recherche
 
-Le score est le dégât du T1. Il n'existe pas de tour de préparation antérieur.
-
-### T2
-
-Le score est **uniquement le dégât du T2**.
-
-T1 est un tour de préparation. Ses dégâts ne sont pas additionnés au score et peuvent parfaitement être nuls si cela améliore davantage T2. T1 peut notamment :
-
-- lancer un buff de caractéristiques/puissance ;
-- préparer un sort dont le lancer suivant est renforcé ;
-- poser/consommer un état utile au T2 ;
-- charger une mécanique telle qu'Accumulation/Fureur ;
-- produire des critiques utiles à une mécanique de Dofus telle que Turquoise ;
-- engager un cooldown, une charge ou un compteur si cela améliore T2.
-
-### T3
-
-Le score est **uniquement le dégât du T3**.
-
-T1 et T2 sont des tours de préparation. Le moteur doit pouvoir choisir leurs actions exclusivement pour maximiser l'état offensif disponible au T3. Leurs dégâts propres ne sont pas ajoutés au score T3.
-
-Le même principe doit pouvoir s'étendre plus tard à un horizon `Tn` quelconque : les tours `T1..T(n-1)` servent le tour cible.
-
-Les modes d'agrégation multi-tour (`sum`, `average`, `min`, `constant`) peuvent exister comme objectifs distincts, mais ils ne redéfinissent pas la sémantique des objectifs ciblés `T1/T2/T3` ci-dessus.
-
-## État de combat à conserver
-
-Un planner complet doit être capable de faire transiter au minimum les informations pertinentes suivantes entre actions et tours :
-
-- PA/PM disponibles ;
-- buffs/debuffs et durées ;
-- états ;
-- cooldowns/intervalles de relance ;
-- limites de lancer ;
-- charges et compteurs ;
-- améliorations du prochain lancer d'un sort ;
-- critiques réalisés et compteurs dépendants des critiques ;
-- effets différés ;
-- bonus de dommages finaux et leur ordre d'application ;
-- passifs/Dofus/trophées/compagnons actifs ;
-- toute autre mécanique certifiée qui peut changer la meilleure séquence.
-
-L'historique nécessaire à une mécanique doit être représenté explicitement plutôt que reconstruit par heuristique.
-
-## Scénario offensif de référence
-
-Pour l'optimisation de plafond offensif par défaut :
-
-- cible unique **ennemie normale** (pas une invocation) ;
-- cible passive ;
-- `0 %` de résistances ;
-- aucun comportement adverse à simuler ;
-- placement supposé compatible avec le plan candidat : mêlée si nécessaire, distance si nécessaire ;
-- objectif : maximiser les dégâts du tour cible tout en respectant les vraies règles des sorts et ressources.
-
-Une mécanique source ne bloque la certification offensive que si elle peut changer le score ou la séquence optimale dans ce scénario : dégâts du tour cible, légalité d'action, PA/PM disponibles, limites de lancer/cooldowns, buffs/debuffs offensifs, charges/compteurs, dégâts futurs pertinents pour `Tn`, états requis, ordre des effets ou toute autre propriété pouvant modifier le meilleur plan.
-
-La certification reste **fail-closed** : une mécanique inconnue susceptible d'avoir un tel impact reste `UNRESOLVED`. En revanche, une mécanique suffisamment comprise pour démontrer qu'elle ne peut pas affecter cet objectif peut être conservée dans la couverture source comme `ignoredSource` / `ignoredSemantics`, avec justification explicite et `certifiedIrrelevantToT1=true`. L'ignorance n'est jamais une preuve d'irrélevance.
-
-Pour le scénario de référence, l'érosion est hors objectif : elle ne contribue pas au score de dégâts offensifs et n'impose donc pas de modèle runtime d'érosion/max-health pour certifier un sort autrement utilisable. De même, une différence de dégâts démontrée comme exclusivement applicable aux invocations est hors scénario puisque la cible de référence est une ennemie normale. Cela n'autorise ni à ignorer une branche de cible non comprise, ni à déduire la signification d'un masque depuis ses seules lettres.
-
-La classe n'est pas étiquetée globalement « mêlée » ou « distance » : c'est le **plan candidat** qui détermine son contexte de frappe. Les choix de compagnon associés au contexte mêlée/distance doivent être dérivés de données certifiées. L'acceptation produit prévoit notamment un arbitrage entre les options de compagnon de type Porécypithon pour un plan distance et Mate pour un plan mêlée ; leurs valeurs exactes doivent être vérifiées dans la source courante avant toute règle runtime.
-
-## PA / PM : ressources, pas objectifs
-
-Le jeu et le produit travaillent autour d'un plafond permanent de référence de `12 PA / 6 PM`, sous réserve des règles de jeu certifiées.
-
-Le moteur ne doit pas maximiser PA/PM pour eux-mêmes :
-
-- si l'utilisateur impose `12 PA`, c'est une contrainte dure ;
-- si l'utilisateur autorise `6 PM` mais n'en a pas besoin pour le plan, un build à `5 PM` peut gagner s'il produit davantage de dégâts ;
-- un PA/PM supplémentaire n'a de valeur que s'il améliore le plan ou satisfait une contrainte.
-
-Les bonus temporaires de combat restent distincts des minima permanents d'équipement lorsqu'une règle l'exige.
-
-## Faisabilité avant qualité
-
-Les minima utilisateur sont des contraintes dures.
-
-Invariant :
+Les minima utilisateur restent des contraintes dures.
 
 > **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**
 
-Si au moins un build légal respecte toutes les contraintes minimales raisonnables, la recherche ne doit pas échouer uniquement parce qu'une heuristique de beam, ranking, Pareto, préfiltrage ou diversification a éliminé ce build.
+Le score synthétique ne crée jamais la faisabilité et ne peut jamais remplacer les règles de légalité.
 
-Une fois la faisabilité assurée, le moteur optimise le plan combat demandé.
+Ordre futur obligatoire de la recherche :
 
-## Contrat cible de forgemagie
+1. satisfaire toutes les contraintes d'équipement ;
+2. parmi les candidats faisables, maximiser le **minimum** des scores synthétiques demandés ;
+3. à égalité, maximiser leur **moyenne** ;
+4. appliquer un tie-break déterministe.
 
-Le build possède **9 emplacements d'équipement éligibles à la FM spéciale** (coiffe, cape, amulette, deux anneaux, ceinture, bottes, arme, bouclier).
+La PR Equipment-First Synthetic Offense Core V1 n'intègre pas encore ce ranking dans la recherche.
 
-Règle cible : un seul bonus spécial par objet éligible.
+## Sondes offensives synthétiques
 
-- aucun Exo PA/PM utilisé → jusqu'à 9 emplacements offensifs libres ;
-- Exo PA seul → 8 ;
-- Exo PM seul → 8 ;
-- Exo PA + Exo PM → 7.
+Les sondes synthétiques sont des **métriques internes de qualité d'équipement**. Elles ne sont pas des sorts Dofus et ne doivent jamais être présentées comme des sorts sélectionnables.
 
-Les cases d'interface « Autoriser Exo PA/PM » donnent une **permission**, pas une obligation. Le moteur doit pouvoir refuser un exo si l'emplacement libéré pour une FM offensive améliore davantage le plan.
+Orientations élémentaires : `earth`, `fire`, `water`, `air`, `multi`.
 
-Domaine offensif cible à certifier :
+- mono : 1 à 3 éléments sélectionnés, de poids égal ;
+- plus de 3 éléments mono : invalide ;
+- `multi` est exclusif ;
+- `multi` représente exactement quatre lignes, une Terre, une Feu, une Eau et une Air.
 
-- `+1 % dommages sorts` ;
-- `+2 % dommages sorts` ;
-- ou `+8 dommages critiques` lorsque c'est plus rentable **et uniquement si l'objet ne possède pas déjà naturellement cette ligne**, sous réserve de validation des règles de jeu exactes avant activation.
+Profils :
 
-L'optimiseur choisit la distribution. L'utilisateur ne doit pas avoir à deviner lui-même quelle FM maximise la rotation.
+| Profil | PA nominal | Base mono normale | Base MULTI normale | Crit de base |
+| --- | ---: | ---: | ---: | ---: |
+| SMALL | 2 | 20 | 4 × 5 | 15 % |
+| MEDIUM | 3 | 30 | 4 × 7,5 | 20 % |
+| LARGE | 4 | 40 | 4 × 10 | 25 % |
 
-## Vérité des sorts et passifs
+Invariant : **1 PA = 10 dégâts de base synthétiques normaux** en mono comme en MULTI.
 
-Une mécanique inconnue n'est pas équivalente à « aucune mécanique ».
+La base critique synthétique vaut `base normale × 1,25`. Les valeurs sont continues : la ligne `7,5` de MEDIUM MULTI ne doit jamais être arrondie pour imiter un sort réel.
 
-Le moteur doit distinguer :
+## Sémantique des statistiques offensives
 
-- la donnée source disponible ;
-- l'interprétation structurée ;
-- la mécanique réellement supportée par le runtime ;
-- la mécanique restant non résolue.
+Le scoring synthétique réutilise le vocabulaire de stats normalisé du repository :
 
-Il est interdit de présenter un sort comme complètement compris si une sémantique pertinente reste non résolue. Il est également interdit d'inventer une règle depuis un nom, un texte ou une ressemblance sans preuve/certification.
+- caractéristiques : `earth`, `fire`, `water`, `air` ;
+- Puissance : `power` ;
+- dommage fixe générique : `damage` ;
+- dommages fixes élémentaires : `damageEarth`, `damageFire`, `damageWater`, `damageAir` ;
+- Crit : `crit` ;
+- Dommages Critiques : `critDamage`.
 
-Un agent IA peut assister l'interprétation **offline**, mais doit pouvoir conclure `MECHANIC_UNRESOLVED`. Une sortie IA ne devient pas automatiquement du comportement runtime.
+Le critique d'équipement s'ajoute en points de pourcentage au critique de base du profil, avec la borne canonique `0..100 %` déjà utilisée par le moteur Dofus.
 
-## Vérité équipement
+Pour une ligne élémentaire synthétique :
 
-Un résultat doit respecter les règles structurelles et conditions d'équipement comprises par le produit : slots, restrictions spéciales, panoplies, PA/PM, FM/exos autorisés, conditions, passifs et autres invariants certifiés.
+- caractéristique effective = caractéristique élémentaire + Puissance ;
+- `damage` et le dommage fixe de l'élément s'appliquent à la ligne normale et critique ;
+- `critDamage` s'applique uniquement à la branche critique ;
+- espérance = normale × `(1-p)` + critique × `p`.
 
-Les règles de jeu ne sont pas des coefficients de ranking et ne doivent pas être assouplies pour améliorer un score.
+Le calcul synthétique est volontairement **continu**. Il ne passe pas par `dofusDamageEndpoint()` ni par l'exécution d'un sort réel, car ces chemins appliquent des floors Dofus légitimes pour les vrais sorts mais incompatibles avec `4 × 7,5 = 30`.
 
-## Scénario d'acceptation prioritaire
+Les modificateurs `spellDamagePct`, `weaponDamagePct`, `meleeDamagePct` et `rangedDamagePct` ne sont pas inclus dans ce cœur : ils portent un contexte source/position que la sonde synthétique pure ne doit pas inventer. Aucun modificateur offensif ambigu n'est ajouté silencieusement.
 
-Iop Terre / T1 sert de premier scénario représentatif de certification sémantique.
+## Budget PA et reste proportionnel
 
-Le moteur doit pouvoir découvrir de lui-même un enchaînement optimal tel que `Colère de Iop + Fureur + Concentration` lorsque les données, coûts, contraintes et mécaniques réelles rendent effectivement cet enchaînement optimal.
+Pour `A` PA disponibles et un profil de coût nominal `X` :
 
-Pour T2/T3, les scénarios d'acceptation doivent ensuite vérifier les préparations réelles : buffs, charges de sorts, critiques/Turquoise, effets différés et bonus finaux transportés jusqu'au tour cible.
+- `fullCount = floor(A / X)` ;
+- `remainder = A % X` ;
+- `partialFactor = remainder / X` ;
+- contribution partielle = **résultat complet de la sonde × partialFactor**.
 
-Aucune rotation d'exemple n'est une règle à coder en dur.
+Le reste conserve l'identité du profil. `11 PA + LARGE` vaut `2,75 × LARGE`, et non `2 × LARGE + MEDIUM`.
 
-## Explicabilité
+Toutes les composantes sont proratisées ensemble, y compris dégâts fixes et Dommages Critiques. Un reste ne crée jamais une nouvelle application complète de dégâts fixes. La même règle s'applique à la sonde MULTI quatre lignes.
 
-Un résultat doit pouvoir expliquer au minimum :
+## Équilibre multi-profils
 
-- le tour/plan retenu ;
-- les actions de préparation pertinentes ;
-- les buffs/états/charges transportés ;
-- les contraintes satisfaites ;
-- l'usage ou non des Exo PA/PM ;
-- la distribution FM retenue ;
-- pourquoi un compromis (par exemple 5 PM + davantage de dégâts) bat une autre option.
+Pour plusieurs éléments/profils, chaque combinaison demandée produit une sonde indépendante. Le ranking agrégé n'est **pas** une somme :
+
+- score primaire = minimum des scores demandés ;
+- score secondaire = moyenne des scores demandés.
+
+Ainsi un build équilibré peut battre un build très spécialisé dès que son profil le plus faible est meilleur.
+
+## Travail combat désormais PARKED
+
+Sont préservés mais hors du chemin produit actif :
+
+- certification sémantique des vrais sorts ;
+- vérité source des sorts ;
+- Certified Combat Planner ;
+- planification de combat spécifique aux classes ;
+- objectifs T1/T2/T3 et préparation inter-tours.
+
+Ce travail n'est ni supprimé ni déclaré incorrect. Il pourra être réévalué dans un autre produit ou une phase future, mais aucun développement actif ne doit le prolonger sans nouvelle décision directeur.
+
+## Interface cible — contrat futur, non implémenté ici
+
+L'interface active future doit supprimer le choix de classe.
+
+Contraintes principales toujours visibles :
+
+- `PA [valeur] [exo]`
+- `PM [valeur] [exo]`
+
+Le contrôle adjacent représente l'autorisation Exo PA/PM selon le modèle d'équipement/exo existant.
+
+Les autres contraintes passent par un contrôle unique :
+
+`[ constraint dropdown ] [ value ] [ add ]`
+
+Exemple : `Initiative | 4000 | Add`, puis liste compacte des contraintes actives :
+
+- `Initiative ≥ 4000`
+- `Range ≥ 4`
+- `Summons ≥ 2`
+
+Le dropdown doit exposer uniquement les contraintes réellement supportées par le moteur de contraintes. Il est interdit de créer un modèle de contraintes propre à l'UI.
+
+## Forgemagie et légalité
+
+Les règles structurelles d'équipement, conditions, panoplies, PA/PM, exos et FM restent des règles de légalité ou des choix d'équipement. Elles ne sont pas assouplies par le scoring synthétique.
+
+Les autorisations Exo PA/PM sont des permissions, pas des obligations. Les travaux FM détaillés restent soumis aux règles de jeu certifiées et aux tranches produit ultérieures.
 
 ## Hiérarchie de vérité
 
 En cas de contradiction :
 
-1. données/règles Dofus certifiées pour les faits de jeu ;
-2. `docs/PRODUCT_CONTRACT.md` pour l'intention produit ;
-3. code runtime + tests pour savoir ce qui est **déjà implémenté** ;
-4. `PROJECT_STATE.md` / `docs/DOFUS_MODEL.md` pour les écarts connus ;
-5. historique Git/anciennes PR uniquement comme contexte historique.
+1. données/règles Dofus certifiées pour les faits d'équipement et de légalité ;
+2. `docs/PRODUCT_CONTRACT.md` pour l'intention produit active ;
+3. code runtime + tests pour savoir ce qui est déjà implémenté ;
+4. `PROJECT_STATE.md` pour les écarts connus ;
+5. documents `docs/history/`, historique Git et anciennes PR comme contexte historique.

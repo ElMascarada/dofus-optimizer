@@ -1,71 +1,99 @@
 # État courant du projet
 
-Ce document décrit l'état **réel aujourd'hui** et les écarts connus avec le contrat produit. Pour l'historique, utiliser Git et les PR mergées.
+Ce document décrit l'état **réel aujourd'hui** après le pivot Equipment-First du 9 septembre 2026.
 
-## Produit
+L'état précédent, centré combat-plan-first, est conservé intégralement dans `docs/history/PROJECT_STATE-pre-equipment-pivot-2026-09-09.md`.
 
-Dofus Optimizer est un optimiseur de **plan de combat**. Le tour offensif ciblé est l'objectif ; le stuff, les statistiques et les ressources sont les variables permettant de rendre ce plan légal et meilleur.
+## Produit actif
 
-La version runtime est définie uniquement dans `js/runtime-meta.js`.
+Dofus Optimizer est désormais un **optimiseur d'équipement**.
 
-## Runtime actif
+Le chemin produit cible est : contraintes d'équipement + orientation offensive + sondes synthétiques → meilleur équipement légal.
 
-- UI principale : `index.html`
-- Optimiseur : `js/optimizer-v2-app.js`
-- Worker : `js/optimizer-worker.js`
-- Génération d'architectures : `js/architecture-search-v2.js`
-- Recherche de candidats : `optimizer/candidate-search.js`
-- Atelier : `js/workshop/`
-- Primitives Search Memory : `js/search-memory/` ; le repository produit par défaut est actuellement inerté
-- PWA/offline : `service-worker.js`
+La classe, les vrais sorts, les rotations, T1/T2/T3 et le Combat Planner ne sont plus des dépendances du produit actif.
 
-Voir `docs/ARCHITECTURE_CURRENT.md` pour la carte détaillée.
+## Nouveau cœur synthétique
 
-## Contrats actuellement protégés
+`js/synthetic-offense.js` fournit le premier primitive pur Equipment-First :
+
+- profils SMALL / MEDIUM / LARGE ;
+- mono Terre/Feu/Eau/Air, 1 à 3 éléments ;
+- MULTI exclusif à quatre lignes ;
+- invariant continu 1 PA = 10 base normale ;
+- critique de base 15/20/25 % ;
+- base critique ×1,25 ;
+- stats canoniques `earth/fire/water/air`, `power`, `damage`, `damageEarth/Fire/Water/Air`, `crit`, `critDamage` ;
+- Crit borné à 0..100 % comme le moteur existant ;
+- reste PA proportionnel appliqué au résultat complet ;
+- agrégation équilibrée minimum puis moyenne ;
+- tie-break canonique stable.
+
+Le module n'importe pas le moteur de sorts, source-certification ou Combat Planner. Il réutilise uniquement l'accès canonique `stat()` pour le vocabulaire/agrégation des stats. Le calcul de ligne reste synthétique et continu afin de préserver notamment MEDIUM MULTI `4 × 7,5 = 30`.
+
+## Runtime actif existant
+
+Le runtime historique reste en place pendant ce pivot :
+
+- UI principale : `index.html` ;
+- Optimiseur : `js/optimizer-v2-app.js` ;
+- Worker : `js/optimizer-worker.js` ;
+- Génération d'architectures : `js/architecture-search-v2.js` ;
+- Recherche de candidats : `optimizer/candidate-search.js` ;
+- Atelier : `js/workshop/` ;
+- PWA/offline : `service-worker.js`.
+
+Cette PR **ne raccorde pas** encore `synthetic-offense.js` à la recherche et ne modifie pas l'UI. Les sélecteurs classe/sorts historiques peuvent donc encore être présents dans le runtime courant : ils sont un écart connu, pas le contrat futur.
+
+## Contrats protégés
 
 1. Un build rendu doit être légal.
-2. Les minima demandés sont des contraintes dures, pas des préférences de score.
-3. Si l'ensemble faisable est non vide, la recherche doit pouvoir produire un résultat faisable.
-4. Le score combat vient d'un plan de sorts jouable pour le mode temporel réellement pris en charge.
-5. La donnée Dofus inconnue n'est pas devinée.
-6. Une sémantique de sort riche non comprise reste explicitement non résolue au lieu d'être silencieusement réduite à du dégât.
+2. Les minima utilisateur sont des contraintes dures.
+3. **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**.
+4. Le scoring synthétique ne peut classer que des candidats déjà faisables.
+5. Le futur ranking Equipment-First doit maximiser le minimum demandé, puis la moyenne, puis un tie-break déterministe.
+6. Aucune hypothèse de classe, de sort réel ou de contexte mêlée/distance ne doit être injectée dans le cœur synthétique pur.
 
-## Écarts connus avec le contrat produit
+## Écarts actifs à traiter dans les slices suivantes
 
-Le contrat canonique demandé est plus ambitieux que le runtime courant. Ces écarts sont **des travaux futurs, pas des fonctionnalités déjà présentes** :
+- **Search integration** : raccorder le scoring synthétique après la faisabilité, sans casser beam/Pareto/rescue ni l'invariant de complétude.
+- **UI** : retirer le choix de classe du chemin actif et exposer les orientations/profils synthétiques.
+- **Contraintes PA/PM** : afficher `PA [valeur] [exo]` et `PM [valeur] [exo]` en permanence.
+- **Autres contraintes** : fournir un seul contrôle `dropdown + valeur + add`, alimenté par le vrai moteur de contraintes.
+- **Exo/FM** : conserver le modèle de légalité existant et faire évoluer l'interface sans inventer un modèle parallèle.
 
-- **Connaissance des sorts** : la vérité source riche est importée mais sa couverture d'interprétation runtime reste très incomplète. `spell-source-truth.json` conserve les sémantiques non certifiées en `source-unresolved`.
-- **Horizon T3** : le helper temporel courant simule explicitement T1→T2 pour un objectif T2, mais l'objectif T3 ne simule pas encore T1 et T2 comme tours de préparation. Le contrat cible exige T1→T2→T3 avec score uniquement sur T3.
-- **FM** : le runtime courant expose encore une politique historique `+3 % dommages sorts / slot`, `+8 dommages critiques`, Exo PA/PM. Elle ne correspond pas encore au contrat cible de budget de 9 objets FM avec arbitrage 1 % / 2 % dommages sorts, +8 do crit sous condition de ligne native, et coût d'opportunité des exos.
-- **Interface** : l'UI courante utilise encore des champs permanents de contraintes et des sélecteurs FM séparés. La cible validée est `PA/PM + autorisation exo`, contraintes ajoutées par menu, puis bloc FM Oui/Non.
-- **Scénario combat complet** : plusieurs mécaniques de buffs, états, charges, critiques, Dofus/passifs et interactions inter-tours restent à certifier avant de prétendre à un planner exhaustif.
+## Interface cible documentée
 
-## Priorité produit après nettoyage
+Future UI active :
 
-Première revue sémantique Terre : `data/knowledge/iop-terre-source-semantics.json` classe uniquement Pression (13106) et Concentration (13123), hors runtime. Chacun conserve quatre occurrences d'effets et un script non résolus, sans référence d'état explicite. Le calcul isolé des six lignes Terre normales/critiques est démontré, mais ne certifie pas leur applicabilité aux cibles. Restent non certifiés : masques/zones, érosion de Pression et scripts liés 16115/16118 sans métadonnées. Les deux sorts restent exclus du planner certifié ; aucun comportement runtime n'est modifié. Les assertions déterministes remplacent le diagnostic temporaire.
+- aucun choix de classe ;
+- `PA [valeur] [exo]` ;
+- `PM [valeur] [exo]` ;
+- autres contraintes via `[constraint dropdown] [value] [add]` ;
+- contraintes actives affichées en liste compacte (`Initiative ≥ 4000`, `Range ≥ 4`, `Summons ≥ 2`, etc.) ;
+- options disponibles dérivées du moteur de contraintes réel.
 
-P0 : **Spell Knowledge Certification**.
+Aucune de ces modifications UI n'est implémentée dans Synthetic Offense Core V1.
 
-1. auditer 100 % de la banque de sorts et les informations réellement disponibles en source ;
-2. enrichir offline la connaissance avec une interprétation structurée, assistée par IA, sans activation automatique ;
-3. classer explicitement les mécaniques résolues/non résolues ;
-4. étendre les primitives runtime et tests par familles sémantiques ;
-5. certifier d'abord un T1 représentatif (Iop Terre), puis la préparation T2, puis la préparation T3 ;
-6. seulement ensuite juger/optimiser plus agressivement la recherche d'équipement autour de ces plans.
+## Travail PARKED
 
-Iop Terre / T1 sert de premier scénario représentatif. Une séquence telle que `Colère de Iop + Fureur + Concentration` doit être redécouverte par le moteur lorsqu'elle est réellement optimale ; elle ne doit jamais être codée en dur.
+Le travail suivant reste dans le repository mais sort du chemin produit actif :
 
-## Maintenance
+- source truth / semantic certification des sorts ;
+- connaissance Iop Terre ;
+- Certified Combat Planner ;
+- planification spécifique à une classe ;
+- objectifs T1/T2/T3 et préparation inter-tours.
 
-Les gates permanents sont :
+Il n'est ni supprimé ni considéré comme erroné. Aucun nouveau bridge de sorts réels ne doit être ajouté dans les slices Equipment-First sans nouvelle décision directeur.
 
-- tests/syntaxe Node ;
+## Validation attendue
+
+Les gates permanents restent :
+
+- syntaxe/tests Node ;
+- tests ciblés du nouveau primitive ;
 - recette navigateur réelle ;
 - product smoke ;
-- benchmarks de régression des chemins principaux.
+- benchmarks de régression des chemins principaux lorsque la slice les concerne.
 
-Les données et icônes ont une seule chaîne de synchronisation canonique : `.github/workflows/sync-dofus-data.yml`.
-
-Les tests des snapshots synchronisés vérifient le schéma source enrichi v2 et ses jointures de métadonnées, sans assimiler une jointure à une certification sémantique. La séparation source/runtime est protégée par une vérification de non-mutation du catalogue courant ; le snapshot runtime publié est déjà passé par `apply:curated`, dont la réapplication doit être idempotente.
-
-Aucun nouveau travail produit ne doit repartir d'un ancien checkpoint documentaire ou d'une branche historique : repartir de `main`, du code courant et de cette documentation canonique.
+Le CI canonique reste exclusivement le runner self-hosted : `[self-hosted, linux, x64, steam-machine, dofus]`.
