@@ -244,7 +244,7 @@
         {"sourceOccurrenceId":"critical:1:293","justification":"The critical branch repeats the same +20 future Fureur modifier and the same maxCastPerTurn=1 rule; it cannot alter another legal T1 cast.","certifiedIrrelevantToT1":true},
         {"sourceOccurrenceId":"critical:2:1160","justification":"Owner-certified complete behavior states critical effect 1160 belongs only to bookkeeping/control of the future Fureur charge and produces no immediate damage, offensive stat buff usable by another T1 spell, AP/MP/resource change, cast-legality change or same-turn damage modifier.","certifiedIrrelevantToT1":true}
       ],"scripts":[
-        {"sourceOccurrenceId":"bound:0:16120","justification":"Owner-certified complete behavior states bound script 16120 belongs only to bookkeeping/control of the future Fureur charge and adds no immediate damage, offensive buff, resource, legality or same-turn ordering/damage consequence. Its global implementation remains unknown.","certifiedIrrelevantToT1":true}
+        {"sourceOccurrenceId":"bound:0:16120","justification":"Owner-certified complete behavior states bound script 16120 belongs only to bookkeeping/control of the future Fureur charge and adds no immediate damage, offensive buff, resource, legality or same-turn ordering/damage consequence in this fixed T1 reference scenario. Its global implementation remains unknown.","certifiedIrrelevantToT1":true}
       ],"states":[]},
       "stateEvidence": "No explicit stateReferences are present. Effect 1160 and script 16120 remain globally opaque but are owner-certified as future-charge bookkeeping only for this fixed T1 scenario.",
       "criticalSemantics": "IMMEDIATE_DAMAGE_ONLY",
