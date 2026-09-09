@@ -157,7 +157,7 @@ for (const review of reviews) {
     }
   });
 
-  test(`${review.name}: source completeness is distinct from current planner eligibility`, () => {
+  test(`${review.name}: source completeness matches the supported critical-state source gate`, () => {
     const proof = certification(review, source);
     const validation = validatePlannerSourceCertification(String(review.spellId), proof, source);
     const expectedCertified = coreT1SpellIds.includes(review.spellId);
@@ -169,13 +169,8 @@ for (const review of reviews) {
 
     if (expectedCertified) {
       assert.deepEqual(proof.unresolvedSemantics, []);
-      if (review.spellId === 13118) {
-        assert.equal(validation.eligible, false);
-        assert.deepEqual(validation.reasons, ['CRITICAL_STATE_SEMANTICS_UNCERTIFIED']);
-      } else {
-        assert.equal(validation.eligible, true);
-        assert.deepEqual(validation.reasons, []);
-      }
+      assert.equal(validation.eligible, true);
+      assert.deepEqual(validation.reasons, []);
     } else {
       assert.equal(validation.eligible, false);
       assert.ok(proof.unresolvedSemantics.length > 0);
