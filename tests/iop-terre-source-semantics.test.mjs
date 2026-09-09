@@ -10,7 +10,6 @@ import {
   validatePlannerSourceCertification
 } from '../js/combat/source-certification.js';
 import { normalizeSpellEffectSemantics } from '../js/combat/spell-effect-semantic.js';
-import { certifiedT1SpellEligibility } from '../js/combat/t1-certified-planner.js';
 import { spellDamageBreakdown } from '../js/spells.js';
 import { applyCuratedSpellRules } from '../js/curated-runtime-rules.js';
 
@@ -19,7 +18,8 @@ const reviews = readJson('../data/knowledge/iop-terre-source-semantics.json').sp
 const sourceTruth = readJson('../data/normalized/spell-source-truth.json');
 const runtime = readJson('../data/normalized/spell-data.json');
 
-const closureSpellIds = [13106, 13123, 13125, 13118, 13156, 13124, 13110];
+const coreT1SpellIds = [13106, 13123, 13125, 13118, 13156, 13124];
+const deferredSpellIds = [13110, 13146];
 const expectedOccurrenceCounts = new Map([
   [13106, { effects: 4, scripts: 1, states: 0 }],
   [13123, { effects: 4, scripts: 1, states: 0 }],
@@ -98,14 +98,18 @@ function certification(review, source) {
   });
 }
 
-test('Iop Terre closure reviews exactly the requested seven spells while preserving the existing Pugilat review', () => {
+function semantic(review, id) {
+  return review.effects.flatMap((entry) => entry.semantics).find((entry) => entry.id === id);
+}
+
+test('Iop Terre reference certification closes only the core six and keeps deferred reviews present', () => {
   assert.deepEqual(reviews.map((entry) => entry.spellId), [13106, 13123, 13125, 13146, 13118, 13156, 13124, 13110]);
-  assert.deepEqual(reviews.filter((entry) => closureSpellIds.includes(entry.spellId)).map((entry) => entry.spellId), closureSpellIds);
+  assert.deepEqual(reviews.filter((entry) => coreT1SpellIds.includes(entry.spellId)).map((entry) => entry.spellId), coreT1SpellIds);
+  assert.deepEqual(reviews.filter((entry) => deferredSpellIds.includes(entry.spellId)).map((entry) => entry.spellId), [13146, 13110]);
 });
 
 for (const review of reviews) {
   const source = sourceTruth.spells.find((entry) => entry.id === review.spellId);
-  const spell = runtime.spells.find((entry) => entry.ankamaId === review.spellId);
 
   test(`${review.name}: every normal, critical, script and state occurrence is explicitly reviewed`, () => {
     assert.ok(source, `source spell ${review.spellId} must exist`);
@@ -135,71 +139,69 @@ for (const review of reviews) {
       assert.equal(entry.sourceOrder, raw.order);
       assert.equal(raw.metadataJoinStatus, 'joined');
       assert.equal(raw.effectMetadata.id, raw.effectId);
-      assert.equal(entry.status, 'UNRESOLVED');
+      assert.ok(['SUPPORTED', 'UNRESOLVED'].includes(entry.status));
       const semantics = normalizeSpellEffectSemantics(entry.semantics);
       assert.ok(semantics.length > 0);
-      for (const semantic of semantics) {
-        assert.ok(semantic.proof.length > 0);
-        if (semantic.status === 'UNRESOLVED'
+      for (const item of semantics) {
+        assert.ok(item.proof.length > 0);
+        if (item.status === 'UNRESOLVED'
           && !ignoredEffects.has(entry.sourceOccurrenceId)
-          && !ignoredSemantics.has(semantic.id)) {
-          assert.ok(semantic.missingRuntimePrimitive.length > 0);
+          && !ignoredSemantics.has(item.id)) {
+          assert.ok(item.missingRuntimePrimitive.length > 0);
         }
       }
-      const target = semantics.find((semantic) => semantic.type === 'target');
+      const target = semantics.find((item) => item.type === 'target');
       assert.ok(target, `${entry.sourceOccurrenceId} must preserve target evidence`);
-      assert.equal(target.status, 'UNRESOLVED');
+      assert.ok(['SUPPORTED', 'UNRESOLVED'].includes(target.status));
       assert.equal(target.sourceMask, raw.targetMask);
     }
   });
 
-  test(`${review.name}: complete occurrence accounting remains fail-closed while relevant semantics are unresolved`, () => {
+  test(`${review.name}: source certification eligibility matches the core-six boundary`, () => {
     const proof = certification(review, source);
-    assert.equal(proof.sourceComplete, false);
-    assert.equal(proof.sourceSemanticStatus, 'UNRESOLVED');
     const validation = validatePlannerSourceCertification(String(review.spellId), proof, source);
-    assert.equal(validation.eligible, false);
+    const expectedCertified = coreT1SpellIds.includes(review.spellId);
+
+    assert.equal(review.sourceSemanticStatus, expectedCertified ? 'CERTIFIED' : 'UNRESOLVED');
+    assert.equal(proof.sourceComplete, expectedCertified);
+    assert.equal(proof.sourceSemanticStatus, expectedCertified ? 'CERTIFIED' : 'UNRESOLVED');
+    assert.equal(validation.eligible, expectedCertified);
     assert.ok(!validation.reasons.some((reason) => /COVERAGE_(INCOMPLETE|EXTRA|OVERLAP|SOURCE_MISMATCH)/.test(reason)));
+    if (expectedCertified) {
+      assert.deepEqual(proof.unresolvedSemantics, []);
+      assert.equal(validation.reasons.length, 0);
+    } else {
+      assert.ok(proof.unresolvedSemantics.length > 0);
+      assert.ok(validation.reasons.includes('SOURCE_CERTIFICATION_INCOMPLETE'));
+    }
     for (const kind of ['effects', 'scripts', 'states']) {
       assert.deepEqual(proof.sourceCoverage[kind].ignoredIds, ignoredSourceIds(review, kind).map(String).sort());
     }
-    const ignoredEffects = new Set(ignoredSourceIds(review, 'effects'));
-    const eligibility = certifiedT1SpellEligibility({
-      spell,
-      sourceSpell: source,
-      sourceCertification: proof,
-      effects: review.effects
-        .filter((entry) => !ignoredEffects.has(entry.sourceOccurrenceId))
-        .flatMap((entry) => entry.semantics)
-    });
-    assert.equal(eligibility.eligible, false);
-    assert.ok(eligibility.reasons.includes('UNRESOLVED_RUNTIME_EFFECTS'));
   });
 }
 
-test('the seven-spell closure has exact deterministic occurrence counts', () => {
-  assert.deepEqual(closureSpellIds.map((spellId) => [spellId, expectedOccurrenceCounts.get(spellId)]), [
+test('the core-six reference pool has exact deterministic occurrence counts', () => {
+  assert.deepEqual(coreT1SpellIds.map((spellId) => [spellId, expectedOccurrenceCounts.get(spellId)]), [
     [13106, { effects: 4, scripts: 1, states: 0 }],
     [13123, { effects: 4, scripts: 1, states: 0 }],
     [13125, { effects: 2, scripts: 1, states: 0 }],
     [13118, { effects: 4, scripts: 1, states: 0 }],
     [13156, { effects: 6, scripts: 1, states: 0 }],
-    [13124, { effects: 6, scripts: 2, states: 0 }],
-    [13110, { effects: 4, scripts: 1, states: 0 }]
+    [13124, { effects: 6, scripts: 2, states: 0 }]
   ]);
 });
 
-test('source coverage fails closed on omitted and extra occurrences', () => {
+test('source coverage fails closed on omitted and extra occurrences even for a certified core spell', () => {
   const review = reviews.find((entry) => entry.spellId === 13156);
   const source = sourceTruth.spells.find((entry) => entry.id === 13156);
   const proof = certification(review, source);
 
   const omitted = structuredClone(proof);
-  omitted.sourceCoverage.effects.unresolvedIds = omitted.sourceCoverage.effects.unresolvedIds.slice(1);
+  omitted.sourceCoverage.effects.classifiedIds = omitted.sourceCoverage.effects.classifiedIds.slice(1);
   assert.ok(validatePlannerSourceCertification('13156', omitted, source).reasons.includes('SOURCE_EFFECT_COVERAGE_INCOMPLETE'));
 
   const extra = structuredClone(proof);
-  extra.sourceCoverage.effects.unresolvedIds.push('normal:999:999999');
+  extra.sourceCoverage.effects.classifiedIds.push('normal:999:999999');
   assert.ok(validatePlannerSourceCertification('13156', extra, source).reasons.includes('SOURCE_EFFECT_COVERAGE_EXTRA'));
 });
 
@@ -247,9 +249,55 @@ test('certified irrelevant source occurrences require non-empty proof and certif
     assert.ok(validatePlannerSourceCertification('13156', certification(broken, source), source)
       .reasons.includes('IGNORED_SOURCE_EFFECTS_UNCERTIFIED'));
   }
+
+  const pression = reviews.find((entry) => entry.spellId === 13106);
+  const pressionSource = sourceTruth.spells.find((entry) => entry.id === 13106);
+  const brokenScript = structuredClone(pression);
+  brokenScript.ignoredSource.scripts[0].certifiedIrrelevantToT1 = false;
+  assert.ok(validatePlannerSourceCertification('13106', certification(brokenScript, pressionSource), pressionSource)
+    .reasons.includes('IGNORED_SOURCE_SCRIPTS_UNCERTIFIED'));
 });
 
-test('an unresolved relevant occurrence prevents certification even when all source ids are accounted for', () => {
+test('all seven owner-ignored core scripts are scoped T1 proofs, not global script understanding', () => {
+  const expectedScripts = new Map([
+    [13106, ['bound:0:16115']],
+    [13123, ['bound:0:16118']],
+    [13125, ['bound:0:16119']],
+    [13118, ['bound:0:16093']],
+    [13156, ['bound:0:16120']],
+    [13124, ['bound:0:16107', 'bound:1:16121']]
+  ]);
+  for (const spellId of coreT1SpellIds) {
+    const review = reviews.find((entry) => entry.spellId === spellId);
+    assert.deepEqual(ignoredSourceIds(review, 'scripts'), expectedScripts.get(spellId));
+    assert.ok(ignoredSourceEntries(review, 'scripts').every((entry) => entry.certifiedIrrelevantToT1 === true));
+    assert.ok(ignoredSourceEntries(review, 'scripts').every((entry) => /T1|fixed|reference/.test(entry.justification)));
+    assert.ok(review.scripts.every((entry) => entry.status === 'UNRESOLVED'));
+    assert.ok(review.scripts.every((entry) => /not globally understood|global implementation remains unknown/.test(entry.proof)));
+  }
+});
+
+test('target applicability is supported only for the exact owner-certified reference applications', () => {
+  const expected = [
+    [13106, ['normal:1:97:target', 'critical:1:97:target'], /one normal enemy/],
+    [13123, ['normal:0:97:target', 'critical:0:97:target'], /one normal non-invocation enemy/],
+    [13125, ['normal:0:97:target', 'critical:0:97:target'], /one normal enemy under compatible placement/],
+    [13156, ['normal:0:97:target', 'critical:0:97:target'], /one normal enemy/],
+    [13124, ['normal:0:97:target', 'critical:0:97:target'], /one normal enemy/],
+    [13118, ['normal:0:138:target', 'critical:0:138:target'], /Iop himself/]
+  ];
+  for (const [spellId, ids, scope] of expected) {
+    const review = reviews.find((entry) => entry.spellId === spellId);
+    for (const id of ids) {
+      const target = semantic(review, id);
+      assert.equal(target.status, 'SUPPORTED');
+      assert.match(target.proof, scope);
+      assert.match(target.proof, /does not decode|fixed reference use|scoped/i);
+    }
+  }
+});
+
+test('an unresolved relevant occurrence still prevents deferred Épée Divine certification', () => {
   const divine = reviews.find((entry) => entry.spellId === 13110);
   const source = sourceTruth.spells.find((entry) => entry.id === 13110);
   const proof = certification(divine, source);
@@ -260,89 +308,102 @@ test('an unresolved relevant occurrence prevents certification even when all sou
   assert.equal(validation.eligible, false);
 });
 
-test('Pression erosion stays certified irrelevant without changing its existing source review', () => {
+test('Pression certifies ordinary-target Earth damage while erosion and script 16115 stay T1-irrelevant only', () => {
   const review = reviews.find((entry) => entry.spellId === 13106);
   const source = sourceTruth.spells.find((entry) => entry.id === 13106);
   assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:0:776', 'normal:0:776']);
   assert.equal(review.sourceRecordSha256, '6424e27fd5f8b90f9f2941c8fba9a4e1cf031179b267968d5e99a8d1cc09d784');
   assert.deepEqual(source.effects.map((entry) => entry.effectId), [776, 97]);
-  assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16115, 'UNRESOLVED']]);
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16115']);
+  assert.equal(semantic(review, 'normal:1:97:target').status, 'SUPPORTED');
+  assert.equal(semantic(review, 'critical:1:97:target').status, 'SUPPORTED');
 });
 
-test('Concentration invocation-only higher branch remains ignored without decoding masks', () => {
+test('Concentration keeps invocation-only higher branches ignored and certifies ordinary-target applicability without decoding masks', () => {
   const review = reviews.find((entry) => entry.spellId === 13123);
   const source = sourceTruth.spells.find((entry) => entry.id === 13123);
   const spell = runtime.spells.find((entry) => entry.ankamaId === 13123);
   const curated = applyCuratedSpellRules(spell);
   assert.deepEqual(source.effects.map((entry) => entry.targetMask), ['L,M,l,m,c', 'J,j']);
   assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:97', 'normal:1:97']);
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16118']);
   assert.equal(curated.hits.length, 1);
   assert.deepEqual(curated.hits[0], { element: 'earth', normal: [20, 24], crit: [25, 30] });
 });
 
-test('Épée de Iop preserves target-zone applicability and bound script 16119 as unresolved', () => {
+test('Épée de Iop certifies only the compatible-placement reference application and ignores script 16119 only for T1', () => {
   const review = reviews.find((entry) => entry.spellId === 13125);
   const source = sourceTruth.spells.find((entry) => entry.id === 13125);
   assert.deepEqual(source.effects.map((entry) => entry.effectId), [97]);
   assert.deepEqual(source.criticalEffects.map((entry) => entry.effectId), [97]);
   assert.deepEqual(source.effects.map((entry) => entry.targetMask), ['A,g']);
-  assert.deepEqual(review.scripts.map((entry) => entry.scriptId), [16119]);
-  assert.ok(review.scripts.every((entry) => entry.status === 'UNRESOLVED'));
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16119']);
+  assert.equal(semantic(review, 'normal:0:97:target').status, 'SUPPORTED');
+  assert.match(semantic(review, 'normal:0:97:target').proof, /compatible placement/);
 });
 
-test('Pugilat review is preserved outside the seven-spell closure', () => {
+test('Pugilat review remains byte-semantically unchanged and unresolved outside the core six', () => {
   const review = reviews.find((entry) => entry.spellId === 13146);
   const source = sourceTruth.spells.find((entry) => entry.id === 13146);
+  assert.equal(createHash('sha256').update(JSON.stringify(review)).digest('hex'), '1d02ece3a0e2b50f51939047b97fad514591fbcfe200f56a1584ddb56928b9b4');
   assert.equal(review.sourceRecordSha256, '7cd6529eeeb95a8b687aef410ae1d72892e4a5648349367b4e1f6bc0fa210b6a');
   assert.deepEqual(source.effects.map((entry) => entry.effectId), [97, 293, 406]);
   assert.deepEqual(source.scripts.bound.map((entry) => entry.scriptId), [16122, 16123]);
+  assert.equal(validatePlannerSourceCertification('13146', certification(review, source), source).eligible, false);
 });
 
-test('Puissance keeps offensive self-buffs relevant and fails closed on target/script semantics', () => {
+test('Puissance preserves distinct normal/critical Power and ignores Push Damage only because the core six has no pushback attack', () => {
   const review = reviews.find((entry) => entry.spellId === 13118);
   const source = sourceTruth.spells.find((entry) => entry.id === 13118);
   assert.deepEqual(source.effects.map((entry) => [entry.effectId, entry.diceNum, entry.duration]), [[138, 300, 3], [414, 120, 3]]);
   assert.deepEqual(source.criticalEffects.map((entry) => [entry.effectId, entry.diceNum, entry.duration]), [[138, 350, 3], [414, 140, 3]]);
   assert.equal(targetingOf(source).minCastInterval, 4);
-  assert.deepEqual(review.scripts.map((entry) => entry.scriptId), [16093]);
-  assert.deepEqual(ignoredSourceIds(review, 'effects'), []);
-  assert.ok(review.effects.flatMap((entry) => entry.semantics).some((entry) => entry.id === 'normal:0:138:power-buff' && entry.status === 'SUPPORTED'));
+  assert.equal(semantic(review, 'normal:0:138:power-buff').amount, 300);
+  assert.equal(semantic(review, 'critical:0:138:power-buff').amount, 350);
+  assert.notEqual(semantic(review, 'normal:0:138:power-buff').amount, semantic(review, 'critical:0:138:power-buff').amount);
+  assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:414', 'normal:1:414']);
+  assert.ok(ignoredSourceEntries(review, 'effects').every((entry) => /six-spell reference pool contains no pushback-damage offensive action/.test(entry.justification)));
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16093']);
 });
 
-test('Fureur future effect-293 charge is T1-irrelevant only because maxCastPerTurn=1', () => {
+test('Fureur ignores effect 1160 only under the owner-certified future-charge bookkeeping proof', () => {
   const review = reviews.find((entry) => entry.spellId === 13156);
   const source = sourceTruth.spells.find((entry) => entry.id === 13156);
   assert.equal(targetingOf(source).maxCastPerTurn, 1);
-  assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:293', 'normal:1:293']);
-  assert.ok(ignoredSourceEntries(review, 'effects').every((entry) => /maxCastPerTurn=1/.test(entry.justification)));
-  assert.deepEqual(review.effects.filter((entry) => entry.effectId === 1160).map((entry) => entry.status), ['UNRESOLVED', 'UNRESOLVED']);
-  assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16120, 'UNRESOLVED']]);
+  assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:293', 'critical:2:1160', 'normal:1:293', 'normal:2:1160']);
+  const effect1160Proofs = ignoredSourceEntries(review, 'effects').filter((entry) => entry.sourceOccurrenceId.endsWith(':1160'));
+  assert.equal(effect1160Proofs.length, 2);
+  assert.ok(effect1160Proofs.every((entry) => /bookkeeping\/control of the future Fureur charge/.test(entry.justification)));
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16120']);
+  assert.equal(semantic(review, 'normal:0:97:target').status, 'SUPPORTED');
 });
 
-test('Colère delay=3 future effects are T1-irrelevant while bound scripts remain unresolved', () => {
+test('Colère keeps delay=3 future mechanics outside T1 and ignores both scripts only as future-charge bookkeeping', () => {
   const review = reviews.find((entry) => entry.spellId === 13124);
   const source = sourceTruth.spells.find((entry) => entry.id === 13124);
   assert.equal(targetingOf(source).minCastInterval, 3);
   assert.deepEqual(source.effects.map((entry) => [entry.effectId, entry.delay]), [[97, 0], [3793, 3], [293, 3]]);
   assert.deepEqual(ignoredSourceIds(review, 'effects').sort(), ['critical:1:3793', 'critical:2:293', 'normal:1:3793', 'normal:2:293']);
   assert.ok(ignoredSourceEntries(review, 'effects').every((entry) => /delay=3|minCastInterval=3/.test(entry.justification)));
-  assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16107, 'UNRESOLVED'], [16121, 'UNRESOLVED']]);
+  assert.deepEqual(ignoredSourceIds(review, 'scripts'), ['bound:0:16107', 'bound:1:16121']);
+  assert.ok(ignoredSourceEntries(review, 'scripts').every((entry) => /future-charge scheduling\/bookkeeping/.test(entry.justification)));
+  assert.equal(semantic(review, 'normal:0:97:target').status, 'SUPPORTED');
 });
 
-test('Épée Divine offensive +30 Damage buff remains fail-closed because two T1 casts can stack or refresh differently', () => {
+test('Épée Divine remains deferred and its existing review stays unchanged', () => {
   const review = reviews.find((entry) => entry.spellId === 13110);
   const source = sourceTruth.spells.find((entry) => entry.id === 13110);
+  assert.equal(createHash('sha256').update(JSON.stringify(review)).digest('hex'), 'c98dc80fd4aa000e47289e171b11e5aab506fbaa95090bd80bfcb4a0a1329293');
   assert.equal(targetingOf(source).maxCastPerTurn, 2);
   assert.deepEqual(source.effects.map((entry) => [entry.effectId, entry.diceNum, entry.duration]), [[98, 24, 0], [112, 30, 4]]);
   assert.deepEqual(source.criticalEffects.map((entry) => [entry.effectId, entry.diceNum, entry.duration]), [[98, 29, 0], [112, 30, 4]]);
   const buffs = review.effects.flatMap((entry) => entry.semantics).filter((entry) => entry.id.endsWith(':damage-buff'));
   assert.equal(buffs.length, 2);
   assert.ok(buffs.every((entry) => entry.status === 'UNRESOLVED'));
-  assert.ok(buffs.every((entry) => /stacking|stack/.test(entry.missingRuntimePrimitive)));
   assert.deepEqual(review.scripts.map((entry) => [entry.scriptId, entry.status]), [[16135, 'UNRESOLVED']]);
 });
 
-test('Earth damage arithmetic remains represented independently of unresolved applicability', () => {
+test('Earth damage arithmetic remains represented independently of scoped applicability', () => {
   for (const spellId of [13106, 13123, 13125, 13156, 13124]) {
     const review = reviews.find((entry) => entry.spellId === spellId);
     const source = sourceTruth.spells.find((entry) => entry.id === spellId);
