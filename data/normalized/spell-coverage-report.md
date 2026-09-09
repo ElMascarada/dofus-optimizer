@@ -1,7 +1,7 @@
 # Dofus spell normalization coverage
 
-- Generated: 2026-09-08T10:51:33.396403094+02:00
-- Game version: 3.6.11.12 (main)
+- Generated: 2026-09-09T10:27:15.764966427+02:00
+- Game version: 3.6.11.13 (main)
 - Classes: 19
 - Class spell references: 836
 - SpellVariantData source records: 431

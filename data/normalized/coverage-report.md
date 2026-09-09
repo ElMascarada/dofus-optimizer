@@ -1,7 +1,7 @@
 # Dofusdude normalization coverage
 
-- Generated: 2026-09-08T10:51:33.396403094+02:00
-- Game version: 3.6.11.12 (main)
+- Generated: 2026-09-09T10:27:15.764966427+02:00
+- Game version: 3.6.11.13 (main)
 - Included items: 1109
 - Self-certified items in coverage scope: 1053 (94.95%)
 - Snapshot items: 1093
