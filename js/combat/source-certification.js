@@ -5,6 +5,10 @@ import {
 export const PlannerSourceCertificationSchemaVersion = 2;
 
 const SOURCE_COVERAGE_KINDS = Object.freeze(['effects', 'scripts', 'states']);
+const PLANNER_SUPPORTED_CRITICAL_SEMANTICS = new Set([
+  'IMMEDIATE_DAMAGE_ONLY',
+  'DISTINCT_POWER_BUFF_PAYLOADS'
+]);
 
 function cloneValue(value) {
   if (value === undefined || value === null || typeof value !== 'object') return value;
@@ -429,7 +433,7 @@ export function validatePlannerSourceCertification(spellId, sourceCertification 
     reasons.push('SOURCE_CERTIFICATION_INCOMPLETE');
   }
 
-  if (String(certification.criticalSemantics || '') !== 'IMMEDIATE_DAMAGE_ONLY') {
+  if (!PLANNER_SUPPORTED_CRITICAL_SEMANTICS.has(String(certification.criticalSemantics || ''))) {
     reasons.push('CRITICAL_STATE_SEMANTICS_UNCERTIFIED');
   }
 
