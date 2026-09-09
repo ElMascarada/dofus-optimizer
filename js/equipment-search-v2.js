@@ -1,7 +1,11 @@
-import { SLOT_RULES } from './config.js';
+import { BASE_CHARACTER, SLOT_RULES } from './config.js';
 import { addStats, effectiveStat, emptyStats } from './stats.js';
 import { applySetBonuses } from './sets.js';
-import { specialSlotRulesAreValid } from './build-legality.js';
+import {
+  MAX_PERMANENT_AP,
+  MAX_PERMANENT_MP,
+  specialSlotRulesAreValid
+} from './build-legality.js';
 import {
   compareCompleteEquipmentBuildResults,
   evaluateCompleteEquipmentBuild
@@ -15,6 +19,7 @@ import {
   filterOptimizerEligibleItems,
   optimizerTrophyEligibilityCounts
 } from '../optimizer/item-eligibility.js';
+import { pruneDominatedCandidates } from './search-space.js';
 
 function itemKey(items = []) {
   return items.map((item) => String(item?.id ?? '')).sort().join('|');
@@ -141,6 +146,47 @@ function keepEquipmentDiversity(states, limit, { policy, constraints, bucketLimi
   return output;
 }
 
+function diagnosticStaticValue(stats = {}, key, fmPolicy = {}) {
+  const base = Number(BASE_CHARACTER.baseStats?.[key] || 0);
+  const exo = key === 'ap' ? (Number(fmPolicy?.exoAp) === 1 ? 1 : 0)
+    : key === 'mp' ? (Number(fmPolicy?.exoMp) === 1 ? 1 : 0) : 0;
+  return base + exo + Number(effectiveStat(stats, key) || 0);
+}
+
+function diagnosticDistribution(states = [], key, fmPolicy = {}) {
+  const counts = new Map();
+  for (const state of states) {
+    const value = diagnosticStaticValue(state?.stats || {}, key, fmPolicy);
+    counts.set(value, Number(counts.get(value) || 0) + 1);
+  }
+  return Object.fromEntries([...counts.entries()].sort((a, b) => Number(a[0]) - Number(b[0])));
+}
+
+function printDiagnosticLossStats(witnessState, retainedStates, fmPolicy = {}) {
+  if (!witnessState) return;
+  const witnessAp = diagnosticStaticValue(witnessState.stats, 'ap', fmPolicy);
+  const witnessMp = diagnosticStaticValue(witnessState.stats, 'mp', fmPolicy);
+  const apCounts = diagnosticDistribution(retainedStates, 'ap', fmPolicy);
+  const mpCounts = diagnosticDistribution(retainedStates, 'mp', fmPolicy);
+  const overAp = retainedStates.filter((state) => diagnosticStaticValue(state.stats, 'ap', fmPolicy) > MAX_PERMANENT_AP).length;
+  const overMp = retainedStates.filter((state) => diagnosticStaticValue(state.stats, 'mp', fmPolicy) > MAX_PERMANENT_MP).length;
+  console.log(`TRACE_WITNESS_STATIC_AP=${witnessAp}`);
+  console.log(`TRACE_WITNESS_STATIC_MP=${witnessMp}`);
+  console.log(`TRACE_RETAINED_AP_COUNTS=${JSON.stringify(apCounts)}`);
+  console.log(`TRACE_RETAINED_MP_COUNTS=${JSON.stringify(mpCounts)}`);
+  console.log(`TRACE_RETAINED_OVER_AP_CAP=${overAp}`);
+  console.log(`TRACE_RETAINED_OVER_MP_CAP=${overMp}`);
+}
+
+function recordDiagnosticFirstLoss(diagnostic, point, evidence, extra = {}) {
+  if (!diagnostic || diagnostic.firstLoss) return false;
+  diagnostic.firstLoss = { point, evidence, ...extra };
+  console.log(`FIRST_LOSS_POINT=${point}`);
+  console.log(`FIRST_LOSS_EVIDENCE=${evidence}`);
+  for (const [key, value] of Object.entries(extra)) console.log(`${key}=${value}`);
+  return true;
+}
+
 function buildGroupChoices(profiles = [], count = 1, context = {}) {
   if (count <= 0) return [{ items: [], stats: {}, rankScore: 0 }];
   let states = [{ items: [], ids: new Set(), stats: {}, rankScore: 0 }];
@@ -148,6 +194,10 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     Number(context.profile.search.groupChoiceLimits?.[context.slot] || 1),
     Number(context.profile.search.groupBeamWidth || 1)
   );
+  const diagnostic = context.diagnostic || null;
+  const witnessChoiceIds = new Set((context.diagnosticWitnessChoiceIds || []).map(String));
+  let finalPickSnapshot = null;
+
   for (let pick = 0; pick < count; pick++) {
     const next = [];
     for (const state of states) {
@@ -171,16 +221,93 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
       const previous = dedup.get(key);
       if (!previous || state.rankScore > previous.rankScore) dedup.set(key, state);
     }
-    states = keepEquipmentDiversity([...dedup.values()], limit, {
+    const dedupStates = [...dedup.values()];
+    const diverseStates = keepEquipmentDiversity(dedupStates, limit, {
       policy: context.policy,
       constraints: context.constraints,
       bucketLimit: context.profile.search.groupBucketLimit
     });
+
+    if (diagnostic && !diagnostic.firstLoss && witnessChoiceIds.size) {
+      const compatible = (state) => state.items.length === pick + 1
+        && state.items.every((item) => witnessChoiceIds.has(String(item.id)));
+      const witnessRaw = next.some(compatible);
+      const witnessDedup = dedupStates.some(compatible);
+      const witnessDiverse = diverseStates.some(compatible);
+      if (witnessRaw && witnessDedup && !witnessDiverse) {
+        const witnessState = dedupStates.find(compatible);
+        const ranked = [...dedupStates].sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
+        const rank = witnessState ? ranked.findIndex((state) => itemKey(state.items) === itemKey(witnessState.items)) + 1 : 0;
+        const bucket = witnessState ? stateBucket(witnessState, context.constraints) : 'NA';
+        const signature = witnessState ? setSignature(witnessState.items) : 'NA';
+        if (recordDiagnosticFirstLoss(
+          diagnostic,
+          'GROUP_CHOICE_DIVERSITY',
+          `slot=${context.slot}|pick=${pick + 1}|witness-compatible partial removed by keepEquipmentDiversity`,
+          {
+            FIRST_LOSS_OPERATION: 'KEEP_EQUIPMENT_DIVERSITY',
+            FIRST_LOSS_RANK: rank || 'NA',
+            FIRST_LOSS_LIMIT: limit,
+            FIRST_LOSS_BUCKET: bucket,
+            FIRST_LOSS_SET_SIGNATURE: signature || 'EMPTY'
+          }
+        )) printDiagnosticLossStats(witnessState, diverseStates, context.fmPolicy);
+      }
+    }
+
+    states = diverseStates;
+    if (pick === count - 1) {
+      finalPickSnapshot = {
+        raw: next,
+        dedup: dedupStates,
+        diverse: diverseStates
+      };
+    }
     if (!states.length) break;
   }
-  return states
-    .sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)))
-    .slice(0, Number(context.profile.search.groupChoiceLimits?.[context.slot] || states.length));
+
+  const preSlice = [...states]
+    .sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
+  const finalLimit = Number(context.profile.search.groupChoiceLimits?.[context.slot] || states.length);
+  const finalStates = preSlice.slice(0, finalLimit);
+
+  if (diagnostic && witnessChoiceIds.size) {
+    const witnessKey = [...witnessChoiceIds].sort().join('|');
+    const exact = (state) => itemKey(state.items) === witnessKey;
+    const rawStates = finalPickSnapshot?.raw || [];
+    const dedupStates = finalPickSnapshot?.dedup || [];
+    const diverseStates = finalPickSnapshot?.diverse || [];
+    const witnessRaw = rawStates.some(exact);
+    const witnessDedup = dedupStates.some(exact);
+    const witnessDiverse = diverseStates.some(exact);
+    const witnessPreSlice = preSlice.some(exact);
+    const witnessFinal = finalStates.some(exact);
+    const rank = witnessPreSlice ? preSlice.findIndex(exact) + 1 : 0;
+    console.log(`TRACE_GROUP=|pool=${context.slot}|pick=${count}|raw=${rawStates.length}|dedup=${dedupStates.length}|diverse=${diverseStates.length}|final=${finalStates.length}|limit=${finalLimit}|witnessRaw=${witnessRaw ? 'YES' : 'NO'}|witnessDedup=${witnessDedup ? 'YES' : 'NO'}|witnessDiverse=${witnessDiverse ? 'YES' : 'NO'}|witnessPreSlice=${witnessPreSlice ? 'YES' : 'NO'}|witnessFinal=${witnessFinal ? 'YES' : 'NO'}|preSliceRank=${rank || 'NA'}`);
+
+    if (!diagnostic.firstLoss && witnessDiverse && !witnessFinal) {
+      const witnessState = preSlice.find(exact);
+      if (recordDiagnosticFirstLoss(
+        diagnostic,
+        'GROUP_CHOICE_FINAL_SLICE',
+        `slot=${context.slot}|exact witness choice present before final sort/slice and absent after slice`,
+        {
+          FIRST_LOSS_OPERATION: 'FINAL_SORT_AND_SLICE',
+          FIRST_LOSS_RANK: rank || 'NA',
+          FIRST_LOSS_LIMIT: finalLimit
+        }
+      )) printDiagnosticLossStats(witnessState, finalStates, context.fmPolicy);
+    } else if (!diagnostic.firstLoss && !witnessRaw) {
+      recordDiagnosticFirstLoss(
+        diagnostic,
+        'GROUP_CHOICE_EXPANSION',
+        `slot=${context.slot}|exact witness group choice never reached final raw expansion`,
+        { FIRST_LOSS_OPERATION: 'RAW_EXPANSION' }
+      );
+    }
+  }
+
+  return finalStates;
 }
 
 function insertTop(results, candidate, topN) {
@@ -226,13 +353,37 @@ export function searchEquipmentArchitecturesV2({
   fmPolicy = {},
   syntheticOffense = {},
   requiredItemIds = [],
+  diagnosticWitnessItemIds = [],
   topN = 10,
   searchProfile = 'BALANCED',
   onProgress = null,
   onDiagnostics = null
 } = {}) {
+  const diagnosticIds = [...new Set((diagnosticWitnessItemIds || []).map(String).filter(Boolean))];
+  const diagnostic = diagnosticIds.length ? { ids: diagnosticIds, firstLoss: null } : null;
+  const rawById = new Map((items || []).map((item) => [String(item.id), item]));
   const trophyEligibility = optimizerTrophyEligibilityCounts(items);
   const eligibleItems = filterOptimizerEligibleItems(items);
+  const eligibleById = new Map(eligibleItems.map((item) => [String(item.id), item]));
+
+  if (diagnostic) {
+    const rawCount = diagnosticIds.filter((id) => rawById.has(id)).length;
+    const eligibleCount = diagnosticIds.filter((id) => eligibleById.has(id)).length;
+    console.log(`TRACE_RAW_WITNESS_COUNT=${rawCount}`);
+    console.log(`TRACE_ELIGIBLE_WITNESS_COUNT=${eligibleCount}`);
+    for (const id of diagnosticIds) {
+      const item = rawById.get(id) || eligibleById.get(id);
+      console.log(`TRACE_ITEM=${id}|slot=${item?.slot || 'NA'}|raw=${rawById.has(id) ? 'YES' : 'NO'}|eligible=${eligibleById.has(id) ? 'YES' : 'NO'}`);
+    }
+    if (rawCount !== diagnosticIds.length || eligibleCount !== diagnosticIds.length) {
+      recordDiagnosticFirstLoss(
+        diagnostic,
+        'RAW_ELIGIBILITY',
+        `raw=${rawCount}/${diagnosticIds.length}|eligible=${eligibleCount}/${diagnosticIds.length}`
+      );
+    }
+  }
+
   const required = requiredConstraint(eligibleItems, requiredItemIds);
   if (!required.valid) return impossibleResult(required, trophyEligibility);
 
@@ -248,8 +399,50 @@ export function searchEquipmentArchitecturesV2({
   });
   const policy = prefilter.policy;
   const setsById = setsByIdFor(sets);
+
+  if (diagnostic && !diagnostic.firstLoss) {
+    let poolWitnessCount = 0;
+    let firstMissing = null;
+    for (const id of diagnosticIds) {
+      const item = eligibleById.get(id);
+      const pool = item ? (prefilter.pools?.[item.slot] || []) : [];
+      const position = item ? pool.findIndex((entry) => String(entry.id) === id) : -1;
+      const present = position >= 0;
+      if (present) poolWitnessCount++;
+      const slotDiag = prefilter.diagnostics?.slots?.find((entry) => entry.id === item?.slot);
+      const reasons = slotDiag?.reasons?.[id] || [];
+      console.log(`TRACE_POOL_ITEM=${id}|slot=${item?.slot || 'NA'}|present=${present ? 'YES' : 'NO'}|position=${present ? `${position + 1}/${pool.length}` : 'NA'}|reasons=${reasons.join(',') || 'NONE'}`);
+      if (!present && !firstMissing && item) firstMissing = item;
+    }
+    console.log(`TRACE_POOL_WITNESS_COUNT=${poolWitnessCount}`);
+
+    if (firstMissing) {
+      const rule = SLOT_RULES.find((entry) => entry.id === firstMissing.slot);
+      const slotItems = eligibleItems.filter((item) => item?.slot === firstMissing.slot);
+      const pareto = pruneDominatedCandidates(slotItems, {
+        keys: policy.paretoKeys,
+        nonMonotoneKeys: policy.nonMonotoneKeys,
+        groupCount: Number(rule?.count || 1)
+      });
+      const paretoSurvived = pareto.candidates.some((item) => String(item.id) === String(firstMissing.id));
+      console.log(`TRACE_POOL_MISSING=${firstMissing.id}|slot=${firstMissing.slot}|paretoSurvived=${paretoSurvived ? 'YES' : 'NO'}`);
+      recordDiagnosticFirstLoss(
+        diagnostic,
+        paretoSurvived ? 'CANDIDATE_POOL_SHORTLIST' : 'CANDIDATE_POOL_PARETO',
+        `item=${firstMissing.id}|slot=${firstMissing.slot}|paretoSurvived=${paretoSurvived ? 'YES' : 'NO'}`,
+        {
+          FIRST_POOL_MISSING_ITEM: firstMissing.id,
+          FIRST_POOL_MISSING_PARETO_SURVIVED: paretoSurvived ? 'YES' : 'NO'
+        }
+      );
+    }
+  }
+
   const requiredIds = new Set(required.ids);
   const requiredCounts = slotCounts(required.requiredItems);
+  const witnessBySlot = diagnostic
+    ? Object.fromEntries(SLOT_RULES.map((rule) => [rule.id, diagnosticIds.filter((id) => eligibleById.get(id)?.slot === rule.id)]))
+    : {};
   const choiceCache = new Map();
 
   function choicesFor(rule) {
@@ -265,7 +458,10 @@ export function searchEquipmentArchitecturesV2({
       policy,
       profile,
       constraints,
-      setsById
+      fmPolicy,
+      setsById,
+      diagnostic: diagnostic && !diagnostic.firstLoss ? diagnostic : null,
+      diagnosticWitnessChoiceIds: diagnostic && !diagnostic.firstLoss ? (witnessBySlot[rule.id] || []) : []
     });
     choiceCache.set(cacheKey, choices);
     return choices;
@@ -280,6 +476,8 @@ export function searchEquipmentArchitecturesV2({
       return choicesFor(a).length - choicesFor(b).length;
     });
 
+  if (diagnostic && !diagnostic.firstLoss) console.log(`TRACE_GROUP_ORDER=${groups.map((group) => group.id).join('|')}`);
+
   const initialRank = rankItems(required.requiredItems, policy, setsById);
   let states = [{
     items: [...required.requiredItems],
@@ -291,6 +489,7 @@ export function searchEquipmentArchitecturesV2({
   let heuristicTrimmed = 0;
   let safePruned = 0;
   const trace = [{ stage: 'raw-eligible-catalog', count: eligibleItems.length }, { stage: 'candidate-pool', count: prefilter.items.length }];
+  const processedWitnessIds = new Set(required.ids.filter((id) => diagnosticIds.includes(id)));
 
   for (const group of groups) {
     const choices = choicesFor(group);
@@ -320,6 +519,40 @@ export function searchEquipmentArchitecturesV2({
       constraints,
       bucketLimit: profile.search.stateBucketLimit
     });
+
+    if (diagnostic && !diagnostic.firstLoss) {
+      for (const id of witnessBySlot[group.id] || []) processedWitnessIds.add(id);
+      const prefixKey = [...processedWitnessIds].sort().join('|');
+      const matchesPrefix = (state) => itemKey(state.items) === prefixKey;
+      const witnessBefore = next.find(matchesPrefix);
+      const witnessAfter = kept.find(matchesPrefix);
+      const rankedNext = [...next].sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
+      const rank = witnessBefore ? rankedNext.findIndex(matchesPrefix) + 1 : 0;
+      const bucket = witnessBefore ? stateBucket(witnessBefore, constraints) : 'NA';
+      const signature = witnessBefore ? setSignature(witnessBefore.items) : 'NA';
+      console.log(`TRACE_STATE=|group=${group.id}|incoming=${states.length}|choices=${choices.length}|expanded=${next.length}|beam=${kept.length}|bucketLimit=${profile.search.stateBucketLimit}|witnessBefore=${witnessBefore ? 'YES' : 'NO'}|witnessAfter=${witnessAfter ? 'YES' : 'NO'}|rank=${rank || 'NA'}|rankScore=${witnessBefore?.rankScore ?? 'NA'}|bucket=${bucket}|setSignature=${signature || 'EMPTY'}`);
+      if (witnessBefore && !witnessAfter) {
+        if (recordDiagnosticFirstLoss(
+          diagnostic,
+          'STATE_BEAM',
+          `group=${group.id}|exact witness prefix present before keepEquipmentDiversity and absent after beam`,
+          {
+            FIRST_LOSS_BEAM_LIMIT: stateLimit,
+            FIRST_LOSS_WITNESS_RANK: rank || 'NA',
+            FIRST_LOSS_WITNESS_BUCKET: bucket,
+            FIRST_LOSS_WITNESS_SET_SIGNATURE: signature || 'EMPTY'
+          }
+        )) printDiagnosticLossStats(witnessBefore, kept, fmPolicy);
+      } else if (!witnessBefore) {
+        recordDiagnosticFirstLoss(
+          diagnostic,
+          'STATE_EXPANSION',
+          `group=${group.id}|exact witness prefix absent before state beam`,
+          { FIRST_LOSS_BEAM_LIMIT: stateLimit }
+        );
+      }
+    }
+
     heuristicTrimmed += Math.max(0, next.length - kept.length);
     states = kept;
     trace.push({ stage: `beam:${group.id}`, before: next.length, count: states.length });

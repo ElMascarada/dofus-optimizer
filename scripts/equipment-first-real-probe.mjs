@@ -2,8 +2,32 @@ import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { validateDofusSnapshot } from '../js/data-loader.js';
 import { searchEquipmentArchitecturesV2 } from '../js/equipment-search-v2.js';
-import { completeSlotStructureIsValid, itemConditionsAreValid, permanentStatCapViolations } from '../js/build-legality.js';
+import {
+  completeSlotStructureIsValid,
+  itemConditionsAreValid,
+  permanentStatCapViolations
+} from '../js/build-legality.js';
+import { evaluateCompleteEquipmentBuild } from '../js/complete-equipment-build-evaluator.js';
 import { constraintDeficits } from '../js/stats.js';
+
+const WITNESS_IDS = Object.freeze([
+  'item-22191',
+  'item-14162',
+  'item-15696',
+  'item-26011',
+  'item-14169',
+  'item-22189',
+  'item-13641',
+  'item-22192',
+  'item-13642',
+  'item-13465',
+  'item-22001',
+  'item-13762',
+  'item-13828',
+  'item-694',
+  'item-7754',
+  'item-8698'
+]);
 
 const raw = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
 const dataset = validateDofusSnapshot(raw);
@@ -12,6 +36,51 @@ const constraints = { ap: 12, mp: 6 };
 const fmPolicy = { exoAp: 0, exoMp: 0 };
 const topN = 3;
 
+const byId = new Map(dataset.items.map((item) => [String(item.id), item]));
+const witnessItems = WITNESS_IDS.map((id) => byId.get(id)).filter(Boolean);
+if (witnessItems.length !== WITNESS_IDS.length) {
+  const missing = WITNESS_IDS.filter((id) => !byId.has(id));
+  throw new Error(`Authoritative witness dataset drift: resolved ${witnessItems.length}/${WITNESS_IDS.length}; missing=${missing.join('|')}`);
+}
+
+const direct = evaluateCompleteEquipmentBuild({
+  items: witnessItems,
+  sets: dataset.sets,
+  constraints,
+  fmPolicy,
+  syntheticOffense
+});
+const directValid = Boolean(direct.result);
+console.log(`TRACE_DIRECT_WITNESS_VALID=${directValid ? 'YES' : 'NO'}`);
+console.log(`TRACE_DIRECT_WITNESS_AP=${direct.result?.stats?.ap ?? 'NA'}`);
+console.log(`TRACE_DIRECT_WITNESS_MP=${direct.result?.stats?.mp ?? 'NA'}`);
+console.log(`TRACE_DIRECT_WITNESS_MIN=${direct.result?.syntheticOffense?.minimumScore ?? 'NA'}`);
+console.log(`TRACE_DIRECT_WITNESS_MEAN=${direct.result?.syntheticOffense?.meanScore ?? 'NA'}`);
+console.log(`TRACE_DIRECT_WITNESS_IDENTITY=${direct.result?.items?.map((item) => String(item.id)).sort().join('|') || 'NA'}`);
+if (!directValid) throw new Error(`Authoritative witness failed direct evaluator: ${direct.reason || 'unknown'}`);
+
+const forced = searchEquipmentArchitecturesV2({
+  items: dataset.items,
+  sets: dataset.sets,
+  constraints,
+  fmPolicy,
+  syntheticOffense,
+  requiredItemIds: WITNESS_IDS,
+  topN,
+  searchProfile: 'BALANCED'
+});
+const forcedIdentity = forced.results[0]?.items?.map((item) => String(item.id)).sort().join('|') || 'NA';
+const expectedIdentity = [...WITNESS_IDS].sort().join('|');
+const forcedValid = forced.results.length > 0 && forcedIdentity === expectedIdentity;
+console.log(`TRACE_FORCED_WITNESS_VALID=${forcedValid ? 'YES' : 'NO'}`);
+console.log(`TRACE_FORCED_WITNESS_RESULT_COUNT=${forced.results.length}`);
+console.log(`TRACE_FORCED_WITNESS_IDENTITY=${forcedIdentity}`);
+console.log(`TRACE_FORCED_WITNESS_MIN=${forced.results[0]?.syntheticOffense?.minimumScore ?? 'NA'}`);
+if (!forcedValid) {
+  console.log('FIRST_LOSS_POINT=FORCED_PATH_INCONSISTENCY');
+  console.log(`FIRST_LOSS_EVIDENCE=direct evaluator passed but requiredItemIds search returned ${forced.results.length} result(s); reason=${forced.diagnostics?.reason || 'none'}`);
+}
+
 const started = performance.now();
 const output = searchEquipmentArchitecturesV2({
   items: dataset.items,
@@ -19,6 +88,7 @@ const output = searchEquipmentArchitecturesV2({
   constraints,
   fmPolicy,
   syntheticOffense,
+  diagnosticWitnessItemIds: forcedValid ? WITNESS_IDS : [],
   topN,
   searchProfile: 'BALANCED'
 });
