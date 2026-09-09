@@ -1,5 +1,6 @@
 import { cloneStats } from './stats.js';
 import { evaluateObjective } from './spells.js';
+import { applyStructuralExos, structuralExoSelection } from './structural-exos.js';
 
 export const FM_ELIGIBLE_SLOTS = new Set(['hat', 'cape', 'amulet', 'ring', 'belt', 'boots', 'weapon', 'shield']);
 
@@ -8,21 +9,6 @@ function offensiveAssignmentOptions(items, policy) {
   const forcedSpellPctItems = items.filter((item) => Number(item.stats?.critDamage || 0) !== 0);
   const maxCritItems = policy.allowCritDamage ? critEligible.length : 0;
   return { critEligible, forcedSpellPctItems, maxCritItems };
-}
-
-function structuralExoSelection(policy = {}) {
-  // Keep legacy structuralExos as an explicitly-requested compatibility input
-  // for old deterministic callers. Product requests use the independent fields.
-  const legacyPair = policy?.structuralExos === true;
-  return {
-    exoAp: Number(policy?.exoAp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0,
-    exoMp: Number(policy?.exoMp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0
-  };
-}
-
-function applyStructuralExos(stats, { exoAp = 0, exoMp = 0 } = {}) {
-  if (exoAp) stats.ap = (stats.ap || 0) + 1;
-  if (exoMp) stats.mp = (stats.mp || 0) + 1;
 }
 
 function noOffensiveFm({ baseStats, items, selections, turnMode, scenario, exoAp, exoMp }) {

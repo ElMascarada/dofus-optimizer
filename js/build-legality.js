@@ -1,3 +1,4 @@
+import { SLOT_RULES } from './config.js';
 import { effectiveStat } from './stats.js';
 
 function normalizeType(value = '') {
@@ -7,6 +8,7 @@ function normalizeType(value = '') {
 const INVESTABLE_STATS = new Set(['earth', 'fire', 'water', 'air']);
 
 export const MAX_PERMANENT_AP = 12;
+export const MAX_PERMANENT_MP = 6;
 
 export function isPrysmaradite(item) {
   return item?.slotSubtype === 'prysmaradite' || normalizeType(item?.typeName).includes('prysmaradite');
@@ -27,11 +29,22 @@ export function specialSlotRulesAreValid(items = []) {
   return items.filter(isPrysmaradite).length <= 1;
 }
 
-export function permanentStatCapViolations(stats = {}) {
+export function completeSlotStructureIsValid(items = [], slotRules = SLOT_RULES) {
+  const counts = new Map();
+  for (const item of items || []) counts.set(item?.slot, (counts.get(item?.slot) || 0) + 1);
+  return (slotRules || []).every((rule) => Number(counts.get(rule.id) || 0) === Number(rule.count || 0))
+    && [...counts.keys()].every((slot) => (slotRules || []).some((rule) => rule.id === slot));
+}
+
+export function permanentStatCapViolations(stats = {}, { includeMp = false } = {}) {
+  const violations = [];
   const ap = effectiveStat(stats, 'ap');
-  return ap > MAX_PERMANENT_AP
-    ? [{ stat: 'ap', actual: ap, maximum: MAX_PERMANENT_AP }]
-    : [];
+  if (ap > MAX_PERMANENT_AP) violations.push({ stat: 'ap', actual: ap, maximum: MAX_PERMANENT_AP });
+  if (includeMp) {
+    const mp = effectiveStat(stats, 'mp');
+    if (mp > MAX_PERMANENT_MP) violations.push({ stat: 'mp', actual: mp, maximum: MAX_PERMANENT_MP });
+  }
+  return violations;
 }
 
 export function evaluateNormalizedCondition(node, stats = {}) {
