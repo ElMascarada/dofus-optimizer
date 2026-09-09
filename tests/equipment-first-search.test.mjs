@@ -11,6 +11,7 @@ import {
   createEquipmentCandidatePolicy,
   syntheticRelevantStatKeys
 } from '../optimizer/equipment-candidate-policy.js';
+import { getSearchProfile } from '../optimizer/search-profiles.js';
 
 function item(id, slot, stats = {}, extra = {}) {
   return { id, name: id, slot, level: 200, stats: { ...stats }, conditions: null, setId: null, ...extra };
@@ -64,6 +65,16 @@ function exhaustiveBuilds(items) {
   }
   visit(0, []);
   return output;
+}
+
+function sumItemStats(items = []) {
+  const stats = {};
+  for (const entry of items) {
+    for (const [key, value] of Object.entries(entry?.stats || {})) {
+      stats[key] = Number(stats[key] || 0) + Number(value || 0);
+    }
+  }
+  return stats;
 }
 
 function exhaustiveOracle({ items, sets = [], constraints = {}, fmPolicy = {}, syntheticOffense, topN = 3 }) {
@@ -267,7 +278,7 @@ test('oracle I: structural exo AP affects offense and exo MP rescues feasibility
   assert.equal(mpOracle[0].stats.mp, 6);
 });
 
-test('topN=3 exactly matches exhaustive oracle order', () => {
+test('topN=3 exactly matches exhaustive oracle order and scans every generated complete state', () => {
   const base = fixedCatalog();
   const fixture = {
     items: withSlotVariants(base, 'hat', [
@@ -281,6 +292,9 @@ test('topN=3 exactly matches exhaustive oracle order', () => {
   };
   const { oracle, search } = runCase(fixture);
   assert.deepEqual(search.results.map((result) => result.buildIdentity), oracle.map((result) => result.buildIdentity));
+  assert.equal(search.diagnostics.authoritativeEvaluated, search.diagnostics.completeStates);
+  assert.equal(search.diagnostics.evaluated, search.diagnostics.completeStates);
+  assert.equal(search.diagnostics.finalEvaluationTrimmed, 0);
 });
 
 test('unique feasible late lineage survives many better partial-offense candidates', () => {
@@ -306,4 +320,71 @@ test('unique feasible late lineage survives many better partial-offense candidat
   assert.equal(search.results[0].buildIdentity, oracle[0].buildIdentity);
   assert.equal(search.results[0].items.some((entry) => entry.id === 'only-feasible'), true);
   assert.ok(search.diagnostics.trace.some((entry) => entry.stage === 'complete-evaluation-pool'));
+});
+
+test('late feasible complete build is evaluated beyond the historical final limit', () => {
+  let items = fixedCatalog({ ap: 4, mp: 3 });
+  const hats = [];
+  const capes = [];
+  for (let index = 0; index < 8; index++) {
+    hats.push(item(`invalid-high-hat-${index}`, 'hat', { ap: 1, earth: 1000 + index }));
+    capes.push(item(`invalid-high-cape-${index}`, 'cape', { ap: 1, earth: 1000 + index }));
+  }
+  for (let index = 0; index < 4; index++) {
+    hats.push(item(`valid-late-hat-${index}`, 'hat', { earth: 10 + index }));
+    capes.push(item(`valid-late-cape-${index}`, 'cape', { earth: 10 + index }));
+  }
+  items = withSlotVariants(items, 'hat', hats);
+  items = withSlotVariants(items, 'cape', capes);
+  const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+  const historicalLimit = getSearchProfile('BALANCED').search.evaluationLimit;
+  const policy = createEquipmentCandidatePolicy({ items, syntheticOffense });
+  const ranked = exhaustiveBuilds(items)
+    .map((build) => ({
+      build,
+      rankScore: policy.rankStats(sumItemStats(build)).rankScore,
+      key: build.map((entry) => String(entry.id)).sort().join('|')
+    }))
+    .sort((a, b) => b.rankScore - a.rankScore || a.key.localeCompare(b.key));
+
+  assert.ok(ranked.length > historicalLimit);
+  const historicalPrefix = ranked.slice(0, historicalLimit);
+  assert.equal(historicalPrefix.length, historicalLimit);
+  assert.equal(historicalPrefix.every(({ build }) => !evaluateCompleteEquipmentBuild({
+    items: build,
+    syntheticOffense
+  }).result), true);
+
+  const search = searchEquipmentArchitecturesV2({ items, syntheticOffense, topN: 1 });
+  assert.ok(search.diagnostics.completeStates > historicalLimit);
+  assert.equal(search.diagnostics.authoritativeEvaluated, search.diagnostics.completeStates);
+  assert.equal(search.diagnostics.finalEvaluationTrimmed, 0);
+  assert.ok(search.diagnostics.valid > 0);
+  assert.ok(search.results.length > 0);
+});
+
+test('later authoritative winner beats an earlier valid heuristic favorite', () => {
+  const heuristicFavorite = item('heuristic-favorite', 'hat', { earth: 500 }, {
+    conditions: { kind: 'condition', stat: 'fire', operator: 'gte', value: 400 }
+  });
+  const authoritativeWinner = item('authoritative-winner', 'hat', { earth: 350 });
+  const base = fixedCatalog();
+  const items = withSlotVariants(base, 'hat', [heuristicFavorite, authoritativeWinner]);
+  const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+  const policy = createEquipmentCandidatePolicy({ items, syntheticOffense });
+  assert.ok(policy.profileItem(heuristicFavorite).rankScore > policy.profileItem(authoritativeWinner).rankScore);
+
+  const builds = exhaustiveBuilds(items);
+  const favoriteBuild = builds.find((build) => build.some((entry) => entry.id === heuristicFavorite.id));
+  const winnerBuild = builds.find((build) => build.some((entry) => entry.id === authoritativeWinner.id));
+  const favoriteEvaluation = evaluateCompleteEquipmentBuild({ items: favoriteBuild, syntheticOffense });
+  const winnerEvaluation = evaluateCompleteEquipmentBuild({ items: winnerBuild, syntheticOffense });
+  assert.ok(favoriteEvaluation.result);
+  assert.ok(winnerEvaluation.result);
+  assert.ok(compareCompleteEquipmentBuildResults(winnerEvaluation.result, favoriteEvaluation.result) > 0);
+
+  const search = searchEquipmentArchitecturesV2({ items, syntheticOffense, topN: 1 });
+  assert.equal(search.diagnostics.authoritativeEvaluated, search.diagnostics.completeStates);
+  assert.equal(search.diagnostics.finalEvaluationTrimmed, 0);
+  assert.equal(search.results[0].buildIdentity, winnerEvaluation.result.buildIdentity);
 });

@@ -209,6 +209,8 @@ function impossibleResult(required, trophyEligibility) {
       expandedStates: 0,
       completeStates: 0,
       evaluated: 0,
+      authoritativeEvaluated: 0,
+      finalEvaluationTrimmed: 0,
       valid: 0,
       heuristicTrimmed: 0,
       safePruned: 0,
@@ -337,17 +339,9 @@ export function searchEquipmentArchitecturesV2({
 
   const complete = states.filter((state) => fullShape(state.items));
   trace.push({ stage: 'complete-states', count: complete.length });
-  const evaluationLimit = positiveEquipmentConstraintKeys(constraints).some((key) => !['ap', 'mp'].includes(key))
-    ? profile.search.constrainedEvaluationLimit
-    : profile.search.evaluationLimit;
-  const rankedComplete = [...complete].sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
-  const evaluationPool = keepEquipmentDiversity(rankedComplete, Math.max(evaluationLimit, topN), {
-    policy,
-    constraints,
-    bucketLimit: profile.search.stateBucketLimit
-  });
-  heuristicTrimmed += Math.max(0, complete.length - evaluationPool.length);
-  trace.push({ stage: 'complete-evaluation-pool', count: evaluationPool.length });
+  const evaluationPool = complete;
+  const finalEvaluationTrimmed = 0;
+  trace.push({ stage: 'complete-evaluation-pool', count: evaluationPool.length, trimmed: finalEvaluationTrimmed });
 
   const results = [];
   const rejected = {};
@@ -387,6 +381,8 @@ export function searchEquipmentArchitecturesV2({
       candidateCount: prefilter.items.length,
       completeStates: complete.length,
       evaluated,
+      authoritativeEvaluated: evaluated,
+      finalEvaluationTrimmed,
       valid,
       expandedStates,
       safePruned,
