@@ -1,3 +1,4 @@
+import { SLOT_RULES } from './config.js';
 import { effectiveStat } from './stats.js';
 
 function normalizeType(value = '') {
@@ -26,6 +27,13 @@ export function countSetBonuses(items = []) {
 
 export function specialSlotRulesAreValid(items = []) {
   return items.filter(isPrysmaradite).length <= 1;
+}
+
+export function completeSlotStructureIsValid(items = [], slotRules = SLOT_RULES) {
+  const counts = new Map();
+  for (const item of items || []) counts.set(item?.slot, (counts.get(item?.slot) || 0) + 1);
+  return (slotRules || []).every((rule) => Number(counts.get(rule.id) || 0) === Number(rule.count || 0))
+    && [...counts.keys()].every((slot) => (slotRules || []).some((rule) => rule.id === slot));
 }
 
 export function permanentStatCapViolations(stats = {}, { includeMp = false } = {}) {
