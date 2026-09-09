@@ -388,3 +388,44 @@ test('later authoritative winner beats an earlier valid heuristic favorite', () 
   assert.equal(search.diagnostics.finalEvaluationTrimmed, 0);
   assert.equal(search.results[0].buildIdentity, winnerEvaluation.result.buildIdentity);
 });
+
+test('final group diversity preserves a low raw-rank specialist needed for a legal completion', () => {
+  let base = fixedCatalog();
+  base = base.map((entry) => entry.slot === 'amulet'
+    ? {
+        ...entry,
+        conditions: { kind: 'condition', stat: 'range', operator: 'gte', value: 1 }
+      }
+    : entry);
+
+  const profile = getSearchProfile('BALANCED');
+  const finalGroupLimit = Number(profile.search.groupChoiceLimits.hat);
+  const rawFavorites = [];
+  for (let index = 0; index < finalGroupLimit; index++) {
+    rawFavorites.push(item(`raw-favorite-${index}`, 'hat', { earth: 500 - index }));
+  }
+  const witness = item('range-specialist-witness', 'hat', { range: 1 });
+  const items = withSlotVariants(base, 'hat', [...rawFavorites, witness]);
+  const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+  const policy = createEquipmentCandidatePolicy({ items, syntheticOffense, searchProfile: profile });
+  const rankedHats = items
+    .filter((entry) => entry.slot === 'hat')
+    .map((entry) => policy.profileItem(entry))
+    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+  const witnessRawRank = rankedHats.findIndex((entry) => entry.item.id === witness.id) + 1;
+
+  assert.ok(witnessRawRank > finalGroupLimit);
+  const oracle = exhaustiveOracle({ items, syntheticOffense, topN: 1 });
+  assert.equal(oracle.length, 1);
+  assert.equal(oracle[0].items.some((entry) => entry.id === witness.id), true);
+
+  const search = searchEquipmentArchitecturesV2({
+    items,
+    syntheticOffense,
+    topN: 1,
+    searchProfile: profile
+  });
+  assert.ok(search.results.length > 0, 'final diversity selection must retain the only legal specialist lineage');
+  assert.equal(search.results[0].buildIdentity, oracle[0].buildIdentity);
+  assert.equal(search.results[0].items.some((entry) => entry.id === witness.id), true);
+});

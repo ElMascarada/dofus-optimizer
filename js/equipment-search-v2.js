@@ -190,8 +190,12 @@ function recordDiagnosticFirstLoss(diagnostic, point, evidence, extra = {}) {
 function buildGroupChoices(profiles = [], count = 1, context = {}) {
   if (count <= 0) return [{ items: [], stats: {}, rankScore: 0 }];
   let states = [{ items: [], ids: new Set(), stats: {}, rankScore: 0 }];
-  const limit = Math.max(
-    Number(context.profile.search.groupChoiceLimits?.[context.slot] || 1),
+  const finalLimit = Math.max(
+    1,
+    Number(context.profile.search.groupChoiceLimits?.[context.slot] || 1)
+  );
+  const intermediateLimit = Math.max(
+    finalLimit,
     Number(context.profile.search.groupBeamWidth || 1)
   );
   const diagnostic = context.diagnostic || null;
@@ -222,7 +226,8 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
       if (!previous || state.rankScore > previous.rankScore) dedup.set(key, state);
     }
     const dedupStates = [...dedup.values()];
-    const diverseStates = keepEquipmentDiversity(dedupStates, limit, {
+    const pickLimit = pick === count - 1 ? finalLimit : intermediateLimit;
+    const diverseStates = keepEquipmentDiversity(dedupStates, pickLimit, {
       policy: context.policy,
       constraints: context.constraints,
       bucketLimit: context.profile.search.groupBucketLimit
@@ -247,7 +252,7 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
           {
             FIRST_LOSS_OPERATION: 'KEEP_EQUIPMENT_DIVERSITY',
             FIRST_LOSS_RANK: rank || 'NA',
-            FIRST_LOSS_LIMIT: limit,
+            FIRST_LOSS_LIMIT: pickLimit,
             FIRST_LOSS_BUCKET: bucket,
             FIRST_LOSS_SET_SIGNATURE: signature || 'EMPTY'
           }
@@ -266,10 +271,7 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     if (!states.length) break;
   }
 
-  const preSlice = [...states]
-    .sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
-  const finalLimit = Number(context.profile.search.groupChoiceLimits?.[context.slot] || states.length);
-  const finalStates = preSlice.slice(0, finalLimit);
+  const finalStates = states;
 
   if (diagnostic && witnessChoiceIds.size) {
     const witnessKey = [...witnessChoiceIds].sort().join('|');
@@ -280,24 +282,13 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     const witnessRaw = rawStates.some(exact);
     const witnessDedup = dedupStates.some(exact);
     const witnessDiverse = diverseStates.some(exact);
-    const witnessPreSlice = preSlice.some(exact);
     const witnessFinal = finalStates.some(exact);
-    const rank = witnessPreSlice ? preSlice.findIndex(exact) + 1 : 0;
-    console.log(`TRACE_GROUP=|pool=${context.slot}|pick=${count}|raw=${rawStates.length}|dedup=${dedupStates.length}|diverse=${diverseStates.length}|final=${finalStates.length}|limit=${finalLimit}|witnessRaw=${witnessRaw ? 'YES' : 'NO'}|witnessDedup=${witnessDedup ? 'YES' : 'NO'}|witnessDiverse=${witnessDiverse ? 'YES' : 'NO'}|witnessPreSlice=${witnessPreSlice ? 'YES' : 'NO'}|witnessFinal=${witnessFinal ? 'YES' : 'NO'}|preSliceRank=${rank || 'NA'}`);
+    const rankedRaw = [...dedupStates]
+      .sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)));
+    const rank = witnessDedup ? rankedRaw.findIndex(exact) + 1 : 0;
+    console.log(`TRACE_GROUP=|pool=${context.slot}|pick=${count}|raw=${rawStates.length}|dedup=${dedupStates.length}|diverse=${diverseStates.length}|final=${finalStates.length}|limit=${finalLimit}|witnessRaw=${witnessRaw ? 'YES' : 'NO'}|witnessDedup=${witnessDedup ? 'YES' : 'NO'}|witnessDiverse=${witnessDiverse ? 'YES' : 'NO'}|witnessPreSlice=${witnessDiverse ? 'YES' : 'NO'}|witnessFinal=${witnessFinal ? 'YES' : 'NO'}|preSliceRank=${rank || 'NA'}`);
 
-    if (!diagnostic.firstLoss && witnessDiverse && !witnessFinal) {
-      const witnessState = preSlice.find(exact);
-      if (recordDiagnosticFirstLoss(
-        diagnostic,
-        'GROUP_CHOICE_FINAL_SLICE',
-        `slot=${context.slot}|exact witness choice present before final sort/slice and absent after slice`,
-        {
-          FIRST_LOSS_OPERATION: 'FINAL_SORT_AND_SLICE',
-          FIRST_LOSS_RANK: rank || 'NA',
-          FIRST_LOSS_LIMIT: finalLimit
-        }
-      )) printDiagnosticLossStats(witnessState, finalStates, context.fmPolicy);
-    } else if (!diagnostic.firstLoss && !witnessRaw) {
+    if (!diagnostic.firstLoss && !witnessRaw) {
       recordDiagnosticFirstLoss(
         diagnostic,
         'GROUP_CHOICE_EXPANSION',
