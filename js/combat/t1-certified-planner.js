@@ -13,7 +13,6 @@ import {
 import { validatePlannerSourceCertification } from './source-certification.js';
 
 const EPSILON = 1e-9;
-const IMMEDIATE_DAMAGE_ONLY = 'IMMEDIATE_DAMAGE_ONLY';
 const DISTINCT_POWER_BUFF_PAYLOADS = 'DISTINCT_POWER_BUFF_PAYLOADS';
 
 function cloneValue(value) {
@@ -42,12 +41,21 @@ function semanticOfType(effects, type) {
   return found;
 }
 
+function sameValue(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function branchDiffers(effect) {
+  if (effect.critical === undefined) return false;
+  const normal = effect.normal === undefined ? null : effect.normal;
+  return !sameValue(normal, effect.critical);
+}
+
 function futureStateBranchingEffects(effects) {
   const branching = [];
   semanticWalk(effects, (effect) => {
-    if (effect.type === SpellEffectSemanticType.DAMAGE || effect.critical === undefined) return;
-    const normal = effect.normal === undefined ? null : effect.normal;
-    if (JSON.stringify(normal) !== JSON.stringify(effect.critical)) branching.push(effect);
+    if (effect.type === SpellEffectSemanticType.DAMAGE) return;
+    if (branchDiffers(effect)) branching.push(effect);
   });
   return branching;
 }
@@ -56,40 +64,42 @@ function semanticScope(effect = {}) {
   return effect.target === 'target' || effect.scope === 'target' ? 'target' : 'self';
 }
 
-function sameValue(left, right) {
-  return JSON.stringify(left) === JSON.stringify(right);
+function normalizedResolvedPowerShape(effect, critical) {
+  const resolved = resolveSpellEffectSemantic(effect, { critical });
+  const stats = resolved.stats && typeof resolved.stats === 'object' ? resolved.stats : null;
+  if (!stats || !sameValue(Object.keys(stats).sort(), ['power'])) return null;
+  const power = Number(stats.power);
+  if (!Number.isFinite(power)) return null;
+  return {
+    power,
+    shape: {
+      ...cloneValue(resolved),
+      stats: { power: '__DISTINCT_POWER__' }
+    }
+  };
 }
 
 function distinctPowerBuffRuntimeSupported(effects) {
-  const explicitCriticalEffects = [];
+  const criticalAware = [];
   semanticWalk(effects, (effect) => {
-    if (effect.type !== SpellEffectSemanticType.DAMAGE && effect.critical !== undefined) {
-      explicitCriticalEffects.push(effect);
-    }
+    if (effect.type !== SpellEffectSemanticType.DAMAGE && effect.critical !== undefined) criticalAware.push(effect);
   });
 
-  const powerCandidates = explicitCriticalEffects.filter((effect) => {
-    if (effect.type !== SpellEffectSemanticType.STAT_MODIFIER || effect.normal === undefined) return false;
-    const normal = resolveSpellEffectSemantic(effect, { critical: false });
-    const critical = resolveSpellEffectSemantic(effect, { critical: true });
-    const normalKeys = Object.keys(normal.stats || {}).sort();
-    const criticalKeys = Object.keys(critical.stats || {}).sort();
-    return sameValue(normalKeys, ['power']) && sameValue(criticalKeys, ['power']);
-  });
-  if (powerCandidates.length !== 1) return false;
+  const branching = criticalAware.filter(branchDiffers);
+  if (branching.length !== 1) return false;
 
-  const powerEffect = powerCandidates[0];
-  const normal = resolveSpellEffectSemantic(powerEffect, { critical: false });
-  const critical = resolveSpellEffectSemantic(powerEffect, { critical: true });
-  const normalPower = Number(normal.stats?.power);
-  const criticalPower = Number(critical.stats?.power);
-  if (!Number.isFinite(normalPower) || !Number.isFinite(criticalPower)) return false;
-  if (semanticScope(normal) !== 'self' || semanticScope(critical) !== 'self') return false;
-  if (String(normal.id || '') !== String(critical.id || '')) return false;
-  if (Number(normal.durationTurns ?? normal.duration ?? 1) !== Number(critical.durationTurns ?? critical.duration ?? 1)) return false;
-  if (String(normal.stacking || 'replace-source') !== String(critical.stacking || 'replace-source')) return false;
+  const powerEffect = branching[0];
+  if (powerEffect.type !== SpellEffectSemanticType.STAT_MODIFIER) return false;
+  if (powerEffect.normal === undefined || powerEffect.critical === undefined) return false;
 
-  for (const effect of explicitCriticalEffects) {
+  const normal = normalizedResolvedPowerShape(powerEffect, false);
+  const critical = normalizedResolvedPowerShape(powerEffect, true);
+  if (!normal || !critical) return false;
+  if (normal.power === critical.power) return false;
+  if (semanticScope(normal.shape) !== 'self' || semanticScope(critical.shape) !== 'self') return false;
+  if (!sameValue(normal.shape, critical.shape)) return false;
+
+  for (const effect of criticalAware) {
     if (effect === powerEffect) continue;
     const normalBranch = effect.normal === undefined ? null : effect.normal;
     if (!sameValue(normalBranch, effect.critical)) return false;
@@ -146,19 +156,11 @@ function plannerEntry(raw, sourceCertifications = {}, sourceSpells = {}) {
 }
 
 function plannerSourceProof(entry) {
-  const criticalSemantics = String(entry.sourceCertification?.criticalSemantics || '');
-  const certificationForLegacyValidator = criticalSemantics === DISTINCT_POWER_BUFF_PAYLOADS
-    ? { ...cloneValue(entry.sourceCertification), criticalSemantics: IMMEDIATE_DAMAGE_ONLY }
-    : entry.sourceCertification;
-  const result = validatePlannerSourceCertification(
+  return validatePlannerSourceCertification(
     entry.sourceSpellId,
-    certificationForLegacyValidator,
+    entry.sourceCertification,
     entry.sourceSpell
   );
-  return {
-    ...result,
-    sourceCertification: cloneValue(entry.sourceCertification || {})
-  };
 }
 
 export function certifiedT1SpellEligibility(raw, sourceCertifications = {}, sourceSpells = {}) {
@@ -288,19 +290,26 @@ function sequenceKey(sequence = []) {
 function policyDepth(policy) {
   if (!policy) return 0;
   if (!policy.stochastic) return 1 + policyDepth(policy.continuation);
-  return 1 + Math.max(0, ...(policy.branches || []).map((branch) => policyDepth(branch.continuation)));
+  const normal = policy.branches?.find((branch) => branch.outcome === 'normal');
+  const critical = policy.branches?.find((branch) => branch.outcome === 'critical');
+  return 1 + Math.max(policyDepth(normal?.continuation), policyDepth(critical?.continuation));
 }
 
 function policyKey(policy) {
-  return policy ? JSON.stringify(policy, (key, value) => key === 'stateAfterAction' ? undefined : value) : '';
+  if (!policy) return '';
+  const spellId = String(policy.spellId || '');
+  if (!policy.stochastic) return `${spellId}>${policyKey(policy.continuation)}`;
+  const normal = policy.branches?.find((branch) => branch.outcome === 'normal');
+  const critical = policy.branches?.find((branch) => branch.outcome === 'critical');
+  return `${spellId}{n:${policyKey(normal?.continuation)},c:${policyKey(critical?.continuation)}}`;
 }
 
 function resultLength(result) {
-  return Array.isArray(result.sequence) ? result.sequence.length : policyDepth(result.policy);
+  return policyDepth(result.policy);
 }
 
 function resultKey(result) {
-  return Array.isArray(result.sequence) ? sequenceKey(result.sequence) : policyKey(result.policy);
+  return policyKey(result.policy);
 }
 
 function betterResult(candidate, best) {
