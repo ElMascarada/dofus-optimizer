@@ -7,6 +7,7 @@ function normalizeType(value = '') {
 const INVESTABLE_STATS = new Set(['earth', 'fire', 'water', 'air']);
 
 export const MAX_PERMANENT_AP = 12;
+export const MAX_PERMANENT_MP = 6;
 
 export function isPrysmaradite(item) {
   return item?.slotSubtype === 'prysmaradite' || normalizeType(item?.typeName).includes('prysmaradite');
@@ -27,11 +28,15 @@ export function specialSlotRulesAreValid(items = []) {
   return items.filter(isPrysmaradite).length <= 1;
 }
 
-export function permanentStatCapViolations(stats = {}) {
+export function permanentStatCapViolations(stats = {}, { includeMp = false } = {}) {
+  const violations = [];
   const ap = effectiveStat(stats, 'ap');
-  return ap > MAX_PERMANENT_AP
-    ? [{ stat: 'ap', actual: ap, maximum: MAX_PERMANENT_AP }]
-    : [];
+  if (ap > MAX_PERMANENT_AP) violations.push({ stat: 'ap', actual: ap, maximum: MAX_PERMANENT_AP });
+  if (includeMp) {
+    const mp = effectiveStat(stats, 'mp');
+    if (mp > MAX_PERMANENT_MP) violations.push({ stat: 'mp', actual: mp, maximum: MAX_PERMANENT_MP });
+  }
+  return violations;
 }
 
 export function evaluateNormalizedCondition(node, stats = {}) {
