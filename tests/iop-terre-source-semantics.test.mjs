@@ -157,7 +157,7 @@ for (const review of reviews) {
     }
   });
 
-  test(`${review.name}: source certification eligibility matches the core-six boundary`, () => {
+  test(`${review.name}: source completeness is distinct from current planner eligibility`, () => {
     const proof = certification(review, source);
     const validation = validatePlannerSourceCertification(String(review.spellId), proof, source);
     const expectedCertified = coreT1SpellIds.includes(review.spellId);
@@ -165,12 +165,19 @@ for (const review of reviews) {
     assert.equal(review.sourceSemanticStatus, expectedCertified ? 'CERTIFIED' : 'UNRESOLVED');
     assert.equal(proof.sourceComplete, expectedCertified);
     assert.equal(proof.sourceSemanticStatus, expectedCertified ? 'CERTIFIED' : 'UNRESOLVED');
-    assert.equal(validation.eligible, expectedCertified);
     assert.ok(!validation.reasons.some((reason) => /COVERAGE_(INCOMPLETE|EXTRA|OVERLAP|SOURCE_MISMATCH)/.test(reason)));
+
     if (expectedCertified) {
       assert.deepEqual(proof.unresolvedSemantics, []);
-      assert.equal(validation.reasons.length, 0);
+      if (review.spellId === 13118) {
+        assert.equal(validation.eligible, false);
+        assert.deepEqual(validation.reasons, ['CRITICAL_STATE_SEMANTICS_UNCERTIFIED']);
+      } else {
+        assert.equal(validation.eligible, true);
+        assert.deepEqual(validation.reasons, []);
+      }
     } else {
+      assert.equal(validation.eligible, false);
       assert.ok(proof.unresolvedSemantics.length > 0);
       assert.ok(validation.reasons.includes('SOURCE_CERTIFICATION_INCOMPLETE'));
     }
