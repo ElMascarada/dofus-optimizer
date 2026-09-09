@@ -1,5 +1,5 @@
 {
-  "scope": "Offline review only; no runtime/planner activation. Pression 13106, Concentration 13123, Épée de Iop 13125 and Pugilat 13146.",
+  "scope": "Offline review only; no runtime/planner activation. Closed T1 certification set: Pression 13106, Concentration 13123, Épée de Iop 13125, Puissance 13118, Fureur 13156, Colère de Iop 13124 and Épée Divine 13110. Existing Pugilat 13146 review is preserved unchanged and remains outside this closure pass.",
   "source": "data/normalized/spell-source-truth.json",
   "gameVersion": "3.6.11.12",
   "sourceBinding": "SHA-256 of recursively key-sorted compact UTF-8 JSON for the entire selected source spell record.",
@@ -46,10 +46,7 @@
               "type": "damage",
               "status": "SUPPORTED",
               "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                26,
-                30
-              ]
+              "range": [26, 30]
             },
             {
               "id": "normal:1:97:target",
@@ -97,10 +94,7 @@
               "type": "damage",
               "status": "SUPPORTED",
               "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                31,
-                36
-              ]
+              "range": [31, 36]
             },
             {
               "id": "critical:1:97:target",
@@ -113,44 +107,16 @@
           ]
         }
       ],
-      "scripts": [
-        {
-          "sourceOccurrenceId": "bound:0:16115",
-          "status": "UNRESOLVED",
-          "scriptId": 16115,
-          "proof": "Bound script 16115 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
-          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
-        }
-      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16115","status":"UNRESOLVED","scriptId":16115,"proof":"Bound script 16115 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.","missingRuntimePrimitive":"Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."}],
       "states": [],
       "ignoredSemantics": [
-        {
-          "semantic": "normal:0:776:erosion",
-          "justification": "Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.",
-          "certifiedIrrelevantToT1": true
-        },
-        {
-          "semantic": "critical:0:776:erosion",
-          "justification": "Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.",
-          "certifiedIrrelevantToT1": true
-        }
+        {"semantic":"normal:0:776:erosion","justification":"Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.","certifiedIrrelevantToT1":true},
+        {"semantic":"critical:0:776:erosion","justification":"Effect 776 is source-identified as erosion, and erosion cannot affect the reference target-turn offensive damage objective.","certifiedIrrelevantToT1":true}
       ],
-      "ignoredSource": {
-        "effects": [
-          {
-            "sourceOccurrenceId": "normal:0:776",
-            "justification": "The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.",
-            "certifiedIrrelevantToT1": true
-          },
-          {
-            "sourceOccurrenceId": "critical:0:776",
-            "justification": "The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.",
-            "certifiedIrrelevantToT1": true
-          }
-        ],
-        "scripts": [],
-        "states": []
-      },
+      "ignoredSource": {"effects":[
+        {"sourceOccurrenceId":"normal:0:776","justification":"The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"critical:0:776","justification":"The complete occurrence is demonstrated effect 776 erosion. Erosion is outside the reference offensive score, so its target-specific erosion application cannot change the optimal T1 offensive sequence.","certifiedIrrelevantToT1":true}
+      ],"scripts":[],"states":[]},
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
       "criticalSemantics": "SOURCE_UNRESOLVED",
       "criticalEvidence": "Normal and critical effect-776 erosion occurrences are certified irrelevant to the reference T1 offensive objective. Earth-damage target applicability and bound script 16115 remain unresolved."
@@ -161,138 +127,30 @@
       "sourceRecordSha256": "e978f2de5d803dbe8e6cb6abbc454513c373ce9d5700b04d2b1c5a6c239b2959",
       "sourceSemanticStatus": "UNRESOLVED",
       "effects": [
-        {
-          "sourceOccurrenceId": "normal:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 0,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "normal:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                20,
-                24
-              ]
-            },
-            {
-              "id": "normal:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "L,M,l,m,c",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "normal:1:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 1,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "normal:1:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the source range 30-34 is the unique higher normal-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.",
-              "range": [
-                30,
-                34
-              ]
-            },
-            {
-              "id": "normal:1:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "J,j",
-              "proof": "The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher normal-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.",
-              "missingRuntimePrimitive": "A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 2,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "critical:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                25,
-                30
-              ]
-            },
-            {
-              "id": "critical:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "L,M,l,m,c",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:1:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 3,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "critical:1:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the source range 37-42 is the unique higher critical-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.",
-              "range": [
-                37,
-                42
-              ]
-            },
-            {
-              "id": "critical:1:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "J,j",
-              "proof": "The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher critical-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.",
-              "missingRuntimePrimitive": "A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."
-            }
-          ]
-        }
+        {"sourceOccurrenceId":"normal:0:97","status":"UNRESOLVED","sourceOrder":0,"effectId":97,"semantics":[
+          {"id":"normal:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[20,24]},
+          {"id":"normal:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"L,M,l,m,c","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:97","status":"UNRESOLVED","sourceOrder":1,"effectId":97,"semantics":[
+          {"id":"normal:1:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the source range 30-34 is the unique higher normal-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.","range":[30,34]},
+          {"id":"normal:1:97:target","type":"target","status":"UNRESOLVED","sourceMask":"J,j","proof":"The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher normal-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.","missingRuntimePrimitive":"A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:97","status":"UNRESOLVED","sourceOrder":2,"effectId":97,"semantics":[
+          {"id":"critical:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[25,30]},
+          {"id":"critical:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"L,M,l,m,c","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:97","status":"UNRESOLVED","sourceOrder":3,"effectId":97,"semantics":[
+          {"id":"critical:1:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the source range 37-42 is the unique higher critical-damage branch. Owner-certified gameplay fact identifies Concentration's higher-damage branch as invocation-only; this binding uses damage ordering, not interpretation of target-mask letters.","range":[37,42]},
+          {"id":"critical:1:97:target","type":"target","status":"UNRESOLVED","sourceMask":"J,j","proof":"The mask letters are not interpreted. This source occurrence is separately bound to the invocation-only branch because it is the unique higher critical-damage branch and the owner gameplay fact states that Concentration's extra damage is invocation-only.","missingRuntimePrimitive":"A generic target-mask evaluator remains absent, but this occurrence is certified irrelevant to the normal-enemy T1 reference scenario."}
+        ]}
       ],
-      "scripts": [
-        {
-          "sourceOccurrenceId": "bound:0:16118",
-          "status": "UNRESOLVED",
-          "scriptId": 16118,
-          "proof": "Bound script 16118 has metadataJoinStatus=missing and scriptMetadata=null. The source does not bind it specifically to the invocation-only branch, so the relevance doctrine cannot remove this blocker.",
-          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
-        }
-      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16118","status":"UNRESOLVED","scriptId":16118,"proof":"Bound script 16118 has metadataJoinStatus=missing and scriptMetadata=null. The source does not bind it specifically to the invocation-only branch, so the relevance doctrine cannot remove this blocker.","missingRuntimePrimitive":"Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."}],
       "states": [],
       "ignoredSemantics": [],
-      "ignoredSource": {
-        "effects": [
-          {
-            "sourceOccurrenceId": "normal:1:97",
-            "justification": "Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher normal source branch (30-34 versus 20-24), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.",
-            "certifiedIrrelevantToT1": true
-          },
-          {
-            "sourceOccurrenceId": "critical:1:97",
-            "justification": "Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher critical source branch (37-42 versus 25-30), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.",
-            "certifiedIrrelevantToT1": true
-          }
-        ],
-        "scripts": [],
-        "states": []
-      },
+      "ignoredSource": {"effects":[
+        {"sourceOccurrenceId":"normal:1:97","justification":"Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher normal source branch (30-34 versus 20-24), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"critical:1:97","justification":"Owner-certified gameplay fact states that Concentration's higher-damage branch applies only to invocations. This is the unique higher critical source branch (37-42 versus 25-30), so it is deterministically bound without decoding target-mask letters and cannot apply to the normal-enemy reference target.","certifiedIrrelevantToT1":true}
+      ],"scripts":[],"states":[]},
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
       "criticalSemantics": "IMMEDIATE_DAMAGE_ONLY",
       "criticalEvidence": "The unique higher normal and critical damage occurrences are owner-bound to the invocation-only branch and certified irrelevant to the normal-enemy T1 objective. The ordinary-target branch applicability and bound script 16118 remain unresolved."
@@ -303,68 +161,16 @@
       "sourceRecordSha256": "a64f9ce7416c5883db6a7e100dbde305783de4e2cb650ff24a6bee1217293377",
       "sourceSemanticStatus": "UNRESOLVED",
       "effects": [
-        {
-          "sourceOccurrenceId": "normal:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 0,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "normal:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                37,
-                41
-              ]
-            },
-            {
-              "id": "normal:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "A,g",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 1,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "critical:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                44,
-                49
-              ]
-            },
-            {
-              "id": "critical:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "A,g",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        }
+        {"sourceOccurrenceId":"normal:0:97","status":"UNRESOLVED","sourceOrder":0,"effectId":97,"semantics":[
+          {"id":"normal:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[37,41]},
+          {"id":"normal:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"A,g","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:97","status":"UNRESOLVED","sourceOrder":1,"effectId":97,"semantics":[
+          {"id":"critical:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[44,49]},
+          {"id":"critical:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"A,g","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]}
       ],
-      "scripts": [
-        {
-          "sourceOccurrenceId": "bound:0:16119",
-          "status": "UNRESOLVED",
-          "scriptId": 16119,
-          "proof": "Bound script 16119 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
-          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
-        }
-      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16119","status":"UNRESOLVED","scriptId":16119,"proof":"Bound script 16119 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.","missingRuntimePrimitive":"Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."}],
       "states": [],
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound script cannot affect state.",
       "criticalSemantics": "IMMEDIATE_DAMAGE_ONLY",
@@ -376,181 +182,190 @@
       "sourceRecordSha256": "7cd6529eeeb95a8b687aef410ae1d72892e4a5648349367b4e1f6bc0fa210b6a",
       "sourceSemanticStatus": "UNRESOLVED",
       "effects": [
-        {
-          "sourceOccurrenceId": "normal:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 0,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "normal:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                9,
-                11
-              ]
-            },
-            {
-              "id": "normal:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "g,A",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "normal:1:293",
-          "status": "UNRESOLVED",
-          "sourceOrder": 1,
-          "effectId": 293,
-          "semantics": [
-            {
-              "id": "normal:1:293:base-damage-modifier",
-              "type": "next_cast_modifier",
-              "status": "UNRESOLVED",
-              "proof": "Effect 293 metadata and source values identify a spell-bound +18 base-damage modifier for spell 13146 with duration 1, but the source record does not certify its stacking, application timing, consumption or interaction with the bound scripts.",
-              "missingRuntimePrimitive": "Certified spell-bound base-damage modifier lifecycle for effect 293, including application timing, stacking and consumption.",
-              "sourceSpellId": 13146,
-              "baseDamageBonus": 18,
-              "duration": 1
-            },
-            {
-              "id": "normal:1:293:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "C",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "normal:2:406",
-          "status": "UNRESOLVED",
-          "sourceOrder": 2,
-          "effectId": 406,
-          "semantics": [
-            {
-              "id": "normal:2:406:te-trigger-removal",
-              "type": "trigger",
-              "status": "UNRESOLVED",
-              "proof": "Effect 406 is joined as removal of effects from spell 13146 and is triggered by TE. The runtime has no certified TE trigger contract or source-ordered effect-removal semantics for this occurrence.",
-              "missingRuntimePrimitive": "Certified TE trigger evaluation and source-ordered removal of effects for effect 406.",
-              "trigger": "TE",
-              "sourceSpellId": 13146
-            },
-            {
-              "id": "normal:2:406:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "C",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:0:97",
-          "status": "UNRESOLVED",
-          "sourceOrder": 3,
-          "effectId": 97,
-          "semantics": [
-            {
-              "id": "critical:0:97:damage-arithmetic",
-              "type": "damage",
-              "status": "SUPPORTED",
-              "proof": "Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.",
-              "range": [
-                12,
-                14
-              ]
-            },
-            {
-              "id": "critical:0:97:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "g,A",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:1:293",
-          "status": "UNRESOLVED",
-          "sourceOrder": 4,
-          "effectId": 293,
-          "semantics": [
-            {
-              "id": "critical:1:293:base-damage-modifier",
-              "type": "next_cast_modifier",
-              "status": "UNRESOLVED",
-              "proof": "Effect 293 metadata and source values identify a spell-bound +18 base-damage modifier for spell 13146 with duration 1, but the source record does not certify its stacking, application timing, consumption or interaction with the bound scripts.",
-              "missingRuntimePrimitive": "Certified spell-bound base-damage modifier lifecycle for effect 293, including application timing, stacking and consumption.",
-              "sourceSpellId": 13146,
-              "baseDamageBonus": 18,
-              "duration": 1
-            },
-            {
-              "id": "critical:1:293:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "C",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        },
-        {
-          "sourceOccurrenceId": "critical:2:406",
-          "status": "UNRESOLVED",
-          "sourceOrder": 5,
-          "effectId": 406,
-          "semantics": [
-            {
-              "id": "critical:2:406:te-trigger-removal",
-              "type": "trigger",
-              "status": "UNRESOLVED",
-              "proof": "Effect 406 is joined as removal of effects from spell 13146 and is triggered by TE. The runtime has no certified TE trigger contract or source-ordered effect-removal semantics for this occurrence.",
-              "missingRuntimePrimitive": "Certified TE trigger evaluation and source-ordered removal of effects for effect 406.",
-              "trigger": "TE",
-              "sourceSpellId": 13146
-            },
-            {
-              "id": "critical:2:406:target",
-              "type": "target",
-              "status": "UNRESOLVED",
-              "sourceMask": "C",
-              "proof": "The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.",
-              "missingRuntimePrimitive": "Source target-mask and zone applicability evaluation bound to explicit target properties."
-            }
-          ]
-        }
+        {"sourceOccurrenceId":"normal:0:97","status":"UNRESOLVED","sourceOrder":0,"effectId":97,"semantics":[
+          {"id":"normal:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[9,11]},
+          {"id":"normal:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"g,A","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:293","status":"UNRESOLVED","sourceOrder":1,"effectId":293,"semantics":[
+          {"id":"normal:1:293:base-damage-modifier","type":"next_cast_modifier","status":"UNRESOLVED","proof":"Effect 293 metadata and source values identify a spell-bound +18 base-damage modifier for spell 13146 with duration 1, but the source record does not certify its stacking, application timing, consumption or interaction with the bound scripts.","missingRuntimePrimitive":"Certified spell-bound base-damage modifier lifecycle for effect 293, including application timing, stacking and consumption.","sourceSpellId":13146,"baseDamageBonus":18,"duration":1},
+          {"id":"normal:1:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"normal:2:406","status":"UNRESOLVED","sourceOrder":2,"effectId":406,"semantics":[
+          {"id":"normal:2:406:te-trigger-removal","type":"trigger","status":"UNRESOLVED","proof":"Effect 406 is joined as removal of effects from spell 13146 and is triggered by TE. The runtime has no certified TE trigger contract or source-ordered effect-removal semantics for this occurrence.","missingRuntimePrimitive":"Certified TE trigger evaluation and source-ordered removal of effects for effect 406.","trigger":"TE","sourceSpellId":13146},
+          {"id":"normal:2:406:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:97","status":"UNRESOLVED","sourceOrder":3,"effectId":97,"semantics":[
+          {"id":"critical:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies Earth damage; the existing fixed-damage registry and canonical spellDamageBreakdown represent this isolated range. This certifies arithmetic only, conditional on a target already selected.","range":[12,14]},
+          {"id":"critical:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"g,A","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:293","status":"UNRESOLVED","sourceOrder":4,"effectId":293,"semantics":[
+          {"id":"critical:1:293:base-damage-modifier","type":"next_cast_modifier","status":"UNRESOLVED","proof":"Effect 293 metadata and source values identify a spell-bound +18 base-damage modifier for spell 13146 with duration 1, but the source record does not certify its stacking, application timing, consumption or interaction with the bound scripts.","missingRuntimePrimitive":"Certified spell-bound base-damage modifier lifecycle for effect 293, including application timing, stacking and consumption.","sourceSpellId":13146,"baseDamageBonus":18,"duration":1},
+          {"id":"critical:1:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]},
+        {"sourceOccurrenceId":"critical:2:406","status":"UNRESOLVED","sourceOrder":5,"effectId":406,"semantics":[
+          {"id":"critical:2:406:te-trigger-removal","type":"trigger","status":"UNRESOLVED","proof":"Effect 406 is joined as removal of effects from spell 13146 and is triggered by TE. The runtime has no certified TE trigger contract or source-ordered effect-removal semantics for this occurrence.","missingRuntimePrimitive":"Certified TE trigger evaluation and source-ordered removal of effects for effect 406.","trigger":"TE","sourceSpellId":13146},
+          {"id":"critical:2:406:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source preserves this mask and zone. The runtime has no certified evaluator for the full mask/zone (including carried-target inclusion). Existing damage projection or positional hit curation does not demonstrate target applicability.","missingRuntimePrimitive":"Source target-mask and zone applicability evaluation bound to explicit target properties."}
+        ]}
       ],
       "scripts": [
-        {
-          "sourceOccurrenceId": "bound:0:16122",
-          "status": "UNRESOLVED",
-          "scriptId": 16122,
-          "proof": "Bound script 16122 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
-          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
-        },
-        {
-          "sourceOccurrenceId": "bound:1:16123",
-          "status": "UNRESOLVED",
-          "scriptId": 16123,
-          "proof": "Bound script 16123 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.",
-          "missingRuntimePrimitive": "Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."
-        }
+        {"sourceOccurrenceId":"bound:0:16122","status":"UNRESOLVED","scriptId":16122,"proof":"Bound script 16122 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.","missingRuntimePrimitive":"Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."},
+        {"sourceOccurrenceId":"bound:1:16123","status":"UNRESOLVED","scriptId":16123,"proof":"Bound script 16123 has metadataJoinStatus=missing and scriptMetadata=null. Empty criterion/masks do not prove irrelevance or cosmetic behavior.","missingRuntimePrimitive":"Undetermined until the bound script implementation/semantics is available; no runtime primitive can be specified from its numeric ID alone."}
       ],
       "states": [],
       "stateEvidence": "No explicit stateReferences are present. This does not prove that the unresolved bound scripts cannot affect state.",
       "criticalSemantics": "SOURCE_UNRESOLVED",
       "criticalEvidence": "Normal and critical rows preserve the same effect 293 and effect 406/TE behavior; only effect 97 damage ranges differ. Those non-damage semantics and both bound scripts remain unresolved."
+    },
+    {
+      "spellId": 13118,
+      "name": "Puissance",
+      "sourceRecordSha256": "3d4c74f0e7932a15f812deecc4c8914c67ce6b154009f1ce89369ab8ef5ce0fe",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {"sourceOccurrenceId":"normal:0:138","status":"UNRESOLVED","sourceOrder":0,"effectId":138,"semantics":[
+          {"id":"normal:0:138:power-buff","type":"stat_modifier","status":"SUPPORTED","proof":"Joined effect 138 explicitly carries characteristic 25, operator +, magnitude 300, trigger I and duration 3. This certifies the source-declared +300 Power payload and timing only; it does not infer target-mask letters.","stat":"power","amount":300,"duration":3},
+          {"id":"normal:0:138:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The source preserves mask a,A but the repository has no certified evaluator that proves which reference actor(s) receive the offensive buff.","missingRuntimePrimitive":"Certified source target-mask applicability for the Puissance buff."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:414","status":"UNRESOLVED","sourceOrder":1,"effectId":414,"semantics":[
+          {"id":"normal:1:414:push-damage-buff","type":"stat_modifier","status":"SUPPORTED","proof":"Joined effect 414 explicitly identifies +120 push damage, trigger I and duration 3. The numeric payload is source-certified without assuming target-mask semantics.","stat":"push_damage","amount":120,"duration":3},
+          {"id":"normal:1:414:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The source preserves mask a,A but does not by itself certify who receives this potentially offensive T1 stat modifier.","missingRuntimePrimitive":"Certified source target-mask applicability for the Puissance push-damage buff."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:138","status":"UNRESOLVED","sourceOrder":2,"effectId":138,"semantics":[
+          {"id":"critical:0:138:power-buff","type":"stat_modifier","status":"SUPPORTED","proof":"Joined critical effect 138 explicitly carries characteristic 25, operator +, magnitude 350, trigger I and duration 3. This certifies the source-declared +350 Power payload and timing only.","stat":"power","amount":350,"duration":3},
+          {"id":"critical:0:138:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The source preserves mask a,A but the repository has no certified evaluator that proves which reference actor(s) receive the offensive buff.","missingRuntimePrimitive":"Certified source target-mask applicability for the critical Puissance buff."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:414","status":"UNRESOLVED","sourceOrder":3,"effectId":414,"semantics":[
+          {"id":"critical:1:414:push-damage-buff","type":"stat_modifier","status":"SUPPORTED","proof":"Joined critical effect 414 explicitly identifies +140 push damage, trigger I and duration 3. The numeric payload is source-certified without assuming target-mask semantics.","stat":"push_damage","amount":140,"duration":3},
+          {"id":"critical:1:414:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The source preserves mask a,A but does not by itself certify who receives this potentially offensive T1 stat modifier.","missingRuntimePrimitive":"Certified source target-mask applicability for the critical Puissance push-damage buff."}
+        ]}
+      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16093","status":"UNRESOLVED","scriptId":16093,"proof":"Bound script 16093 has metadataJoinStatus=missing and scriptMetadata=null. Its empty masks/criterion are not proof that it cannot alter T1 buff behavior.","missingRuntimePrimitive":"Bound script 16093 semantics sufficient to prove whether it affects offensive buff timing, applicability or legality."}],
+      "states": [],
+      "ignoredSemantics": [],
+      "ignoredSource": {"effects":[],"scripts":[],"states":[]},
+      "stateEvidence": "No explicit stateReferences are present. This does not prove that bound script 16093 cannot manipulate implicit state.",
+      "criticalSemantics": "SOURCE_UNRESOLVED",
+      "criticalEvidence": "The +Power and +push-damage payloads are explicit, but target applicability and bound script 16093 remain potentially relevant and unresolved."
+    },
+    {
+      "spellId": 13156,
+      "name": "Fureur",
+      "sourceRecordSha256": "077839b933216654ac49cef91cd9f0f0f7585e4e927a176ae0abf473626bc944",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {"sourceOccurrenceId":"normal:0:97","status":"UNRESOLVED","sourceOrder":0,"effectId":97,"semantics":[
+          {"id":"normal:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies immediate Earth damage and the source range 28-32.","range":[28,32]},
+          {"id":"normal:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The immediate damage mask is preserved but not decoded by intuition; target applicability to the reference enemy remains uncertified.","missingRuntimePrimitive":"Certified source target-mask applicability for Fureur's immediate damage."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:293","status":"UNRESOLVED","sourceOrder":1,"effectId":293,"semantics":[
+          {"id":"normal:1:293:future-charge","type":"next_cast_modifier","status":"UNRESOLVED","relevantToPlan":false,"proof":"Effect 293 source metadata identifies a +20 base-damage modifier bound to spell 13156 for duration 2. Source targeting limits Fureur to maxCastPerTurn=1, so a charge created by this cast cannot modify another legal Fureur cast during the same T1.","sourceSpellId":13156,"baseDamageBonus":20,"duration":2,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"The only source-identified payload is a later Fureur base-damage modifier, while maxCastPerTurn=1 makes a second same-turn Fureur cast illegal."},
+          {"id":"normal:1:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"Target-mask letters are not decoded. The whole occurrence is independently ignored because its source-identified future-cast payload cannot affect another legal Fureur cast in T1.","missingRuntimePrimitive":"Generic source target-mask applicability remains absent but is not required for this ignored occurrence."}
+        ]},
+        {"sourceOccurrenceId":"normal:2:1160","status":"UNRESOLVED","sourceOrder":2,"effectId":1160,"semantics":[
+          {"id":"normal:2:1160:unknown-mechanic","type":"condition","status":"UNRESOLVED","proof":"Effect 1160 is joined but its localized/source description is only '#1'; diceNum=28604, diceSide=1 and value=999 do not establish its gameplay behavior. Because it triggers immediately on the caster, it could affect T1 offense or sequencing.","missingRuntimePrimitive":"Authoritative semantics for effect 1160 / referenced value 28604 sufficient to determine T1 relevance."},
+          {"id":"normal:2:1160:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source mask is preserved and not interpreted; this immediate unknown occurrence is not proven irrelevant.","missingRuntimePrimitive":"Certified source target-mask applicability once effect 1160 semantics are known."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:97","status":"UNRESOLVED","sourceOrder":3,"effectId":97,"semantics":[
+          {"id":"critical:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies immediate critical Earth damage and the source range 34-38.","range":[34,38]},
+          {"id":"critical:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The immediate damage mask is preserved but not decoded by intuition; target applicability to the reference enemy remains uncertified.","missingRuntimePrimitive":"Certified source target-mask applicability for Fureur's critical immediate damage."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:293","status":"UNRESOLVED","sourceOrder":4,"effectId":293,"semantics":[
+          {"id":"critical:1:293:future-charge","type":"next_cast_modifier","status":"UNRESOLVED","relevantToPlan":false,"proof":"Critical effect 293 repeats the +20 base-damage modifier bound to spell 13156 for duration 2. Source maxCastPerTurn=1 makes another Fureur cast impossible during the same T1.","sourceSpellId":13156,"baseDamageBonus":20,"duration":2,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"No second legal Fureur cast exists in T1, so this future-cast modifier cannot change the T1 objective."},
+          {"id":"critical:1:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"Target-mask letters are not decoded. The whole occurrence is independently ignored by the same maxCastPerTurn=1 proof.","missingRuntimePrimitive":"Generic source target-mask applicability remains absent but is not required for this ignored occurrence."}
+        ]},
+        {"sourceOccurrenceId":"critical:2:1160","status":"UNRESOLVED","sourceOrder":5,"effectId":1160,"semantics":[
+          {"id":"critical:2:1160:unknown-mechanic","type":"condition","status":"UNRESOLVED","proof":"Critical effect 1160 is the same immediate joined but semantically opaque source occurrence; numeric identifiers alone do not prove irrelevance.","missingRuntimePrimitive":"Authoritative semantics for effect 1160 / referenced value 28604 sufficient to determine T1 relevance."},
+          {"id":"critical:2:1160:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The source mask is preserved and not interpreted; this immediate unknown occurrence is not proven irrelevant.","missingRuntimePrimitive":"Certified source target-mask applicability once effect 1160 semantics are known."}
+        ]}
+      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16120","status":"UNRESOLVED","scriptId":16120,"proof":"Bound script 16120 has metadataJoinStatus=missing and scriptMetadata=null. The numeric script ID and empty masks do not establish whether it participates only in future charge handling or can affect the immediate T1 cast.","missingRuntimePrimitive":"Bound script 16120 semantics sufficient to separate future-only charge handling from immediate T1 behavior."}],
+      "states": [],
+      "ignoredSemantics": [],
+      "ignoredSource": {"effects":[
+        {"sourceOccurrenceId":"normal:1:293","justification":"Source effect 293 is a +20 base-damage modifier for Fureur lasting 2, while maxCastPerTurn=1 makes another Fureur cast illegal in the same T1; therefore this occurrence can only matter on a future turn.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"critical:1:293","justification":"The critical branch repeats the same +20 future Fureur modifier and the same maxCastPerTurn=1 rule; it cannot alter another legal T1 cast.","certifiedIrrelevantToT1":true}
+      ],"scripts":[],"states":[]},
+      "stateEvidence": "No explicit stateReferences are present. Immediate effect 1160 and bound script 16120 remain unresolved independently of the future charge proof.",
+      "criticalSemantics": "SOURCE_UNRESOLVED",
+      "criticalEvidence": "Immediate Earth damage arithmetic is explicit and future effect-293 charge occurrences are T1-irrelevant by maxCastPerTurn=1. Immediate effect 1160, damage target applicability and bound script 16120 remain unresolved."
+    },
+    {
+      "spellId": 13124,
+      "name": "Colère de Iop",
+      "sourceRecordSha256": "7f8d23330f5475ed52be47ac23d770dfed4be9f9f1b437f1f9e86682dcfbcf48",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {"sourceOccurrenceId":"normal:0:97","status":"UNRESOLVED","sourceOrder":0,"effectId":97,"semantics":[
+          {"id":"normal:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies immediate Earth damage and the source range 81-100.","range":[81,100]},
+          {"id":"normal:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The immediate-damage mask is preserved but not decoded; applicability to the reference enemy remains uncertified.","missingRuntimePrimitive":"Certified source target-mask applicability for Colère de Iop's immediate damage."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:3793","status":"UNRESOLVED","sourceOrder":1,"effectId":3793,"semantics":[
+          {"id":"normal:1:3793:delayed-mechanic","type":"delayed_effect","status":"UNRESOLVED","relevantToPlan":false,"proof":"The source occurrence has delay=3. Whatever effect 3793/value 21251 ultimately does, it cannot execute during T1 and therefore cannot affect T1 damage, resources, legality, ordering or same-turn casts.","delay":3,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"A source delay of 3 places the occurrence strictly after T1."},
+          {"id":"normal:1:3793:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The mask is preserved without decoding; the complete occurrence is independently T1-irrelevant because delay=3 prevents same-turn execution.","missingRuntimePrimitive":"Generic target-mask semantics are not required for this delayed ignored occurrence."}
+        ]},
+        {"sourceOccurrenceId":"normal:2:293","status":"UNRESOLVED","sourceOrder":2,"effectId":293,"semantics":[
+          {"id":"normal:2:293:future-charge","type":"next_cast_modifier","status":"UNRESOLVED","relevantToPlan":false,"proof":"Effect 293 identifies +110 base damage for spell 13124, but this source occurrence itself has delay=3 and duration=1. It cannot alter a cast during T1; source minCastInterval=3 is consistent with the future-cast charge family and rules out a same-T1 charged recast.","sourceSpellId":13124,"baseDamageBonus":110,"delay":3,"duration":1,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"delay=3 and minCastInterval=3 make this charge incapable of changing another legal cast during T1."},
+          {"id":"normal:2:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The mask is preserved without decoding; the complete occurrence is independently ignored because delay=3 prevents T1 application.","missingRuntimePrimitive":"Generic target-mask semantics are not required for this delayed ignored occurrence."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:97","status":"UNRESOLVED","sourceOrder":3,"effectId":97,"semantics":[
+          {"id":"critical:0:97:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 97 metadata identifies immediate critical Earth damage and the source range 107-130.","range":[107,130]},
+          {"id":"critical:0:97:target","type":"target","status":"UNRESOLVED","sourceMask":"a,A","proof":"The immediate-damage mask is preserved but not decoded; applicability to the reference enemy remains uncertified.","missingRuntimePrimitive":"Certified source target-mask applicability for Colère de Iop's critical immediate damage."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:3793","status":"UNRESOLVED","sourceOrder":4,"effectId":3793,"semantics":[
+          {"id":"critical:1:3793:delayed-mechanic","type":"delayed_effect","status":"UNRESOLVED","relevantToPlan":false,"proof":"The critical occurrence also has delay=3, so it cannot execute during T1 regardless of its unresolved internal semantics.","delay":3,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"A source delay of 3 places the occurrence strictly after T1."},
+          {"id":"critical:1:3793:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The mask is preserved without decoding; delay=3 independently proves T1 irrelevance.","missingRuntimePrimitive":"Generic target-mask semantics are not required for this delayed ignored occurrence."}
+        ]},
+        {"sourceOccurrenceId":"critical:2:293","status":"UNRESOLVED","sourceOrder":5,"effectId":293,"semantics":[
+          {"id":"critical:2:293:future-charge","type":"next_cast_modifier","status":"UNRESOLVED","relevantToPlan":false,"proof":"The critical branch repeats the +110 spell-bound base-damage modifier with delay=3 and duration=1. It cannot affect any T1 cast; minCastInterval=3 additionally excludes a same-turn charged recast.","sourceSpellId":13124,"baseDamageBonus":110,"delay":3,"duration":1,"certifiedIrrelevantToT1":true,"irrelevanceJustification":"delay=3 and minCastInterval=3 keep the charge outside T1."},
+          {"id":"critical:2:293:target","type":"target","status":"UNRESOLVED","sourceMask":"C","proof":"The mask is preserved without decoding; delay=3 independently proves T1 irrelevance.","missingRuntimePrimitive":"Generic target-mask semantics are not required for this delayed ignored occurrence."}
+        ]}
+      ],
+      "scripts": [
+        {"sourceOccurrenceId":"bound:0:16107","status":"UNRESOLVED","scriptId":16107,"proof":"Bound script 16107 has metadataJoinStatus=missing. Its bound usage isTargetTreatedAsCaster=1 and id 21251 is not enough to prove that all of its behavior is delayed or irrelevant to the immediate cast.","missingRuntimePrimitive":"Bound script 16107 semantics sufficient to prove whether it can affect immediate T1 behavior."},
+        {"sourceOccurrenceId":"bound:1:16121","status":"UNRESOLVED","scriptId":16121,"proof":"Bound script 16121 has metadataJoinStatus=missing and scriptMetadata=null; numeric ID/order alone cannot prove that it is future-only.","missingRuntimePrimitive":"Bound script 16121 semantics sufficient to determine T1 relevance."}
+      ],
+      "states": [],
+      "ignoredSemantics": [],
+      "ignoredSource": {"effects":[
+        {"sourceOccurrenceId":"normal:1:3793","justification":"This occurrence has source delay=3, so it cannot execute during the T1 objective regardless of unresolved effect-3793 internals.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"normal:2:293","justification":"This +110 Colère base-damage modifier has source delay=3; together with minCastInterval=3 it cannot affect another legal cast during T1.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"critical:1:3793","justification":"The critical occurrence also has source delay=3 and therefore cannot execute during T1.","certifiedIrrelevantToT1":true},
+        {"sourceOccurrenceId":"critical:2:293","justification":"The critical +110 modifier has source delay=3 and minCastInterval=3, so it cannot affect another legal T1 cast.","certifiedIrrelevantToT1":true}
+      ],"scripts":[],"states":[]},
+      "stateEvidence": "No explicit stateReferences are present. The delayed effect occurrences are T1-irrelevant, but both bound scripts remain unresolved.",
+      "criticalSemantics": "SOURCE_UNRESOLVED",
+      "criticalEvidence": "Immediate Earth damage arithmetic is explicit; all delay=3 charge/future occurrences are ignored with T1 proof. Target applicability and bound scripts 16107/16121 remain unresolved."
+    },
+    {
+      "spellId": 13110,
+      "name": "Épée Divine",
+      "sourceRecordSha256": "d2f371c4ddffe1cfad6490457bc90338e3c1aa4d25a1246475d3614f1b6556ef",
+      "sourceSemanticStatus": "UNRESOLVED",
+      "effects": [
+        {"sourceOccurrenceId":"normal:0:98","status":"UNRESOLVED","sourceOrder":0,"effectId":98,"semantics":[
+          {"id":"normal:0:98:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 98 metadata identifies immediate Air damage and the source range 24-28.","range":[24,28],"element":"air"},
+          {"id":"normal:0:98:target","type":"target","status":"UNRESOLVED","sourceMask":"A","proof":"The source mask A is preserved and not decoded; applicability to the reference enemy is not certified.","missingRuntimePrimitive":"Certified source target-mask applicability for Épée Divine Air damage."}
+        ]},
+        {"sourceOccurrenceId":"normal:1:112","status":"UNRESOLVED","sourceOrder":1,"effectId":112,"semantics":[
+          {"id":"normal:1:112:damage-buff","type":"stat_modifier","status":"UNRESOLVED","proof":"Effect 112 explicitly identifies +30 generic Damage, trigger I and duration 4. Because Épée Divine may be cast twice per turn, the source record does not by itself certify whether repeated applications stack, refresh or replace, nor exact applicability of mask C,a; those choices can change later Earth damage in T1.","missingRuntimePrimitive":"Certified effect-112 lifecycle for same-turn stacking/refresh/replacement and target applicability.","stat":"damage","amount":30,"duration":4},
+          {"id":"normal:1:112:target","type":"target","status":"UNRESOLVED","sourceMask":"C,a","proof":"The source preserves C,a, but target-mask letters are not interpreted. Whether the offensive +30 Damage applies to the caster in the reference sequence remains relevant and unresolved.","missingRuntimePrimitive":"Certified source target-mask applicability for effect 112."}
+        ]},
+        {"sourceOccurrenceId":"critical:0:98","status":"UNRESOLVED","sourceOrder":2,"effectId":98,"semantics":[
+          {"id":"critical:0:98:damage-arithmetic","type":"damage","status":"SUPPORTED","proof":"Effect 98 metadata identifies immediate critical Air damage and the source range 29-34.","range":[29,34],"element":"air"},
+          {"id":"critical:0:98:target","type":"target","status":"UNRESOLVED","sourceMask":"A","proof":"The critical source mask A is preserved and not decoded; applicability to the reference enemy is not certified.","missingRuntimePrimitive":"Certified source target-mask applicability for critical Épée Divine Air damage."}
+        ]},
+        {"sourceOccurrenceId":"critical:1:112","status":"UNRESOLVED","sourceOrder":3,"effectId":112,"semantics":[
+          {"id":"critical:1:112:damage-buff","type":"stat_modifier","status":"UNRESOLVED","proof":"Critical effect 112 repeats +30 generic Damage with duration 4. With maxCastPerTurn=2, unresolved stacking/refresh and applicability can materially change the same T1 Earth-oriented plan.","missingRuntimePrimitive":"Certified effect-112 lifecycle for same-turn stacking/refresh/replacement and target applicability.","stat":"damage","amount":30,"duration":4},
+          {"id":"critical:1:112:target","type":"target","status":"UNRESOLVED","sourceMask":"C,a","proof":"The source mask C,a is preserved and not decoded; caster applicability remains relevant to the T1 offensive buff.","missingRuntimePrimitive":"Certified source target-mask applicability for critical effect 112."}
+        ]}
+      ],
+      "scripts": [{"sourceOccurrenceId":"bound:0:16135","status":"UNRESOLVED","scriptId":16135,"proof":"Bound script 16135 has metadataJoinStatus=missing and scriptMetadata=null. The script could affect the offensive buff's application, stacking or timing; numeric ID and empty masks do not prove irrelevance.","missingRuntimePrimitive":"Bound script 16135 semantics sufficient to certify Épée Divine's T1 offensive buff lifecycle."}],
+      "states": [],
+      "ignoredSemantics": [],
+      "ignoredSource": {"effects":[],"scripts":[],"states":[]},
+      "stateEvidence": "No explicit stateReferences are present. That does not resolve effect-112 stacking/application or bound script 16135.",
+      "criticalSemantics": "SOURCE_UNRESOLVED",
+      "criticalEvidence": "Air damage arithmetic and the +30 Damage source payload are visible, but same-turn buff stacking/applicability and bound script 16135 remain relevant and unresolved."
     }
   ]
 }
