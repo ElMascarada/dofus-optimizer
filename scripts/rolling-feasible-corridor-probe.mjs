@@ -124,7 +124,10 @@ function tracedGroupChoices(rule) {
   const profiles = (prefilter.pools?.[rule.id] || []).map((item) => policy.profileItem(item));
   let states = [{ items: [], ids: new Set(), stats: {}, rankScore: 0 }];
   const finalLimit = Math.max(1, Number(profile.search.groupChoiceLimits?.[rule.id] || 1));
-  const intermediateLimit = Math.max(finalLimit, Number(profile.search.groupBeamWidth || 1));
+  const intermediateBeamWidth = rule.id === 'dofus'
+    ? profile.search.dofusGroupBeamWidth
+    : count >= 5 ? profile.search.multiPickBeamWidth : profile.search.groupBeamWidth;
+  const intermediateLimit = Math.max(finalLimit, Number(intermediateBeamWidth || 1));
   const snapshots = [];
 
   for (let pick = 0; pick < count; pick++) {

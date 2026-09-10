@@ -194,9 +194,12 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     1,
     Number(context.profile.search.groupChoiceLimits?.[context.slot] || 1)
   );
+  const intermediateBeamWidth = context.slot === 'dofus'
+    ? context.profile.search.dofusGroupBeamWidth
+    : count >= 5 ? context.profile.search.multiPickBeamWidth : context.profile.search.groupBeamWidth;
   const intermediateLimit = Math.max(
     finalLimit,
-    Number(context.profile.search.groupBeamWidth || 1)
+    Number(intermediateBeamWidth || 1)
   );
   const diagnostic = context.diagnostic || null;
   const witnessChoiceIds = new Set((context.diagnosticWitnessChoiceIds || []).map(String));
