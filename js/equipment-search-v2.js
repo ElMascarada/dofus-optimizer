@@ -19,6 +19,7 @@ import {
   filterOptimizerEligibleItems,
   optimizerTrophyEligibilityCounts
 } from '../optimizer/item-eligibility.js';
+import { searchSetCoreFirstEquipment } from '../optimizer/set-core-first-search.js';
 import { pruneDominatedCandidates } from './search-space.js';
 
 function itemKey(items = []) {
@@ -501,6 +502,23 @@ export function searchEquipmentArchitecturesV2({
   onProgress = null,
   onDiagnostics = null
 } = {}) {
+  // PR #107 Set-Core-First primary path.
+  // Required-item and witness-diagnostic searches intentionally keep the
+  // existing Equipment-First machinery as a compatibility/debug path.
+  if (!(requiredItemIds || []).length && !(diagnosticWitnessItemIds || []).length) {
+    const primary = searchSetCoreFirstEquipment({
+      items,
+      sets,
+      constraints,
+      fmPolicy,
+      syntheticOffense,
+      topN,
+      searchProfile,
+      onProgress,
+      onDiagnostics
+    });
+    if (primary?.applicable && primary.results?.length) return primary;
+  }
   const diagnosticIds = [...new Set((diagnosticWitnessItemIds || []).map(String).filter(Boolean))];
   const diagnostic = diagnosticIds.length ? { ids: diagnosticIds, firstLoss: null } : null;
   const rawById = new Map((items || []).map((item) => [String(item.id), item]));

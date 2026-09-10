@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { createCandidatePolicy } from '../optimizer/candidate-policy.js';
 import { searchConstraintCompletenessRescue } from '../js/constraint-completeness-rescue.js';
 import { buildSetCoreFirstPlan } from '../js/set-core-first-exploration.js';
+import { dofusBranchAllows, preserveClosureAwareStates } from '../optimizer/set-core-first-search.js';
 
 const EPSILON = 1e-9;
 
@@ -177,4 +179,60 @@ test('synthetic set-heavy search reaches its first incumbent in fewer structural
     < Number(before.diagnostics.constraintRescueNodesAtFirstIncumbent));
   assert.ok(Number(after.diagnostics.constraintRescueSetCoreSeeds || 0) > 0);
   assert.equal(after.diagnostics.constraintRescueSetCoreStandaloneBranches, 1);
+});
+
+test('V16 closure-aware final trim preserves a low-offense primary-closable context', () => {
+  const makeState = (id, score, bucket = '9:4') => ({
+    items: [{ id }],
+    score,
+    bucket
+  });
+  const raw = Array.from({ length: 30 }, (_, index) =>
+    makeState(`v16-high-${index}`, 1000 - index, `9:${index % 3 + 3}`)
+  );
+  const closable = makeState('v16-closable-11-5', 1, '11:5');
+  raw.push(closable);
+
+  const legacy = raw.slice(0, 24);
+  const kept = preserveClosureAwareStates(raw, legacy, {
+    limit: 24,
+    reserve: 4,
+    isClosable: (entry) => entry.items[0].id === 'v16-closable-11-5',
+    bucketOf: (entry) => entry.bucket
+  });
+
+  assert.equal(kept.length, 24);
+  assert.equal(
+    kept.some((entry) => entry.items[0].id === 'v16-closable-11-5'),
+    true
+  );
+});
+
+test('V16 CRIT and NO_CRIT Dofus doctrine keeps Robuste and Turquoise mutually exclusive', () => {
+  assert.equal(dofusBranchAllows({ name: 'Robuste majeur' }, 'CRIT'), false);
+  assert.equal(dofusBranchAllows({ name: 'Robuste' }, 'CRIT'), false);
+  assert.equal(dofusBranchAllows({ name: 'Dofus Turquoise' }, 'CRIT'), true);
+
+  assert.equal(dofusBranchAllows({ name: 'Robuste majeur' }, 'NO_CRIT'), true);
+  assert.equal(dofusBranchAllows({ name: 'Dofus Turquoise' }, 'NO_CRIT'), false);
+});
+
+test('V16 primary AP/MP doctrine contains Ocre/Vulbis and no generic PA/PM trophy hardcode', async () => {
+  const source = await readFile(
+    new URL('../optimizer/set-core-first-search.js', import.meta.url),
+    'utf8'
+  );
+
+  assert.equal(source.includes("'Dofus Ocre'"), true);
+  assert.equal(source.includes("'Dofus Vulbis'"), true);
+
+  for (const forbidden of [
+    "'Turbulent'",
+    "'Voyageur'",
+    "'Pryssion Mate'",
+    "'Pryssion Brillante'",
+    "'Pryssion Iridescente'"
+  ]) {
+    assert.equal(source.includes(forbidden), false, forbidden);
+  }
 });
