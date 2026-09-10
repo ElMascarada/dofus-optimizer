@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { SLOT_RULES } from '../js/config.js';
 import {
   compareCompleteEquipmentBuildResults,
@@ -542,4 +542,140 @@ test('final group diversity preserves a low raw-rank specialist in a genuine two
   assert.equal(search.results[0].buildIdentity, oracle[0].buildIdentity);
   assert.equal(search.results[0].items.some((entry) => entry.id === witness.id), true);
   console.log('MULTI_PICK_FINAL_DIVERSITY_REGRESSION=PASS');
+});
+
+async function loadBuildGroupChoicesForParentChildTest() {
+  const sourceUrl = new URL('../js/equipment-search-v2.js', import.meta.url);
+  const tempUrl = new URL(`../js/.equipment-search-v2-parent-child-${process.pid}-${Date.now()}.tmp.mjs`, import.meta.url);
+  const source = await readFile(sourceUrl, 'utf8');
+  try {
+    await writeFile(tempUrl, `${source}\nexport { buildGroupChoices };\n`, 'utf8');
+    const module = await import(`${tempUrl.href}?v=${Date.now()}`);
+    return module.buildGroupChoices;
+  } finally {
+    try { await unlink(tempUrl); } catch {}
+  }
+}
+
+function parentChildRegressionProfile() {
+  const base = getSearchProfile('BALANCED');
+  return {
+    ...base,
+    candidate: {
+      ...base.candidate,
+      slotPoolTargets: {
+        ...base.candidate.slotPoolTargets,
+        dofus: 7
+      }
+    },
+    search: {
+      ...base.search,
+      groupChoiceLimits: {
+        ...base.search.groupChoiceLimits,
+        dofus: 10
+      },
+      dofusGroupBeamWidth: 10,
+      groupBucketLimit: 36,
+      groupSpecialistReservePerStat: 1,
+      dofusStateBeamWidth: 20,
+      stateBucketLimit: 20
+    }
+  };
+}
+
+test('Dofus pick4 parent-child reserve preserves the only feasible retained pick3 lineage without enlarging the beam', async () => {
+  const buildGroupChoices = await loadBuildGroupChoicesForParentChildTest();
+  const profile = parentChildRegressionProfile();
+  const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+  const fixed = fixedCatalog({ ap: 4, mp: 3 }).filter((entry) => entry.slot !== 'dofus');
+  const dofus = [
+    item('pc-a', 'dofus', { ap: 2, earth: 120 }, { slotSubtype: 'prysmaradite' }),
+    item('pc-b', 'dofus', { earth: 90 }),
+    item('pc-c', 'dofus', { earth: 80 }),
+    item('pc-d', 'dofus', { earth: 70 }),
+    item('pc-e', 'dofus'),
+    item('pc-f', 'dofus', {}, { slotSubtype: 'prysmaradite' }),
+    item('pc-g', 'dofus', { earth: 10 })
+  ];
+  const items = [...fixed, ...dofus];
+  const witnessIds = ['pc-b', 'pc-c', 'pc-d', 'pc-e', 'pc-f', 'pc-g'];
+  const witnessKey = [...witnessIds].sort().join('|');
+  const lostParentKey = ['pc-b', 'pc-c', 'pc-d'].sort().join('|');
+  const policy = createEquipmentCandidatePolicy({
+    items,
+    syntheticOffense,
+    searchProfile: profile
+  });
+  const profiles = dofus
+    .map((entry) => policy.profileItem(entry))
+    .sort((a, b) => b.rankScore - a.rankScore || String(a.item.id).localeCompare(String(b.item.id)));
+
+  function runGroupTrace() {
+    const logs = [];
+    const parentChild = [];
+    const diagnostic = { firstLoss: null };
+    const originalLog = console.log;
+    console.log = (...parts) => logs.push(parts.join(' '));
+    let choices;
+    try {
+      choices = buildGroupChoices(profiles, 6, {
+        slot: 'dofus',
+        policy,
+        profile,
+        constraints: {},
+        fmPolicy: {},
+        setsById: {},
+        diagnostic,
+        diagnosticWitnessChoiceIds: witnessIds,
+        onDofusParentChildTrace: (entry) => parentChild.push(entry)
+      });
+    } finally {
+      console.log = originalLog;
+    }
+    return {
+      logs,
+      parentChild,
+      diagnostic,
+      identities: choices.map((choice) => choice.items.map((entry) => String(entry.id)).sort().join('|'))
+    };
+  }
+
+  const first = runGroupTrace();
+  const second = runGroupTrace();
+  const trace = first.parentChild[0];
+  assert.ok(trace, 'pick4 parent-child trace must be emitted');
+  assert.equal(trace.limit, 10);
+  assert.equal(trace.retainedCount, 10);
+  assert.equal(trace.reserveLimit, 2);
+  assert.equal(trace.lostParentKeys.includes(lostParentKey), true);
+  assert.equal(trace.representedParentKeys.includes(lostParentKey), true);
+  assert.equal(first.logs.includes('DOFUS_PICK3_WITNESS_PRESENT_AFTER_REDUCTION=YES'), true);
+  assert.equal(first.logs.includes('DOFUS_PICK4_WITNESS_PRESENT_BEFORE_REDUCTION=YES'), true);
+  assert.equal(first.logs.includes('DOFUS_PICK4_WITNESS_PRESENT_AFTER_PRIMARY_REDUCTION=NO'), true);
+  assert.equal(first.logs.includes('DOFUS_PICK4_WITNESS_PRESENT_AFTER_PARENT_CHILD_PROTECTION=YES'), true);
+  assert.equal(first.logs.includes('DOFUS_PICK4_RETAINED_COUNT=10'), true);
+  assert.equal(first.logs.includes('DOFUS_PICK4_RETAINED_LIMIT=10'), true);
+  assert.equal(first.diagnostic.firstLoss, null);
+  assert.equal(first.identities.includes(witnessKey), true);
+  assert.deepEqual(second.identities, first.identities);
+
+  const oracle = exhaustiveOracle({ items, syntheticOffense, topN: 2 });
+  assert.equal(oracle.length, 1, 'only the A-free six-Dofus completion may be authoritative-valid');
+  assert.equal(oracle[0].items.filter((entry) => entry.slot === 'dofus').map((entry) => String(entry.id)).sort().join('|'), witnessKey);
+
+  const search = searchEquipmentArchitecturesV2({
+    items,
+    requiredItemIds: fixed.map((entry) => entry.id),
+    syntheticOffense,
+    topN: 2,
+    searchProfile: profile
+  });
+  assert.equal(search.results.length, 1);
+  assert.equal(search.results[0].buildIdentity, oracle[0].buildIdentity);
+  assert.equal(search.results[0].items.filter((entry) => entry.slot === 'dofus').map((entry) => String(entry.id)).sort().join('|'), witnessKey);
+
+  console.log('DOFUS_PICK4_PARENT_CHILD_REGRESSION=PASS');
+  console.log('DOFUS_PICK3_PARENT_REPRESENTED_AFTER_PICK4=PASS');
+  console.log('DOFUS_PICK4_BEAM_LIMIT_UNCHANGED=PASS');
+  console.log('DETERMINISTIC_PARENT_CHILD_RETENTION=PASS');
 });

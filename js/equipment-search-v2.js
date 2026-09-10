@@ -146,6 +146,130 @@ function keepEquipmentDiversity(states, limit, { policy, constraints, bucketLimi
   return output;
 }
 
+function parentItemKey(state) {
+  const items = state?.items || [];
+  if (items.length < 2) return '';
+  return itemKey(items.slice(0, -1));
+}
+
+function equipmentParentChildRepresentatives(states, limit, context = {}) {
+  if (!states.length || limit <= 0) return [];
+  const output = [];
+  const seen = new Set();
+
+  function push(state) {
+    if (!state || output.length >= limit) return;
+    const key = itemKey(state.items);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  }
+
+  const ranked = [...states].sort((a, b) => b.rankScore - a.rankScore
+    || itemKey(a.items).localeCompare(itemKey(b.items)));
+  push(ranked[0]);
+
+  for (const statKey of context.policy?.paretoKeys || []) {
+    if (output.length >= limit) break;
+    const specialist = [...states]
+      .filter((state) => effectiveStat(state.stats, statKey) > 0)
+      .sort((a, b) => effectiveStat(b.stats, statKey) - effectiveStat(a.stats, statKey)
+        || b.rankScore - a.rankScore
+        || itemKey(a.items).localeCompare(itemKey(b.items)))[0];
+    push(specialist);
+  }
+
+  const diversified = keepEquipmentDiversity(
+    states,
+    Math.min(states.length, limit),
+    {
+      policy: context.policy,
+      constraints: context.constraints,
+      bucketLimit: context.profile?.search?.groupBucketLimit
+    }
+  );
+  for (const state of diversified) push(state);
+  for (const state of ranked) push(state);
+  return output;
+}
+
+function preserveDofusParentChildDiversity(parentStates, states, retained, limit, context = {}) {
+  const targetCount = Math.min(Math.max(0, Number(limit || 0)), retained.length);
+  if (targetCount <= 1 || !parentStates.length || !states.length || !retained.length) {
+    return retained.slice(0, targetCount);
+  }
+
+  const reserveLimit = Math.min(Math.max(1, Math.floor(targetCount / 4)), targetCount - 1);
+  if (reserveLimit <= 0) return retained.slice(0, targetCount);
+
+  const representedParentKeys = new Set(retained.map((state) => parentItemKey(state)).filter(Boolean));
+  const lostParents = parentStates.filter((state) => {
+    const key = itemKey(state.items);
+    return key && !representedParentKeys.has(key);
+  });
+  if (!lostParents.length) return retained.slice(0, targetCount);
+
+  const childrenByParent = new Map(lostParents.map((state) => [itemKey(state.items), []]));
+  for (const state of states) {
+    const children = childrenByParent.get(parentItemKey(state));
+    if (children) children.push(state);
+  }
+
+  const marginalPool = [];
+  const originalByKey = new Map();
+  for (const parent of lostParents) {
+    const parentKey = itemKey(parent.items);
+    const representatives = equipmentParentChildRepresentatives(
+      childrenByParent.get(parentKey) || [],
+      reserveLimit,
+      context
+    );
+    for (const state of representatives) {
+      const key = itemKey(state.items);
+      if (!key || originalByKey.has(key)) continue;
+      originalByKey.set(key, state);
+      marginalPool.push({
+        ...state,
+        rankScore: Number(state.rankScore || 0) - Number(parent.rankScore || 0)
+      });
+    }
+  }
+  marginalPool.sort((a, b) => itemKey(a.items).localeCompare(itemKey(b.items)));
+
+  const protectedStates = equipmentParentChildRepresentatives(marginalPool, reserveLimit, context)
+    .map((state) => originalByKey.get(itemKey(state.items)))
+    .filter(Boolean);
+  if (!protectedStates.length) return retained.slice(0, targetCount);
+
+  const output = [];
+  const outputKeys = new Set();
+  function push(state) {
+    if (!state || output.length >= targetCount) return;
+    const key = itemKey(state.items);
+    if (!key || outputKeys.has(key)) return;
+    outputKeys.add(key);
+    output.push(state);
+  }
+
+  const primaryCount = Math.max(0, targetCount - protectedStates.length);
+  for (const state of retained.slice(0, primaryCount)) push(state);
+  for (const state of protectedStates) push(state);
+  for (const state of retained) push(state);
+
+  if (typeof context.onDofusParentChildTrace === 'function') {
+    context.onDofusParentChildTrace({
+      limit: targetCount,
+      reserveLimit,
+      lostParentKeys: lostParents.map((state) => itemKey(state.items)),
+      protectedChildKeys: protectedStates.map((state) => itemKey(state.items)),
+      representedParentKeys: [...new Set(output.map((state) => parentItemKey(state)).filter(Boolean))],
+      retainedCount: output.length
+    });
+  }
+
+  return output;
+}
+
 function diagnosticStaticValue(stats = {}, key, fmPolicy = {}) {
   const base = Number(BASE_CHARACTER.baseStats?.[key] || 0);
   const exo = key === 'ap' ? (Number(fmPolicy?.exoAp) === 1 ? 1 : 0)
@@ -206,8 +330,9 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
   let finalPickSnapshot = null;
 
   for (let pick = 0; pick < count; pick++) {
+    const parentStates = states;
     const next = [];
-    for (const state of states) {
+    for (const state of parentStates) {
       for (const entry of profiles) {
         const id = String(entry.item.id);
         if (state.ids.has(id)) continue;
@@ -230,13 +355,31 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
     }
     const dedupStates = [...dedup.values()];
     const pickLimit = pick === count - 1 ? finalLimit : intermediateLimit;
-    const diverseStates = count === 1
+    const primaryStates = count === 1
       ? [...dedupStates].sort((a, b) => b.rankScore - a.rankScore || itemKey(a.items).localeCompare(itemKey(b.items)))
       : keepEquipmentDiversity(dedupStates, pickLimit, {
           policy: context.policy,
           constraints: context.constraints,
           bucketLimit: context.profile.search.groupBucketLimit
         });
+    const diverseStates = context.slot === 'dofus' && pick === 3
+      ? preserveDofusParentChildDiversity(parentStates, dedupStates, primaryStates, pickLimit, context)
+      : primaryStates;
+
+    if (witnessChoiceIds.size && context.slot === 'dofus') {
+      const compatible = (state) => state.items.length === pick + 1
+        && state.items.every((item) => witnessChoiceIds.has(String(item.id)));
+      if (pick === 2) {
+        console.log(`DOFUS_PICK3_WITNESS_PRESENT_AFTER_REDUCTION=${diverseStates.some(compatible) ? 'YES' : 'NO'}`);
+      }
+      if (pick === 3) {
+        console.log(`DOFUS_PICK4_WITNESS_PRESENT_BEFORE_REDUCTION=${dedupStates.some(compatible) ? 'YES' : 'NO'}`);
+        console.log(`DOFUS_PICK4_WITNESS_PRESENT_AFTER_PRIMARY_REDUCTION=${primaryStates.some(compatible) ? 'YES' : 'NO'}`);
+        console.log(`DOFUS_PICK4_WITNESS_PRESENT_AFTER_PARENT_CHILD_PROTECTION=${diverseStates.some(compatible) ? 'YES' : 'NO'}`);
+        console.log(`DOFUS_PICK4_RETAINED_COUNT=${diverseStates.length}`);
+        console.log(`DOFUS_PICK4_RETAINED_LIMIT=${pickLimit}`);
+      }
+    }
 
     if (diagnostic && !diagnostic.firstLoss && witnessChoiceIds.size) {
       const compatible = (state) => state.items.length === pick + 1
@@ -250,12 +393,15 @@ function buildGroupChoices(profiles = [], count = 1, context = {}) {
         const rank = witnessState ? ranked.findIndex((state) => itemKey(state.items) === itemKey(witnessState.items)) + 1 : 0;
         const bucket = witnessState ? stateBucket(witnessState, context.constraints) : 'NA';
         const signature = witnessState ? setSignature(witnessState.items) : 'NA';
+        const protectedPick4 = context.slot === 'dofus' && pick === 3;
         if (recordDiagnosticFirstLoss(
           diagnostic,
           'GROUP_CHOICE_DIVERSITY',
-          `slot=${context.slot}|pick=${pick + 1}|witness-compatible partial removed by keepEquipmentDiversity`,
+          protectedPick4
+            ? `slot=${context.slot}|pick=${pick + 1}|witness-compatible partial removed by primary diversity and not restored by parent-child protection`
+            : `slot=${context.slot}|pick=${pick + 1}|witness-compatible partial removed by keepEquipmentDiversity`,
           {
-            FIRST_LOSS_OPERATION: 'KEEP_EQUIPMENT_DIVERSITY',
+            FIRST_LOSS_OPERATION: protectedPick4 ? 'KEEP_EQUIPMENT_DIVERSITY_PLUS_PARENT_CHILD' : 'KEEP_EQUIPMENT_DIVERSITY',
             FIRST_LOSS_RANK: rank || 'NA',
             FIRST_LOSS_LIMIT: pickLimit,
             FIRST_LOSS_BUCKET: bucket,

@@ -52,7 +52,7 @@ if (originalWitness.length !== ORIGINAL_WITNESS_IDS.length) {
 const searchSourceUrl = new URL('../js/equipment-search-v2.js', import.meta.url);
 const diagnosticModuleUrl = new URL(`../js/.equipment-search-v2-rolling-${process.pid}.tmp.mjs`, import.meta.url);
 const searchSource = readFileSync(searchSourceUrl, 'utf8');
-const exportSuffix = `\nexport { buildGroupChoices, keepEquipmentDiversity, rankItems, itemKey, setsByIdFor, fullShape, constraintProgress };\n`;
+const exportSuffix = `\nexport { buildGroupChoices, keepEquipmentDiversity, preserveDofusParentChildDiversity, rankItems, itemKey, setsByIdFor, fullShape, constraintProgress };\n`;
 let internals;
 try {
   writeFileSync(diagnosticModuleUrl, `${searchSource}${exportSuffix}`, 'utf8');
@@ -131,8 +131,9 @@ function tracedGroupChoices(rule) {
   const snapshots = [];
 
   for (let pick = 0; pick < count; pick++) {
+    const parentStates = states;
     const next = [];
-    for (const state of states) {
+    for (const state of parentStates) {
       for (const entry of profiles) {
         const id = String(entry.item.id);
         if (state.ids.has(id)) continue;
@@ -155,14 +156,17 @@ function tracedGroupChoices(rule) {
     }
     const before = [...dedup.values()];
     const pickLimit = pick === count - 1 ? finalLimit : intermediateLimit;
-    const after = count === 1
+    const primary = count === 1
       ? [...before].sort((a, b) => b.rankScore - a.rankScore || internals.itemKey(a.items).localeCompare(internals.itemKey(b.items)))
       : internals.keepEquipmentDiversity(before, pickLimit, {
           policy,
           constraints,
           bucketLimit: profile.search.groupBucketLimit
         });
-    snapshots.push({ pick: pick + 1, before, after, limit: pickLimit });
+    const after = rule.id === 'dofus' && pick === 3
+      ? internals.preserveDofusParentChildDiversity(parentStates, before, primary, pickLimit, exactGroupContext(rule))
+      : primary;
+    snapshots.push({ pick: pick + 1, before, primary, after, limit: pickLimit });
     states = after;
     if (!states.length) break;
   }
