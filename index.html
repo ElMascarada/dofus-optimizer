@@ -39,8 +39,8 @@
       <section class="panel optimizer-v2-hero">
         <div>
           <span class="eyebrow">OPTIMISEUR DE STUFF</span>
-          <h2>Élément → Type de dégâts → Contraintes → Stuff</h2>
-          <p>Choisis ce que tu veux jouer. Le moteur construit et compare directement les équipements complets.</p>
+          <h2>Offense → Contraintes → Stuff</h2>
+          <p>Choisis ton orientation offensive puis les contraintes réellement importantes pour ton build.</p>
         </div>
         <span id="optimizer-data-status" class="status" data-state="loading" aria-live="polite">Chargement du catalogue équipement…</span>
       </section>
@@ -49,29 +49,43 @@
 
       <div class="optimizer-v2-layout">
         <aside class="optimizer-v2-controls" aria-label="Paramètres de recherche équipement">
-          <section class="panel">
-            <h2>01 · Élément</h2>
-            <div class="form-grid optimizer-v2-constraints">
-              <label class="field"><input data-optimizer-element type="checkbox" value="earth" checked> Terre</label>
-              <label class="field"><input data-optimizer-element type="checkbox" value="fire"> Feu</label>
-              <label class="field"><input data-optimizer-element type="checkbox" value="water"> Eau</label>
-              <label class="field"><input data-optimizer-element type="checkbox" value="air"> Air</label>
-              <label class="field"><input id="optimizer-element-multi" type="checkbox" value="multi"> Multi</label>
+          <section class="panel optimizer-control-panel">
+            <h2>01 · Offense</h2>
+
+            <div class="optimizer-control-group">
+              <h3>Éléments</h3>
+              <div class="form-grid optimizer-element-grid">
+                <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="earth" checked> <span>Terre</span></label>
+                <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="fire"> <span>Feu</span></label>
+                <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="water"> <span>Eau</span></label>
+                <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="air"> <span>Air</span></label>
+                <label class="optimizer-choice optimizer-choice-wide"><input id="optimizer-element-multi" type="checkbox" value="multi"> <span>Multi</span></label>
+              </div>
+              <p class="hint">1 à 3 éléments, ou Multi. Multi est exclusif.</p>
             </div>
-            <p class="hint">Sélectionne 1 à 3 éléments, ou Multi. Multi est exclusif.</p>
+
+            <div class="optimizer-control-group">
+              <h3>Type de dégâts</h3>
+              <div class="optimizer-segmented" role="radiogroup" aria-label="Type de dégâts">
+                <label><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="small"><span>Petites lignes</span></label>
+                <label><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="medium"><span>Mixte</span></label>
+                <label><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="large" checked><span>Grosses lignes</span></label>
+              </div>
+            </div>
+
+            <div class="optimizer-control-group">
+              <h3>Critiques</h3>
+              <div class="optimizer-segmented optimizer-segmented-crit" role="radiogroup" aria-label="Mode critique">
+                <label><input data-optimizer-crit-mode name="optimizer-crit-mode" type="radio" value="auto" checked><span>Auto</span></label>
+                <label><input data-optimizer-crit-mode name="optimizer-crit-mode" type="radio" value="crit"><span>Crit</span></label>
+                <label><input data-optimizer-crit-mode name="optimizer-crit-mode" type="radio" value="no_crit"><span>Sans crit</span></label>
+              </div>
+              <p class="hint">Auto laisse le moteur choisir. Sans crit ignore Crit et Do Crit dans l’objectif offensif.</p>
+            </div>
           </section>
 
-          <section class="panel">
-            <h2>02 · Type de dégâts</h2>
-            <div class="optimizer-damage-types" role="radiogroup" aria-label="Type de dégâts">
-              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="small"> Petites lignes</label>
-              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="medium"> Mixte</label>
-              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="large" checked> Grosses lignes</label>
-            </div>
-          </section>
-
-          <section class="panel">
-            <h2>03 · Contraintes</h2>
+          <section class="panel optimizer-control-panel">
+            <h2>02 · Contraintes</h2>
             <div class="form-grid optimizer-v2-constraints">
               <label class="field">PA minimum<input id="optimizer-min-ap" type="number" min="0" step="1" value="12"></label>
               <label class="field">PM minimum<input id="optimizer-min-mp" type="number" min="0" step="1" value="6"></label>
@@ -81,14 +95,35 @@
               <label class="field">Ajouter une contrainte
                 <select id="optimizer-constraint-key">
                   <option value="">Choisir…</option>
-                  <option value="range">PO minimum</option>
-                  <option value="vit">Vitalité minimum</option>
-                  <option value="initiative">Initiative minimum</option>
-                  <option value="resEarth">% Résistance Terre</option>
-                  <option value="resFire">% Résistance Feu</option>
-                  <option value="resWater">% Résistance Eau</option>
-                  <option value="resAir">% Résistance Air</option>
-                  <option value="fm">FM</option>
+                  <optgroup label="Général">
+                    <option value="range">PO minimum</option>
+                    <option value="vit">Vitalité minimum</option>
+                    <option value="initiative">Initiative minimum</option>
+                    <option value="power">Puissance minimum</option>
+                  </optgroup>
+                  <optgroup label="Offense">
+                    <option value="crit">Crit minimum</option>
+                    <option value="critDamage">Do Crit minimum</option>
+                    <option value="damage">Dommages fixes minimum</option>
+                    <option value="spellDamagePct">% dommages sorts minimum</option>
+                    <option value="earth">Force minimum</option>
+                    <option value="fire">Intelligence minimum</option>
+                    <option value="water">Chance minimum</option>
+                    <option value="air">Agilité minimum</option>
+                    <option value="damageEarth">Do Terre minimum</option>
+                    <option value="damageFire">Do Feu minimum</option>
+                    <option value="damageWater">Do Eau minimum</option>
+                    <option value="damageAir">Do Air minimum</option>
+                  </optgroup>
+                  <optgroup label="Résistances">
+                    <option value="resEarth">% Résistance Terre</option>
+                    <option value="resFire">% Résistance Feu</option>
+                    <option value="resWater">% Résistance Eau</option>
+                    <option value="resAir">% Résistance Air</option>
+                  </optgroup>
+                  <optgroup label="Forgemagie">
+                    <option value="fm">FM</option>
+                  </optgroup>
                 </select>
               </label>
               <label id="optimizer-constraint-number-field" class="field">Valeur
@@ -106,7 +141,7 @@
             <p class="hint">FM Oui inclut dès le départ l’exo PA et l’exo PM, puis optimise les 7 FM offensives restantes.</p>
           </section>
 
-          <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
+          <button id="optimizer-run" class="primary optimizer-run-main" type="button" disabled>Optimiser</button>
           <p id="optimizer-diagnostics" class="diagnostics" aria-live="polite">Chargement du catalogue…</p>
         </aside>
 
@@ -124,8 +159,8 @@
 
   <script src="js/runtime-meta.js?v=20260827-3"></script>
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
-  <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
-  <script type="module" src="js/optimizer-app.js?v=20260911-2"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260911-2', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script type="module" src="js/workshop/workshop-app.js?v=20260911-3"></script>
+  <script type="module" src="js/optimizer-app.js?v=20260911-3"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260911-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
