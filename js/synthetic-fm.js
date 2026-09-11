@@ -43,11 +43,11 @@ function baseAssignments(items = []) {
   }]));
 }
 
-function noOffensiveFm({ stats, items, availableAp, elements, profiles, policy }) {
+function noOffensiveFm({ stats, items, availableAp, elements, profiles, critMode, policy }) {
   const normalized = normalizeSyntheticFmPolicy(policy);
   return {
     stats: cloneStats(stats),
-    offense: evaluateSyntheticOffense({ stats, availableAp, elements, profiles }),
+    offense: evaluateSyntheticOffense({ stats, availableAp, elements, profiles, critMode }),
     enabled: false,
     structuralSlots: normalized.exoAp + normalized.exoMp,
     offensiveSlots: 0,
@@ -64,10 +64,6 @@ function hasNativeCritDamage(item) {
 }
 
 function chooseStructuralPair(forgeable = []) {
-  // A native-Do-Crit item cannot receive the +8 Do Crit offensive FM anyway.
-  // Putting PA/PM exos on those items first can therefore never reduce the
-  // offensive FM option set. If fewer than two exist, fill deterministically
-  // with the lowest-id remaining items.
   const nativeCrit = forgeable.filter(hasNativeCritDamage);
   const critEligible = forgeable.filter((item) => !hasNativeCritDamage(item));
   return [...nativeCrit, ...critEligible].slice(0, 2);
@@ -79,11 +75,12 @@ export function optimizeSyntheticFm({
   availableAp = 0,
   elements = [],
   profiles = [],
+  critMode = 'auto',
   policy = {}
 } = {}) {
   const normalized = normalizeSyntheticFmPolicy(policy);
   if (!normalized.enabled) {
-    return noOffensiveFm({ stats, items, availableAp, elements, profiles, policy });
+    return noOffensiveFm({ stats, items, availableAp, elements, profiles, critMode, policy });
   }
 
   const forgeable = (items || [])
@@ -100,10 +97,6 @@ export function optimizeSyntheticFm({
   const critEligible = offensiveItems.filter((item) => !hasNativeCritDamage(item));
   const forcedSpell = offensiveItems.filter(hasNativeCritDamage);
 
-  // For synthetic scoring, assignments with the same number of +8 Do Crit
-  // slots are mathematically equivalent: only aggregate spellDamagePct and
-  // critDamage matter. Evaluate one canonical representative for each count
-  // instead of 2^N item masks (at most 8 variants for the normal 7 slots).
   let best = null;
   for (let critCount = 0; critCount <= critEligible.length; critCount++) {
     const critIds = new Set(critEligible.slice(0, critCount).map(itemKey));
@@ -138,7 +131,8 @@ export function optimizeSyntheticFm({
       stats: candidateStats,
       availableAp,
       elements,
-      profiles
+      profiles,
+      critMode
     });
     const assignmentList = [...assignments.values()];
     const key = assignmentKey(assignmentList);

@@ -130,7 +130,8 @@ export function createEquipmentCandidatePolicy({
     stats: baselineStats,
     availableAp: baselineAp,
     elements: syntheticOffense?.elements,
-    profiles: syntheticOffense?.profiles
+    profiles: syntheticOffense?.profiles,
+    critMode: syntheticOffense?.critMode
   });
 
   const policy = {
@@ -153,7 +154,8 @@ export function createEquipmentCandidatePolicy({
         stats,
         availableAp,
         elements: syntheticOffense?.elements,
-        profiles: syntheticOffense?.profiles
+        profiles: syntheticOffense?.profiles,
+        critMode: syntheticOffense?.critMode
       });
       const objectiveGain = Math.max(0, Number(offense.minimumScore) - Number(baselineOffense.minimumScore));
       const meanGain = Math.max(0, Number(offense.meanScore) - Number(baselineOffense.meanScore));

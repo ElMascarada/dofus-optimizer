@@ -145,6 +145,27 @@ function canonicalStatsKey(stats = {}) {
     .join('|');
 }
 
+function rankingScores(requestedElements, requestedProbes) {
+  if (requestedElements.length === 1 && requestedElements[0] === 'multi') {
+    return requestedProbes.flatMap((probe) => probe.lines.map((line) =>
+      line.expectedValue * probe.equivalentProbeCount
+    ));
+  }
+  return requestedProbes.map((probe) => probe.totalApBudgetScore);
+}
+
+function multiElementScores(requestedElements, requestedProbes) {
+  if (requestedElements.length !== 1 || requestedElements[0] !== 'multi') return null;
+  const output = {};
+  for (const element of ELEMENTS) {
+    const scores = requestedProbes.flatMap((probe) => probe.lines
+      .filter((line) => line.element === element)
+      .map((line) => line.expectedValue * probe.equivalentProbeCount));
+    output[element] = scores.length ? Math.min(...scores) : 0;
+  }
+  return output;
+}
+
 export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, profiles, critMode = 'auto' } = {}) {
   const ap = finiteNumber(availableAp, 'availableAp');
   if (ap < 0) throw new RangeError('availableAp must be non-negative');
@@ -157,7 +178,7 @@ export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, pr
       requestedProbes.push(evaluateProbe(stats, ap, element, profile, normalizedCritMode));
     }
   }
-  const scores = requestedProbes.map((probe) => probe.totalApBudgetScore);
+  const scores = rankingScores(requestedElements, requestedProbes);
   const minimumScore = Math.min(...scores);
   const meanScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
   const canonicalTieBreak = canonicalStatsKey(stats);
@@ -167,6 +188,7 @@ export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, pr
     profiles: requestedProfiles,
     critMode: normalizedCritMode,
     requestedProbes,
+    multiElementScores: multiElementScores(requestedElements, requestedProbes),
     minimumScore,
     meanScore,
     rankingTuple: [minimumScore, meanScore, canonicalTieBreak],

@@ -72,6 +72,7 @@ export function evaluateCompleteEquipmentBuild({
   const conditionReference = conditionReferenceStats(structural.stats, character?.scrolled);
   const minimumStats = characteristicMinimumsForItems(items, conditionReference, character?.level);
   const actualPermanentAp = effectiveStat(structural.stats, 'ap');
+  const critMode = syntheticOffense?.critMode || 'auto';
 
   let characteristics;
   try {
@@ -83,7 +84,8 @@ export function evaluateCompleteEquipmentBuild({
       minimumStats,
       availableAp: actualPermanentAp,
       elements: syntheticOffense?.elements,
-      profiles: syntheticOffense?.profiles
+      profiles: syntheticOffense?.profiles,
+      critMode
     });
   } catch (error) {
     return {
@@ -105,6 +107,7 @@ export function evaluateCompleteEquipmentBuild({
       availableAp: actualPermanentAp,
       elements: syntheticOffense?.elements,
       profiles: syntheticOffense?.profiles,
+      critMode,
       policy: fmPolicy
     });
   } catch (error) {
