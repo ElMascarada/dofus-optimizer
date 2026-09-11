@@ -35,6 +35,48 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.optimizer-damage-types {
+  display: grid;
+  gap: 8px;
+}
+
+.optimizer-constraint-builder {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(90px, .8fr) auto;
+  gap: 8px;
+  align-items: end;
+  margin-top: 12px;
+}
+
+.optimizer-constraint-builder .field[hidden] {
+  display: none;
+}
+
+.optimizer-active-constraints {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.optimizer-constraint-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--border, #333);
+  padding: 6px 8px;
+  font-size: .78rem;
+}
+
+.optimizer-constraint-chip button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px;
+}
+
 #optimizer-results {
   display: grid;
   gap: 14px;
@@ -186,7 +228,8 @@
     grid-template-columns: 1fr;
   }
 
-  .optimizer-v2-constraints {
+  .optimizer-v2-constraints,
+  .optimizer-constraint-builder {
     grid-template-columns: 1fr;
   }
 
