@@ -28,20 +28,6 @@ function itemKey(item) {
   return String(item?.id ?? '');
 }
 
-function pairKey(left, right) {
-  return [itemKey(left), itemKey(right)].sort().join('|');
-}
-
-function combinationsOfTwo(items = []) {
-  const output = [];
-  for (let left = 0; left < items.length; left++) {
-    for (let right = left + 1; right < items.length; right++) {
-      output.push([items[left], items[right]]);
-    }
-  }
-  return output;
-}
-
 function assignmentKey(assignments = []) {
   return assignments
     .map((entry) => `${entry.itemId}:${entry.type}:${entry.value}`)
@@ -73,6 +59,20 @@ function noOffensiveFm({ stats, items, availableAp, elements, profiles, policy }
   };
 }
 
+function hasNativeCritDamage(item) {
+  return Number(item?.stats?.critDamage || 0) !== 0;
+}
+
+function chooseStructuralPair(forgeable = []) {
+  // A native-Do-Crit item cannot receive the +8 Do Crit offensive FM anyway.
+  // Putting PA/PM exos on those items first can therefore never reduce the
+  // offensive FM option set. If fewer than two exist, fill deterministically
+  // with the lowest-id remaining items.
+  const nativeCrit = forgeable.filter(hasNativeCritDamage);
+  const critEligible = forgeable.filter((item) => !hasNativeCritDamage(item));
+  return [...nativeCrit, ...critEligible].slice(0, 2);
+}
+
 export function optimizeSyntheticFm({
   stats = {},
   items = [],
@@ -94,72 +94,69 @@ export function optimizeSyntheticFm({
     throw new RangeError('FM enabled requires at least two forgeable equipment slots for PA/PM exos');
   }
 
+  const structuralPair = chooseStructuralPair(forgeable);
+  const structuralIds = new Set(structuralPair.map(itemKey));
+  const offensiveItems = forgeable.filter((item) => !structuralIds.has(itemKey(item)));
+  const critEligible = offensiveItems.filter((item) => !hasNativeCritDamage(item));
+  const forcedSpell = offensiveItems.filter(hasNativeCritDamage);
+
+  // For synthetic scoring, assignments with the same number of +8 Do Crit
+  // slots are mathematically equivalent: only aggregate spellDamagePct and
+  // critDamage matter. Evaluate one canonical representative for each count
+  // instead of 2^N item masks (at most 8 variants for the normal 7 slots).
   let best = null;
-  for (const structuralPair of combinationsOfTwo(forgeable)) {
-    const structuralIds = new Set(structuralPair.map(itemKey));
-    const offensiveItems = forgeable.filter((item) => !structuralIds.has(itemKey(item)));
-    const critEligible = offensiveItems.filter((item) => Number(item?.stats?.critDamage || 0) === 0);
-    const critIndex = new Map(critEligible.map((item, index) => [itemKey(item), index]));
-    const variantCount = 2 ** critEligible.length;
+  for (let critCount = 0; critCount <= critEligible.length; critCount++) {
+    const critIds = new Set(critEligible.slice(0, critCount).map(itemKey));
+    const assignments = baseAssignments(items);
+    assignments.set(itemKey(structuralPair[0]), { itemId: structuralPair[0].id, type: 'exoAp', value: 1 });
+    assignments.set(itemKey(structuralPair[1]), { itemId: structuralPair[1].id, type: 'exoMp', value: 1 });
 
-    for (let mask = 0; mask < variantCount; mask++) {
-      const candidateStats = cloneStats(stats);
-      const assignments = baseAssignments(items);
-      const sortedPair = [...structuralPair].sort((a, b) => itemKey(a).localeCompare(itemKey(b)));
-      assignments.set(itemKey(sortedPair[0]), { itemId: sortedPair[0].id, type: 'exoAp', value: 1 });
-      assignments.set(itemKey(sortedPair[1]), { itemId: sortedPair[1].id, type: 'exoMp', value: 1 });
-
-      let critItems = 0;
-      let spellPctItems = 0;
-      for (const item of offensiveItems) {
-        const index = critIndex.get(itemKey(item));
-        const useCrit = index != null && ((mask >> index) & 1) === 1;
-        if (useCrit) {
-          critItems++;
-          assignments.set(itemKey(item), {
-            itemId: item.id,
-            type: 'critDamage',
-            value: normalized.critDamageAmount
-          });
-        } else {
-          spellPctItems++;
-          assignments.set(itemKey(item), {
-            itemId: item.id,
-            type: 'spellDamagePct',
-            value: normalized.spellDamagePct
-          });
-        }
-      }
-
-      candidateStats.spellDamagePct = Number(candidateStats.spellDamagePct || 0)
-        + spellPctItems * normalized.spellDamagePct;
-      candidateStats.critDamage = Number(candidateStats.critDamage || 0)
-        + critItems * normalized.critDamageAmount;
-
-      const offense = evaluateSyntheticOffense({
-        stats: candidateStats,
-        availableAp,
-        elements,
-        profiles
+    for (const item of critEligible) {
+      const useCrit = critIds.has(itemKey(item));
+      assignments.set(itemKey(item), {
+        itemId: item.id,
+        type: useCrit ? 'critDamage' : 'spellDamagePct',
+        value: useCrit ? normalized.critDamageAmount : normalized.spellDamagePct
       });
-      const assignmentList = [...assignments.values()];
-      const key = `${pairKey(...structuralPair)}|${assignmentKey(assignmentList)}`;
-      const comparison = best ? compareSyntheticOffenseResults(offense, best.offense) : 1;
-      if (!best || comparison > 0 || (comparison === 0 && key < best.key)) {
-        best = {
-          key,
-          stats: candidateStats,
-          offense,
-          enabled: true,
-          structuralSlots: 2,
-          offensiveSlots: offensiveItems.length,
-          exoAp: 1,
-          exoMp: 1,
-          spellPctItems,
-          critItems,
-          assignments: assignmentList
-        };
-      }
+    }
+    for (const item of forcedSpell) {
+      assignments.set(itemKey(item), {
+        itemId: item.id,
+        type: 'spellDamagePct',
+        value: normalized.spellDamagePct
+      });
+    }
+
+    const spellPctItems = offensiveItems.length - critCount;
+    const candidateStats = cloneStats(stats);
+    candidateStats.spellDamagePct = Number(candidateStats.spellDamagePct || 0)
+      + spellPctItems * normalized.spellDamagePct;
+    candidateStats.critDamage = Number(candidateStats.critDamage || 0)
+      + critCount * normalized.critDamageAmount;
+
+    const offense = evaluateSyntheticOffense({
+      stats: candidateStats,
+      availableAp,
+      elements,
+      profiles
+    });
+    const assignmentList = [...assignments.values()];
+    const key = assignmentKey(assignmentList);
+    const comparison = best ? compareSyntheticOffenseResults(offense, best.offense) : 1;
+    if (!best || comparison > 0 || (comparison === 0 && key < best.key)) {
+      best = {
+        key,
+        stats: candidateStats,
+        offense,
+        enabled: true,
+        structuralSlots: 2,
+        offensiveSlots: offensiveItems.length,
+        exoAp: 1,
+        exoMp: 1,
+        spellPctItems,
+        critItems: critCount,
+        assignments: assignmentList
+      };
     }
   }
 
