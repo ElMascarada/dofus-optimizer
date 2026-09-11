@@ -11,7 +11,7 @@ const common = {
   sets: dataset.sets,
   constraints: { ap: 12, mp: 6 },
   fmPolicy: { enabled: true, fmEnabled: true, exoAp: 1, exoMp: 1 },
-  topN: 5,
+  topN: 20,
   searchProfile: 'BALANCED'
 };
 
