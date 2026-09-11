@@ -3,6 +3,7 @@ import { stat } from './stats.js';
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
 const ELEMENT_ORDER = Object.freeze([...ELEMENTS, 'multi']);
 const PROFILE_ORDER = Object.freeze(['small', 'medium', 'large']);
+const CRIT_MODE_ORDER = Object.freeze(['auto', 'crit', 'no_crit']);
 const ELEMENTAL_FLAT_DAMAGE_STAT = Object.freeze({
   earth: 'damageEarth',
   fire: 'damageFire',
@@ -54,15 +55,21 @@ function normalizeProfiles(value) {
   return [...profiles].sort((a, b) => PROFILE_ORDER.indexOf(a) - PROFILE_ORDER.indexOf(b));
 }
 
-function effectiveCritChancePct(stats, profile) {
+export function normalizeSyntheticCritMode(value = 'auto') {
+  const mode = String(value || 'auto').trim().toLowerCase();
+  return CRIT_MODE_ORDER.includes(mode) ? mode : 'auto';
+}
+
+function effectiveCritChancePct(stats, profile, critMode) {
+  if (critMode === 'no_crit') return 0;
   return Math.max(0, Math.min(100, profile.baseCritChancePct + stat(stats, 'crit')));
 }
 
-function evaluateLine(stats, element, normalBase, criticalBase, critProbability) {
+function evaluateLine(stats, element, normalBase, criticalBase, critProbability, critMode) {
   const characteristic = stat(stats, element) + stat(stats, 'power');
   const genericFlatDamage = stat(stats, 'damage');
   const elementalFlatDamage = stat(stats, ELEMENTAL_FLAT_DAMAGE_STAT[element]);
-  const criticalDamage = stat(stats, 'critDamage');
+  const criticalDamage = critMode === 'no_crit' ? 0 : stat(stats, 'critDamage');
   const spellDamagePct = stat(stats, 'spellDamagePct');
   const spellMultiplier = 1 + spellDamagePct / 100;
   const normalBeforeSpellPct = normalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage;
@@ -93,12 +100,12 @@ function probeLines(mode, profile) {
   return [{ element: mode, normalBase: profile.monoBase }];
 }
 
-function evaluateProbe(stats, availableAp, mode, profileName) {
+function evaluateProbe(stats, availableAp, mode, profileName, critMode) {
   const profile = SYNTHETIC_OFFENSE_PROFILES[profileName];
-  const effectiveCritPct = effectiveCritChancePct(stats, profile);
+  const effectiveCritPct = effectiveCritChancePct(stats, profile, critMode);
   const critProbability = effectiveCritPct / 100;
   const lines = probeLines(mode, profile).map(({ element, normalBase }) => {
-    return evaluateLine(stats, element, normalBase, normalBase * 1.25, critProbability);
+    return evaluateLine(stats, element, normalBase, normalBase * 1.25, critProbability, critMode);
   });
   const normalFullProbeValue = lines.reduce((sum, line) => sum + line.normalValue, 0);
   const criticalFullProbeValue = lines.reduce((sum, line) => sum + line.criticalValue, 0);
@@ -112,6 +119,7 @@ function evaluateProbe(stats, availableAp, mode, profileName) {
   return {
     element: mode,
     profile: profileName,
+    critMode,
     nominalAp: profile.nominalAp,
     baseCritChancePct: profile.baseCritChancePct,
     effectiveCritChancePct: effectiveCritPct,
@@ -137,14 +145,17 @@ function canonicalStatsKey(stats = {}) {
     .join('|');
 }
 
-export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, profiles } = {}) {
+export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, profiles, critMode = 'auto' } = {}) {
   const ap = finiteNumber(availableAp, 'availableAp');
   if (ap < 0) throw new RangeError('availableAp must be non-negative');
   const requestedElements = normalizeElements(elements);
   const requestedProfiles = normalizeProfiles(profiles);
+  const normalizedCritMode = normalizeSyntheticCritMode(critMode);
   const requestedProbes = [];
   for (const element of requestedElements) {
-    for (const profile of requestedProfiles) requestedProbes.push(evaluateProbe(stats, ap, element, profile));
+    for (const profile of requestedProfiles) {
+      requestedProbes.push(evaluateProbe(stats, ap, element, profile, normalizedCritMode));
+    }
   }
   const scores = requestedProbes.map((probe) => probe.totalApBudgetScore);
   const minimumScore = Math.min(...scores);
@@ -154,6 +165,7 @@ export function evaluateSyntheticOffense({ stats = {}, availableAp, elements, pr
     availableAp: ap,
     elements: requestedElements,
     profiles: requestedProfiles,
+    critMode: normalizedCritMode,
     requestedProbes,
     minimumScore,
     meanScore,
