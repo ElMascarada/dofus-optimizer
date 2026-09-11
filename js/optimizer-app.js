@@ -18,6 +18,19 @@ const CONSTRAINT_LABELS = Object.freeze({
   range: 'PO minimum',
   vit: 'Vitalité minimum',
   initiative: 'Initiative minimum',
+  power: 'Puissance minimum',
+  crit: 'Crit minimum',
+  critDamage: 'Do Crit minimum',
+  damage: 'Dommages fixes minimum',
+  spellDamagePct: '% dommages sorts minimum',
+  earth: 'Force minimum',
+  fire: 'Intelligence minimum',
+  water: 'Chance minimum',
+  air: 'Agilité minimum',
+  damageEarth: 'Do Terre minimum',
+  damageFire: 'Do Feu minimum',
+  damageWater: 'Do Eau minimum',
+  damageAir: 'Do Air minimum',
   resEarth: '% Résistance Terre',
   resFire: '% Résistance Feu',
   resWater: '% Résistance Eau',
@@ -114,10 +127,12 @@ function readSyntheticOffense() {
 
   const profile = document.querySelector('[data-optimizer-profile]:checked')?.value;
   if (!profile) throw new Error('Choisis un type de dégâts.');
+  const critMode = document.querySelector('[data-optimizer-crit-mode]:checked')?.value || 'auto';
 
   return {
     elements: multi ? ['multi'] : mono,
-    profiles: [profile]
+    profiles: [profile],
+    critMode
   };
 }
 
@@ -459,7 +474,7 @@ try {
   ui.run.disabled = false;
   ui.results.dataset.state = 'ready';
   ui.results.setAttribute('aria-busy', 'false');
-  ui.results.innerHTML = '<div class="ui-state" data-state="ready"><strong>Optimiseur prêt</strong><span>Choisis ton élément, ton type de dégâts et tes contraintes.</span></div>';
+  ui.results.innerHTML = '<div class="ui-state" data-state="ready"><strong>Optimiseur prêt</strong><span>Choisis ton orientation offensive et tes contraintes.</span></div>';
   ui.diagnostics.textContent = 'Prêt.';
 } catch (error) {
   ui.dataStatus.dataset.state = 'error';
