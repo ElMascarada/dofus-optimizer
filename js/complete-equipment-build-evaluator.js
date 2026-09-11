@@ -10,6 +10,7 @@ import {
 } from './build-legality.js';
 import { statsWithStructuralExos } from './structural-exos.js';
 import { optimizeSyntheticCharacteristics } from './synthetic-characteristics.js';
+import { optimizeSyntheticFm, syntheticFmEnabled } from './synthetic-fm.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
 
@@ -96,7 +97,25 @@ export function evaluateCompleteEquipmentBuild({
     return { result: null, reason: characteristics?.reason || 'constraint' };
   }
 
-  const finalRawStats = characteristics.stats;
+  let fm;
+  try {
+    fm = optimizeSyntheticFm({
+      stats: characteristics.stats,
+      items,
+      availableAp: actualPermanentAp,
+      elements: syntheticOffense?.elements,
+      profiles: syntheticOffense?.profiles,
+      policy: fmPolicy
+    });
+  } catch (error) {
+    return {
+      result: null,
+      reason: 'evaluation-failed',
+      evaluationDiagnostics: { message: error instanceof Error ? error.message : String(error) }
+    };
+  }
+
+  const finalRawStats = fm.stats;
   const permanentCapViolations = permanentStatCapViolations(finalRawStats, { includeMp: true });
   if (permanentCapViolations.length) {
     return {
@@ -120,8 +139,9 @@ export function evaluateCompleteEquipmentBuild({
   }
 
   const permanentStats = effectiveStats(finalRawStats);
-  const syntheticResult = characteristics.offense;
+  const syntheticResult = fm.offense;
   const buildIdentity = completeEquipmentBuildIdentity(items);
+  const enabled = syntheticFmEnabled(fmPolicy);
   return {
     result: {
       score: syntheticResult.minimumScore,
@@ -136,9 +156,14 @@ export function evaluateCompleteEquipmentBuild({
         count: structural.structuralExos
       },
       fm: {
-        structuralOnly: true,
+        enabled,
         exoAp: structural.exoAp,
         exoMp: structural.exoMp,
+        structuralSlots: fm.structuralSlots,
+        offensiveSlots: fm.offensiveSlots,
+        spellPctItems: fm.spellPctItems,
+        critItems: fm.critItems,
+        assignments: fm.assignments,
         legacyOffensiveFmApplied: false
       },
       itemConditionsSatisfied: true,
