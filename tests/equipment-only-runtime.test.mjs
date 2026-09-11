@@ -4,6 +4,14 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+const FORBIDDEN_LEGACY_RUNTIME = [
+  'architecture-search-v2',
+  'combat-turn-refiner',
+  'offensive-slot-refiner',
+  'combat-feedback',
+  'final-dofus-local-repair'
+];
+
 test('active Optimizer shell is Equipment-Only', async () => {
   const html = await read('index.html');
   assert.doesNotMatch(html, /id="optimizer-class"/);
@@ -24,16 +32,20 @@ test('optimizer app loads equipment data only', async () => {
   assert.doesNotMatch(source, /search-memory/);
 });
 
-test('optimizer worker is a thin Equipment-First entrypoint', async () => {
+test('optimizer worker routes Equipment-Only requests through the request orchestrator', async () => {
   const source = await read('js/optimizer-worker.js');
-  assert.match(source, /searchEquipmentArchitecturesV2/);
-  for (const forbidden of [
-    'architecture-search-v2',
-    'combat-turn-refiner',
-    'offensive-slot-refiner',
-    'combat-feedback',
-    'final-dofus-local-repair'
-  ]) {
+  assert.match(source, /import\s*\{\s*searchEquipmentRequest\s*\}\s*from\s*['"]\.\/equipment-search-request\.js['"]/);
+  assert.match(source, /searchEquipmentRequest\s*\(/);
+  for (const forbidden of FORBIDDEN_LEGACY_RUNTIME) {
+    assert.doesNotMatch(source, new RegExp(forbidden));
+  }
+});
+
+test('equipment request orchestrator delegates to the Equipment-First search without legacy combat runtime', async () => {
+  const source = await read('js/equipment-search-request.js');
+  assert.match(source, /import\s*\{\s*searchEquipmentArchitecturesV2\s*\}\s*from\s*['"]\.\/equipment-search-v2\.js['"]/);
+  assert.match(source, /searchEquipmentArchitecturesV2\s*\(/);
+  for (const forbidden of FORBIDDEN_LEGACY_RUNTIME) {
     assert.doesNotMatch(source, new RegExp(forbidden));
   }
 });

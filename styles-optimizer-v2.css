@@ -13,7 +13,7 @@
 
 .optimizer-v2-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 380px) minmax(0, 1fr);
+  grid-template-columns: minmax(300px, 390px) minmax(0, 1fr);
   gap: 20px;
   align-items: start;
 }
@@ -31,21 +31,102 @@
   min-width: 0;
 }
 
+.optimizer-control-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.optimizer-control-panel > h2 {
+  margin-bottom: 0;
+}
+
+.optimizer-control-group {
+  display: grid;
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border, #2b2b2b);
+}
+
+.optimizer-control-group h3 {
+  margin: 0;
+  font-size: .76rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted, #929292);
+}
+
+.optimizer-element-grid,
 .optimizer-v2-constraints {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.optimizer-damage-types {
-  display: grid;
+.optimizer-choice {
+  display: flex;
+  align-items: center;
   gap: 8px;
+  min-height: 38px;
+  border: 1px solid var(--border, #333);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.optimizer-choice-wide {
+  grid-column: 1 / -1;
+}
+
+.optimizer-choice input {
+  margin: 0;
+}
+
+.optimizer-segmented {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--border, #333);
+}
+
+.optimizer-segmented label {
+  position: relative;
+  min-width: 0;
+}
+
+.optimizer-segmented input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.optimizer-segmented span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 42px;
+  padding: 7px 8px;
+  border-right: 1px solid var(--border, #333);
+  text-align: center;
+  font-size: .78rem;
+  cursor: pointer;
+}
+
+.optimizer-segmented label:last-child span {
+  border-right: 0;
+}
+
+.optimizer-segmented input:checked + span {
+  background: #dc2636;
+  color: #fff;
+}
+
+.optimizer-segmented input:focus-visible + span {
+  outline: 2px solid #fff;
+  outline-offset: -3px;
 }
 
 .optimizer-constraint-builder {
   display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(90px, .8fr) auto;
+  grid-template-columns: minmax(0, 1.45fr) minmax(88px, .65fr) auto;
   gap: 8px;
   align-items: end;
-  margin-top: 12px;
+  margin-top: 4px;
 }
 
 .optimizer-constraint-builder .field[hidden] {
@@ -56,7 +137,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-  margin-top: 10px;
+  margin-top: 2px;
 }
 
 .optimizer-constraint-chip {
@@ -75,6 +156,12 @@
   cursor: pointer;
   font: inherit;
   padding: 0 2px;
+}
+
+.optimizer-run-main {
+  width: 100%;
+  min-height: 58px;
+  font-size: 1rem;
 }
 
 #optimizer-results {
@@ -228,9 +315,20 @@
     grid-template-columns: 1fr;
   }
 
+  .optimizer-element-grid,
   .optimizer-v2-constraints,
-  .optimizer-constraint-builder {
+  .optimizer-constraint-builder,
+  .optimizer-segmented {
     grid-template-columns: 1fr;
+  }
+
+  .optimizer-segmented span {
+    border-right: 0;
+    border-bottom: 1px solid var(--border, #333);
+  }
+
+  .optimizer-segmented label:last-child span {
+    border-bottom: 0;
   }
 
   .optimizer-v2-gear {

@@ -1,4 +1,4 @@
-import { searchEquipmentArchitecturesV2 } from './equipment-search-v2.js';
+import { searchEquipmentRequest } from './equipment-search-request.js';
 
 function normalizedIds(values = []) {
   return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))].sort();
@@ -13,7 +13,7 @@ self.addEventListener('message', (event) => {
     const items = (payload.items || []).filter((item) => !rejected.has(String(item?.id)));
     const fmEnabled = payload.fmPolicy?.enabled === true || payload.fmPolicy?.fmEnabled === true;
 
-    const output = searchEquipmentArchitecturesV2({
+    const output = searchEquipmentRequest({
       items,
       sets: payload.sets || [],
       constraints: payload.constraints || {},
