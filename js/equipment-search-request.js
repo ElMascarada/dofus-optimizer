@@ -1,7 +1,4 @@
-import {
-  compareCompleteEquipmentBuildResults,
-  evaluateCompleteEquipmentBuild
-} from './complete-equipment-build-evaluator.js';
+import { compareCompleteEquipmentBuildResults } from './complete-equipment-build-evaluator.js';
 import { searchEquipmentArchitecturesV2 } from './equipment-search-v2.js';
 import {
   compareSyntheticOffenseResults,
@@ -21,12 +18,6 @@ function requestedElements(syntheticOffense = {}) {
   const raw = unique(syntheticOffense?.elements);
   if (raw.includes('multi')) return ['multi'];
   return raw.filter((element) => ELEMENTS.includes(element));
-}
-
-function seedElements(syntheticOffense = {}) {
-  const requested = requestedElements(syntheticOffense);
-  if (requested.length === 1 && requested[0] === 'multi') return [...ELEMENTS];
-  return requested;
 }
 
 function isMultiElementRequest(syntheticOffense = {}) {
@@ -170,94 +161,37 @@ export function searchEquipmentRequest({
   const effectiveConstraints = searchConstraints(constraints);
   const resultLimit = Math.max(1, Number(topN || 10));
   const critMode = normalizeSyntheticCritMode(syntheticOffense?.critMode);
+  const combinedRequest = isMultiElementRequest(syntheticOffense);
+  const rawLimit = combinedRequest
+    ? Math.max(resultLimit, critMode === 'auto' ? 100 : 120)
+    : (critMode === 'auto' ? resultLimit : Math.max(resultLimit, 80));
 
-  if (!isMultiElementRequest(syntheticOffense)) {
-    const rawLimit = critMode === 'auto' ? resultLimit : Math.max(resultLimit, 80);
-    const direct = searchEquipmentArchitecturesV2({
-      items,
-      sets,
-      constraints: effectiveConstraints,
-      fmPolicy,
-      syntheticOffense,
-      requiredItemIds,
-      topN: rawLimit,
-      searchProfile,
-      onProgress,
-      onDiagnostics
-    });
-    return {
-      ...direct,
-      results: finalizeResults(direct?.results || [], syntheticOffense, constraints, resultLimit),
-      diagnostics: {
-        ...(direct?.diagnostics || {}),
-        requestSearchMode: 'single-element',
-        critMode
-      }
-    };
-  }
-
-  const candidates = new Map();
-  const seeds = seedElements(syntheticOffense);
-  const seedLimit = critMode === 'auto' ? Math.max(resultLimit, 50) : Math.max(resultLimit, 80);
-  for (const element of seeds) {
-    if (typeof onProgress === 'function') {
-      onProgress({ phase: 'multi-element-seed', label: element, message: `Recherche ${element}…` });
+  const direct = searchEquipmentArchitecturesV2({
+    items,
+    sets,
+    constraints: effectiveConstraints,
+    fmPolicy,
+    syntheticOffense: {
+      ...syntheticOffense,
+      critMode
+    },
+    requiredItemIds,
+    topN: rawLimit,
+    searchProfile,
+    onProgress,
+    onDiagnostics
+  });
+  const results = finalizeResults(direct?.results || [], syntheticOffense, constraints, resultLimit);
+  return {
+    ...direct,
+    results,
+    diagnostics: {
+      ...(direct?.diagnostics || {}),
+      requestSearchMode: combinedRequest ? 'multi-element-native' : 'single-element',
+      requestedElements: requestedElements(syntheticOffense),
+      nativeCombinedObjective: combinedRequest,
+      critMode,
+      valid: results.length
     }
-    const seed = searchEquipmentArchitecturesV2({
-      items,
-      sets,
-      constraints: effectiveConstraints,
-      fmPolicy,
-      syntheticOffense: {
-        ...syntheticOffense,
-        elements: [element],
-        critMode: 'auto'
-      },
-      requiredItemIds,
-      topN: seedLimit,
-      searchProfile,
-      onProgress: null,
-      onDiagnostics: null
-    });
-    for (const result of seed?.results || []) candidates.set(result.buildIdentity, result);
-  }
-
-  const reevaluated = [];
-  const rejected = {};
-  for (const candidate of candidates.values()) {
-    const evaluation = evaluateCompleteEquipmentBuild({
-      items: candidate.items,
-      sets,
-      constraints: effectiveConstraints,
-      fmPolicy,
-      syntheticOffense
-    });
-    if (!evaluation.result) {
-      const reason = evaluation.reason || 'unknown';
-      rejected[reason] = Number(rejected[reason] || 0) + 1;
-      continue;
-    }
-    reevaluated.push({
-      ...evaluation.result,
-      searchArchitecture: {
-        ...(candidate.searchArchitecture || {}),
-        multiElementSeeded: true
-      }
-    });
-  }
-
-  const results = finalizeResults(reevaluated, syntheticOffense, constraints, resultLimit);
-  const diagnostics = {
-    mode: 'equipment-request-multi-element',
-    requestSearchMode: 'multi-element-seeded',
-    requestedElements: requestedElements(syntheticOffense),
-    seedElements: seeds,
-    critMode,
-    seedCandidateCount: candidates.size,
-    reevaluated: reevaluated.length,
-    valid: results.length,
-    rejected
   };
-  if (typeof onDiagnostics === 'function') onDiagnostics({ trace: [{ ...diagnostics }] });
-  return { results, diagnostics };
 }
