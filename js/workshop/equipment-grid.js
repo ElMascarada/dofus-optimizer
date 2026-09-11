@@ -50,8 +50,8 @@ export function createEquipmentGrid(root, { onOpen, onRemove, onToggleLock, onRe
             <strong>${item ? escapeHtml(item.name) : 'Ajouter'}</strong>
             ${item ? `<div class="workshop-slot-actions" aria-label="Actions ${escapeHtml(label)}">
               <button type="button" class="workshop-slot-lock" data-workshop-lock="${key}" aria-pressed="${isLocked}" aria-label="${isLocked ? 'Déverrouiller' : 'Verrouiller'} ${escapeHtml(item.name)}" title="${isLocked ? 'Déverrouiller cet item' : 'Verrouiller cet item'}">${isLocked ? 'Verrouillé' : 'Verrouiller'}</button>
-              <button type="button" class="workshop-slot-reject" data-workshop-reject="${key}" aria-label="Rejeter ${escapeHtml(item.name)}" title="Exclure cet item des prochaines recherches">Rejeter</button>
-              <button type="button" class="workshop-slot-remove" data-workshop-remove="${key}" aria-label="Retirer ${escapeHtml(item.name)}" title="Retirer cet item">Retirer</button>
+              <button type="button" class="workshop-slot-reject" data-workshop-reject="${key}" aria-label="Remplacer ${escapeHtml(item.name)}" title="Retirer et exclure cet item des prochaines recherches">Remplacer</button>
+              <button type="button" class="workshop-slot-remove" data-workshop-remove="${key}" aria-label="Retirer ${escapeHtml(item.name)}" title="Retirer sans exclure cet item">Retirer</button>
             </div>` : ''}
           </article>`;
       }).join('');
