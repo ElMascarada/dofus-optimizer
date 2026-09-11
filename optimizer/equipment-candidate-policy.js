@@ -12,7 +12,7 @@ const ELEMENT_DAMAGE = Object.freeze({
   water: 'damageWater',
   air: 'damageAir'
 });
-const SYNTHETIC_COMMON_KEYS = Object.freeze(['power', 'damage', 'crit', 'critDamage']);
+const SYNTHETIC_COMMON_KEYS = Object.freeze(['power', 'damage', 'crit', 'critDamage', 'spellDamagePct']);
 const STRUCTURAL_KEYS = Object.freeze(['ap', 'mp', 'range']);
 
 function num(stats, key) {
@@ -66,7 +66,8 @@ function constraintSignal(stats, constraints = {}) {
 
 function estimatedAp(stats = {}, fmPolicy = {}) {
   const base = Number(BASE_CHARACTER.baseStats?.ap || 0);
-  const exo = Number(fmPolicy?.exoAp) === 1 ? 1 : 0;
+  const globalFm = fmPolicy?.enabled === true || fmPolicy?.fmEnabled === true;
+  const exo = globalFm || Number(fmPolicy?.exoAp) === 1 ? 1 : 0;
   return Math.max(0, Math.min(12, base + exo + num(stats, 'ap')));
 }
 
