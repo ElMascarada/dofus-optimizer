@@ -32,7 +32,7 @@ Le module n'importe pas le moteur de sorts, source-certification ou Combat Plann
 
 ## Complete Equipment Build Evaluator
 
-`js/complete-equipment-build-evaluator.js` fournit désormais le chemin autoritaire **pour évaluer une combinaison d'équipement complète déjà donnée** sans classe ni sorts réels.
+`js/complete-equipment-build-evaluator.js` fournit le chemin autoritaire **pour évaluer une combinaison d'équipement complète déjà donnée** sans classe ni sorts réels.
 
 Il assemble :
 
@@ -46,25 +46,50 @@ Il assemble :
 - caps permanents PA/PM sur ce nouveau chemin ;
 - `evaluateSyntheticOffense()` avec le **PA permanent réel final** comme budget offensif.
 
-`js/synthetic-characteristics.js` optimise exactement l'allocation des caractéristiques selon le même objectif lexicographique que le score final : minimum demandé d'abord, moyenne ensuite, tie-break d'allocation déterministe. MULTI reste une seule sonde quatre lignes. La correction est protégée par un oracle exhaustif indépendant sur des budgets/soft-caps réduits.
+`js/synthetic-characteristics.js` optimise exactement l'allocation des caractéristiques selon le même objectif lexicographique que le score final : minimum demandé d'abord, moyenne ensuite, tie-break d'allocation déterministe. MULTI reste une seule sonde quatre lignes.
 
-La FM offensive historique (`spellDamagePct`, objectif de sorts, contexte mêlée/distance/arme) reste PARKED et n'est pas appliquée par ce nouvel évaluateur. Les helpers d'exos PA/PM ont été isolés dans `js/structural-exos.js` afin que le chemin legacy conserve son comportement.
+La FM offensive historique (`spellDamagePct`, objectif de sorts, contexte mêlée/distance/arme) reste PARKED et n'est pas appliquée par ce nouvel évaluateur. Les helpers d'exos PA/PM vivent dans `js/structural-exos.js` afin que le chemin legacy conserve son comportement.
 
-L'ancien `evaluateCompleteBuild()` n'est pas remplacé et reste utilisé par le runtime/search historique tant que la migration Search n'est pas effectuée.
+## Equipment-First Search
 
-## Runtime actif existant
+`js/equipment-search-v2.js` expose désormais `searchEquipmentArchitecturesV2()` comme première recherche publique Equipment-First, avec `optimizer/equipment-candidate-policy.js` comme politique de candidats dédiée.
+
+Le nouveau chemin prend uniquement :
+
+- catalogue d'objets ;
+- panoplies ;
+- contraintes dures ;
+- politique d'exos PA/PM ;
+- requête `syntheticOffense` ;
+- objets imposés ;
+- profil de recherche / top N / callbacks.
+
+Il ne demande ni classe, ni vrais sorts, ni sélection de sorts, ni tour, ni Combat Planner.
+
+La politique de candidats conserve les dimensions réellement utiles au score synthétique, les contraintes, les conditions d'objets et les ressources structurelles. Les anciennes dimensions offensives `spellDamagePct`, mêlée/distance/arme et finalDamage T1/T2/T3 ne guident pas ce chemin. Initiative réutilise la sémantique canonique et rend les quatre caractéristiques élémentaires pertinentes lorsqu'elle est contrainte ou condition-relevant.
+
+Le PA reste à la fois structurel et offensif : un 12 PA légal peut battre un 11 PA même si le minimum demandé est 11. Le PM reste structurel seulement.
+
+Les états partiels utilisent un proxy synthétique heuristique sensible aux éléments/profils demandés. Aucun upper bound offensif synthétique n'est utilisé pour du safe pruning dans cette slice ; les suppressions de beam sont donc explicitement comptées comme `heuristicTrimmed`, pas comme pruning admissible.
+
+Toute combinaison complète retenue pour vérité finale passe obligatoirement par `evaluateCompleteEquipmentBuild()`. Le top N final utilise `compareCompleteEquipmentBuildResults()` : minimum synthétique, puis moyenne, puis identité canonique.
+
+La certification réduite utilise un oracle exhaustif indépendant de la politique de candidats/beam/Pareto pour mono, équilibre multi-éléments, MULTI, Crit/Large, flat/Small, surplus PA, Initiative, panoplie, exos structurels et top-3.
+
+## Runtime historique / UI
 
 Le runtime historique reste en place pendant ce pivot :
 
 - UI principale : `index.html` ;
 - Optimiseur : `js/optimizer-v2-app.js` ;
 - Worker : `js/optimizer-worker.js` ;
-- Génération d'architectures : `js/architecture-search-v2.js` ;
-- Recherche de candidats : `optimizer/candidate-search.js` ;
+- ancienne génération d'architectures : `js/architecture-search-v2.js` ;
+- ancienne recherche de candidats : `optimizer/candidate-search.js` ;
+- ancien évaluateur complet : `js/complete-build-evaluator.js` ;
 - Atelier : `js/workshop/` ;
 - PWA/offline : `service-worker.js`.
 
-Le nouvel évaluateur Equipment-First **n'est pas encore raccordé à Candidate Search** et cette slice ne modifie pas l'UI.
+Ces chemins restent PARKED mais fonctionnels. L'UI n'est pas encore raccordée à `searchEquipmentArchitecturesV2()`.
 
 ## Contrats protégés
 
@@ -76,17 +101,19 @@ Le nouvel évaluateur Equipment-First **n'est pas encore raccordé à Candidate 
 6. Aucune hypothèse de classe, de sort réel ou de contexte mêlée/distance n'est injectée dans le cœur Equipment-First.
 7. Un exo PM peut rendre un build faisable mais n'ajoute aucune valeur offensive synthétique directe.
 8. Un PA permanent légal supplémentaire augmente réellement le budget de sondes synthétiques.
+9. En cas d'incertitude de dominance, conserver le candidat est préférable à un faux négatif de recherche.
 
 ## Prochaine seam active
 
-**Candidate Search migration** : raccorder la génération/recherche de candidats au Complete Equipment Build Evaluator autoritaire, sans casser beam/Pareto/rescue ni l'invariant de complétude.
+**Equipment-Only UI** : raccorder l'interface au nouveau chemin Equipment-First sans supprimer le legacy tant que la migration n'est pas validée.
 
-Après cette seam :
+Interface cible :
 
-- UI : retirer le choix de classe du chemin actif et exposer orientations/profils synthétiques ;
-- contraintes PA/PM : `PA [valeur] [exo]` et `PM [valeur] [exo]` ;
-- autres contraintes : `dropdown + valeur + add` alimenté par le vrai moteur ;
-- FM : conserver les exos structurels actifs et traiter séparément toute future doctrine de FM offensive synthétique.
+- aucun choix de classe sur le chemin actif ;
+- orientations élémentaires + profils synthétiques ;
+- `PA [valeur] [exo]` et `PM [valeur] [exo]` ;
+- autres contraintes via `dropdown + valeur + add` alimenté par le vrai moteur ;
+- résultats affichant équipement, stats finales, panoplies, caractéristiques, exos et diagnostics synthétiques.
 
 ## Travail PARKED
 
@@ -97,7 +124,8 @@ Le travail suivant reste dans le repository mais sort du chemin produit actif :
 - Certified Combat Planner ;
 - planification spécifique à une classe ;
 - objectifs T1/T2/T3 et préparation inter-tours ;
-- FM offensive historique pilotée par le moteur de sorts.
+- FM offensive historique pilotée par le moteur de sorts ;
+- ancien Candidate Search / Architecture Search spell-driven tant que l'UI n'est pas migrée.
 
 Il n'est ni supprimé ni considéré comme erroné. Aucun nouveau bridge de sorts réels ne doit être ajouté dans les slices Equipment-First sans nouvelle décision directeur.
 
@@ -106,9 +134,11 @@ Il n'est ni supprimé ni considéré comme erroné. Aucun nouveau bridge de sort
 Les gates permanents restent :
 
 - syntaxe/tests Node ;
-- tests ciblés du nouveau primitive ;
+- tests ciblés Equipment-First ;
+- oracle exhaustif réduit ;
+- probe catalogue réel `earth + large`, PA >= 12, PM >= 6, top 3 ;
 - recette navigateur réelle ;
 - product smoke ;
-- benchmarks de régression des chemins principaux lorsque la slice les concerne.
+- benchmarks de régression historiques.
 
 Le CI canonique reste exclusivement le runner self-hosted : `[self-hosted, linux, x64, steam-machine, dofus]`.
