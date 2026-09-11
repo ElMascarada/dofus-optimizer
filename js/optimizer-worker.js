@@ -11,12 +11,15 @@ self.addEventListener('message', (event) => {
   try {
     const rejected = new Set(normalizedIds(payload.rejectedItemIds));
     const items = (payload.items || []).filter((item) => !rejected.has(String(item?.id)));
+    const fmEnabled = payload.fmPolicy?.enabled === true || payload.fmPolicy?.fmEnabled === true;
 
     const output = searchEquipmentArchitecturesV2({
       items,
       sets: payload.sets || [],
       constraints: payload.constraints || {},
       fmPolicy: {
+        enabled: fmEnabled,
+        fmEnabled,
         exoAp: Number(payload.fmPolicy?.exoAp || 0) === 1 ? 1 : 0,
         exoMp: Number(payload.fmPolicy?.exoMp || 0) === 1 ? 1 : 0
       },
