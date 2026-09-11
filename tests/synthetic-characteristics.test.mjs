@@ -91,7 +91,7 @@ certifyCase('three-element balance', {
   availableAp: 11, elements: ['earth', 'fire', 'water'], profiles: ['medium']
 });
 
-certifyCase('multi single-probe objective', {
+certifyCase('multi four-axis balance', {
   baseStats: { earth: 10 }, points: 8, scrolled: {}, constraints: {}, minimumStats: {},
   availableAp: 11, elements: ['multi'], profiles: ['small', 'large']
 });
@@ -121,15 +121,16 @@ test('two-element allocator raises the weaker side beyond naive alternatives', (
   assert.ok(production.allocation.water > production.allocation.fire);
 });
 
-test('multi maximizes its one four-line score without forced equal allocation', () => {
+test('multi invests in the weak elemental axes instead of reinforcing the already-strong one', () => {
   const production = optimizeSyntheticCharacteristics({
     baseStats: { earth: 10 }, points: 8, scrolled: {}, constraints: {}, minimumStats: {},
     availableAp: 12, elements: ['multi'], profiles: ['medium'], softCaps: REDUCED_CAPS
   });
   assert.equal(production.feasible, true);
   assert.equal(production.allocation.earth + production.allocation.fire + production.allocation.water + production.allocation.air, 8);
-  assert.notDeepEqual(
-    [production.allocation.earth, production.allocation.fire, production.allocation.water, production.allocation.air],
-    [2, 2, 2, 2]
-  );
+  assert.equal(production.allocation.earth, 0);
+  assert.ok(production.allocation.fire > 0);
+  assert.ok(production.allocation.water > 0);
+  assert.ok(production.allocation.air > 0);
+  assert.ok(production.offense.multiElementScores);
 });
