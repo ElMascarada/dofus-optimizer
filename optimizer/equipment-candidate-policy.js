@@ -1,7 +1,7 @@
 import { BASE_CHARACTER, SLOT_RULES } from '../js/config.js';
 import { collectConditionStatInfo, pruneDominatedCandidates } from '../js/search-space.js';
 import { effectiveStat } from '../js/stats.js';
-import { evaluateSyntheticOffense } from '../js/synthetic-offense.js';
+import { evaluateSyntheticOffense, SYNTHETIC_COMMON_STAT_KEYS } from '../js/synthetic-offense.js';
 import { getSearchProfile } from './search-profiles.js';
 import { buildSetCoreCatalog, rankSetCoresForPolicy } from './set-core-catalog.js';
 
@@ -12,7 +12,6 @@ const ELEMENT_DAMAGE = Object.freeze({
   water: 'damageWater',
   air: 'damageAir'
 });
-const SYNTHETIC_COMMON_KEYS = Object.freeze(['power', 'damage', 'crit', 'critDamage', 'spellDamagePct']);
 const STRUCTURAL_KEYS = Object.freeze(['ap', 'mp', 'range']);
 
 function num(stats, key) {
@@ -46,7 +45,7 @@ function normalizeSyntheticElements(elements = []) {
 
 export function syntheticRelevantStatKeys(syntheticOffense = {}) {
   const requested = normalizeSyntheticElements(syntheticOffense?.elements);
-  const keys = new Set([...SYNTHETIC_COMMON_KEYS, 'ap']);
+  const keys = new Set([...SYNTHETIC_COMMON_STAT_KEYS, 'ap']);
   const elements = requested.includes('multi') ? ELEMENTS : requested;
   for (const element of elements) {
     keys.add(element);
