@@ -414,7 +414,6 @@ const output = searchEquipmentArchitecturesV2({
   constraints,
   fmPolicy,
   syntheticOffense,
-  diagnosticWitnessItemIds: forcedValid ? WITNESS_IDS : [],
   topN,
   searchProfile: 'BALANCED'
 });
