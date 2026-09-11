@@ -18,6 +18,7 @@ const APP_SHELL = [
   './js/equipment-search-v2.js',
   './js/complete-equipment-build-evaluator.js',
   './js/synthetic-offense.js',
+  './js/synthetic-fm.js',
   './js/config.js',
   './js/data-loader.js',
   './js/curated-runtime-rules.js',
