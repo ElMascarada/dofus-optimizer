@@ -15,6 +15,7 @@ const APP_SHELL = [
   './js/runtime-meta.js',
   './js/optimizer-app.js',
   './js/optimizer-worker.js',
+  './js/equipment-search-request.js',
   './js/equipment-search-v2.js',
   './js/complete-equipment-build-evaluator.js',
   './js/synthetic-offense.js',
