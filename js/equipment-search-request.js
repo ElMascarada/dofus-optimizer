@@ -51,15 +51,8 @@ function itemName(result, pattern) {
 }
 
 function critModeAllows(result, critMode) {
-  const branch = String(result?.searchArchitecture?.branch || '');
-  if (critMode === 'crit') {
-    if (itemName(result, /^Robuste(?: majeur)?$/i)) return false;
-    if (branch && branch !== 'CRIT') return false;
-  }
-  if (critMode === 'no_crit') {
-    if (itemName(result, /^Dofus Turquoise$/i)) return false;
-    if (branch && branch !== 'NO_CRIT') return false;
-  }
+  if (critMode === 'crit' && itemName(result, /^Robuste(?: majeur)?$/i)) return false;
+  if (critMode === 'no_crit' && itemName(result, /^Dofus Turquoise$/i)) return false;
   return true;
 }
 
@@ -176,8 +169,10 @@ export function searchEquipmentRequest({
 } = {}) {
   const effectiveConstraints = searchConstraints(constraints);
   const resultLimit = Math.max(1, Number(topN || 10));
+  const critMode = normalizeSyntheticCritMode(syntheticOffense?.critMode);
 
   if (!isMultiElementRequest(syntheticOffense)) {
+    const rawLimit = critMode === 'auto' ? resultLimit : Math.max(resultLimit, 80);
     const direct = searchEquipmentArchitecturesV2({
       items,
       sets,
@@ -185,7 +180,7 @@ export function searchEquipmentRequest({
       fmPolicy,
       syntheticOffense,
       requiredItemIds,
-      topN: resultLimit,
+      topN: rawLimit,
       searchProfile,
       onProgress,
       onDiagnostics
@@ -196,13 +191,14 @@ export function searchEquipmentRequest({
       diagnostics: {
         ...(direct?.diagnostics || {}),
         requestSearchMode: 'single-element',
-        critMode: normalizeSyntheticCritMode(syntheticOffense?.critMode)
+        critMode
       }
     };
   }
 
   const candidates = new Map();
   const seeds = seedElements(syntheticOffense);
+  const seedLimit = critMode === 'auto' ? Math.max(resultLimit, 50) : Math.max(resultLimit, 80);
   for (const element of seeds) {
     if (typeof onProgress === 'function') {
       onProgress({ phase: 'multi-element-seed', label: element, message: `Recherche ${element}…` });
@@ -218,7 +214,7 @@ export function searchEquipmentRequest({
         critMode: 'auto'
       },
       requiredItemIds,
-      topN: resultLimit,
+      topN: seedLimit,
       searchProfile,
       onProgress: null,
       onDiagnostics: null
@@ -256,7 +252,7 @@ export function searchEquipmentRequest({
     requestSearchMode: 'multi-element-seeded',
     requestedElements: requestedElements(syntheticOffense),
     seedElements: seeds,
-    critMode: normalizeSyntheticCritMode(syntheticOffense?.critMode),
+    critMode,
     seedCandidateCount: candidates.size,
     reevaluated: reevaluated.length,
     valid: results.length,
