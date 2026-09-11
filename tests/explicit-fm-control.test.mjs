@@ -102,23 +102,20 @@ test('FM summary exposes either none or the exact requested policy', () => {
   );
 });
 
-test('UI controls are neutral by default and explicitly passed into the request', async () => {
-  const [html, app, orchestrator] = await Promise.all([
+test('Equipment-Only UI exposes only structural exos and passes them explicitly', async () => {
+  const [html, app] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-v2-orchestrator.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8')
   ]);
-  for (const id of [
-    'optimizer-fm-exo-ap',
-    'optimizer-fm-exo-mp',
-    'optimizer-fm-spell-damage',
-    'optimizer-fm-crit-damage'
-  ]) assert.match(html, new RegExp(`id=["']${id}["']`));
-  assert.match(html, /Aucune forgemagie n’est appliquée tant que tu ne l’actives pas ici/);
+  for (const id of ['optimizer-fm-exo-ap', 'optimizer-fm-exo-mp']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`));
+  }
+  assert.match(html, /Exos structurels/);
+  assert.doesNotMatch(html, /optimizer-fm-spell-damage|optimizer-fm-crit-damage|FM Do Sorts|FM Do Crit/);
   assert.match(app, /function readFmPolicy\(\)/);
+  assert.match(app, /exoAp:/);
+  assert.match(app, /exoMp:/);
   assert.match(app, /fmPolicy: readFmPolicy\(\)/);
-  assert.match(app, /formatOptimizerV2FmSummary/);
-  assert.doesNotMatch(orchestrator, /DEFAULT_FM/);
 });
 
 test('FM policy normalization never invents unsupported user values', () => {

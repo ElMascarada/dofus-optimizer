@@ -176,14 +176,16 @@ test('un résultat réoptimisé remet l’item locké dans son slot Atelier exac
   assert.deepEqual(build.rejectedItemIds, ['old-dofus']);
 });
 
-test('l’UI expose Lock, Reject et Trouver mieux sans patch Worker global', async () => {
+test('l’UI expose Lock, Reject et Trouver mieux via le bridge Equipment-Only', async () => {
   const [workshopSource, optimizerSource] = await Promise.all([
     readFile(new URL('../js/workshop/workshop-app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8')
   ]);
   assert.match(workshopSource, /Trouver mieux/);
   assert.match(workshopSource, /FIND_BETTER_BUILD_EVENT/);
   assert.match(optimizerSource, /workshopOptimizationContext/);
-  assert.match(optimizerSource, /mergeSeedDescriptors/);
+  assert.match(optimizerSource, /requiredItemIds/);
+  assert.match(optimizerSource, /rejectedItemIds/);
+  assert.doesNotMatch(optimizerSource, /mergeSeedDescriptors|seed-worker|searchMemory/);
   assert.doesNotMatch(workshopSource, /globalThis\.Worker|window\.Worker|Worker\.prototype/);
 });

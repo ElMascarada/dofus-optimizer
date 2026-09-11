@@ -1,144 +1,74 @@
-# État courant du projet
+# DOFUS Optimizer — Project State
 
-Ce document décrit l'état **réel aujourd'hui** après le pivot Equipment-First du 9 septembre 2026.
+## Active product
 
-L'état précédent, centré combat-plan-first, est conservé intégralement dans `docs/history/PROJECT_STATE-pre-equipment-pivot-2026-09-09.md`.
+As of the Equipment-Only Product Cleanup V1 candidate based on `7307df28eb23b73bef46d07d5459f30872f99302`:
 
-## Produit actif
+- **Equipment-First is the sole active Optimizer runtime.**
+- **Set-Core-First is the primary real-catalog search strategy.**
+- **`js/complete-equipment-build-evaluator.js` is the authoritative final evaluator.**
+- The browser UI is wired directly to Equipment-First through `js/optimizer-app.js` and the thin `js/optimizer-worker.js`.
+- The active Optimizer does not require class, spell data, turn selection, a Combat Planner objective, or a combat scenario.
+- There is no active fallback from Equipment-First to the historical spell-driven Optimizer.
+- Search Memory is intentionally removed from the active Optimizer path; old combat fingerprints are therefore never reused by the new product.
+- Workshop remains active and may keep its own class/spell combat tooling.
 
-Dofus Optimizer est désormais un **optimiseur d'équipement**.
+## Active Optimizer flow
 
-Le chemin produit cible est : contraintes d'équipement + orientation offensive + sondes synthétiques → meilleur équipement légal.
+```text
+Equipment-Only UI
+        ↓
+Equipment-First Worker
+        ↓
+searchEquipmentArchitecturesV2()
+        ↓
+Set-Core-First
+        ↓
+evaluateCompleteEquipmentBuild()
+```
 
-La classe, les vrais sorts, les rotations, T1/T2/T3 et le Combat Planner ne sont plus des dépendances du produit actif.
+The active request is equipment-only: catalog items/sets, hard constraints, structural exo policy, synthetic offensive orientation/profiles, optional Workshop equipment requirements/rejections, Top N and search profile.
 
-## Cœur synthétique
+## Canonical acceptance scenario
 
-`js/synthetic-offense.js` est le primitive offensif canonique Equipment-First :
+```text
+Element = Earth
+Profile = LARGE
+AP >= 12
+MP >= 6
+Exo AP = 0
+Exo MP = 0
+```
 
-- profils SMALL / MEDIUM / LARGE ;
-- mono Terre/Feu/Eau/Air, 1 à 3 éléments ;
-- MULTI exclusif à quatre lignes ;
-- invariant continu 1 PA = 10 base normale ;
-- critique de base 15/20/25 % ;
-- base critique ×1,25 ;
-- stats canoniques `earth/fire/water/air`, `power`, `damage`, `damageEarth/Fire/Water/Air`, `crit`, `critDamage` ;
-- Crit borné à 0..100 % ;
-- reste PA proportionnel appliqué au résultat complet ;
-- agrégation équilibrée minimum puis moyenne ;
-- tie-break canonique stable.
+A feasible real catalog must return at least one complete legal build with final AP=12 and MP=6.
 
-Le module n'importe pas le moteur de sorts, source-certification ou Combat Planner. Le calcul reste synthétique et continu afin de préserver notamment MEDIUM MULTI `4 × 7,5 = 30`.
+## Workshop boundary
 
-## Complete Equipment Build Evaluator
+Workshop remains a separate active product surface. Its class, spell, rotation and combat-evaluation features are legitimate Workshop functionality and are not dependencies of the Optimizer.
 
-`js/complete-equipment-build-evaluator.js` fournit le chemin autoritaire **pour évaluer une combinaison d'équipement complète déjà donnée** sans classe ni sorts réels.
+- Optimizer → Workshop hydrates an equipment result without requiring a class.
+- Workshop → Find better / Complete exports equipment locks/requirements and rejected item IDs only.
+- A Workshop class selection may remain stored for Workshop analysis, but it is not part of the Equipment-First Optimizer request.
 
-Il assemble :
+## Historical implementation
 
-- stats natives des objets ;
-- bonus de panoplie ;
-- structure complète des slots et règle Prysmaradite ;
-- conditions d'objets ;
-- scroll + budget de caractéristiques + vrais soft caps ;
-- contraintes dures, dont Initiative avec la sémantique canonique ;
-- exos structurels PA/PM uniquement ;
-- caps permanents PA/PM sur ce nouveau chemin ;
-- `evaluateSyntheticOffense()` avec le **PA permanent réel final** comme budget offensif.
+The historical Combat Planner / spell-driven Optimizer is no longer an active runtime or fallback. Git history is the canonical source for the removed active entrypoint. Combat modules still present in the tree are retained only when they have a current Workshop/shared/test consumer; their presence does not make them part of the active Optimizer.
 
-`js/synthetic-characteristics.js` optimise exactement l'allocation des caractéristiques selon le même objectif lexicographique que le score final : minimum demandé d'abord, moyenne ensuite, tie-break d'allocation déterministe. MULTI reste une seule sonde quatre lignes.
+## Validation
 
-La FM offensive historique (`spellDamagePct`, objectif de sorts, contexte mêlée/distance/arme) reste PARKED et n'est pas appliquée par ce nouvel évaluateur. Les helpers d'exos PA/PM vivent dans `js/structural-exos.js` afin que le chemin legacy conserve son comportement.
+Remote candidate generation performs only static/materializer validation. Authoritative certification is local on the Steam Machine:
 
-## Equipment-First Search
+```bash
+npm run check
+npm test
+npm run probe:equipment-search
+npm run smoke:product
+npm run recipe:browser
+git diff --check
+```
 
-`js/equipment-search-v2.js` expose désormais `searchEquipmentArchitecturesV2()` comme première recherche publique Equipment-First, avec `optimizer/equipment-candidate-policy.js` comme politique de candidats dédiée.
+Canonical CI remains the self-hosted runner labels:
 
-Le nouveau chemin prend uniquement :
-
-- catalogue d'objets ;
-- panoplies ;
-- contraintes dures ;
-- politique d'exos PA/PM ;
-- requête `syntheticOffense` ;
-- objets imposés ;
-- profil de recherche / top N / callbacks.
-
-Il ne demande ni classe, ni vrais sorts, ni sélection de sorts, ni tour, ni Combat Planner.
-
-La politique de candidats conserve les dimensions réellement utiles au score synthétique, les contraintes, les conditions d'objets et les ressources structurelles. Les anciennes dimensions offensives `spellDamagePct`, mêlée/distance/arme et finalDamage T1/T2/T3 ne guident pas ce chemin. Initiative réutilise la sémantique canonique et rend les quatre caractéristiques élémentaires pertinentes lorsqu'elle est contrainte ou condition-relevant.
-
-Le PA reste à la fois structurel et offensif : un 12 PA légal peut battre un 11 PA même si le minimum demandé est 11. Le PM reste structurel seulement.
-
-Les états partiels utilisent un proxy synthétique heuristique sensible aux éléments/profils demandés. Aucun upper bound offensif synthétique n'est utilisé pour du safe pruning dans cette slice ; les suppressions de beam sont donc explicitement comptées comme `heuristicTrimmed`, pas comme pruning admissible.
-
-Toute combinaison complète retenue pour vérité finale passe obligatoirement par `evaluateCompleteEquipmentBuild()`. Le top N final utilise `compareCompleteEquipmentBuildResults()` : minimum synthétique, puis moyenne, puis identité canonique.
-
-La certification réduite utilise un oracle exhaustif indépendant de la politique de candidats/beam/Pareto pour mono, équilibre multi-éléments, MULTI, Crit/Large, flat/Small, surplus PA, Initiative, panoplie, exos structurels et top-3.
-
-## Runtime historique / UI
-
-Le runtime historique reste en place pendant ce pivot :
-
-- UI principale : `index.html` ;
-- Optimiseur : `js/optimizer-v2-app.js` ;
-- Worker : `js/optimizer-worker.js` ;
-- ancienne génération d'architectures : `js/architecture-search-v2.js` ;
-- ancienne recherche de candidats : `optimizer/candidate-search.js` ;
-- ancien évaluateur complet : `js/complete-build-evaluator.js` ;
-- Atelier : `js/workshop/` ;
-- PWA/offline : `service-worker.js`.
-
-Ces chemins restent PARKED mais fonctionnels. L'UI n'est pas encore raccordée à `searchEquipmentArchitecturesV2()`.
-
-## Contrats protégés
-
-1. Un build rendu doit être légal.
-2. Les minima utilisateur sont des contraintes dures.
-3. **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**.
-4. Le scoring synthétique ne peut classer que des candidats déjà faisables.
-5. Le ranking Equipment-First maximise le minimum demandé, puis la moyenne, puis un tie-break déterministe.
-6. Aucune hypothèse de classe, de sort réel ou de contexte mêlée/distance n'est injectée dans le cœur Equipment-First.
-7. Un exo PM peut rendre un build faisable mais n'ajoute aucune valeur offensive synthétique directe.
-8. Un PA permanent légal supplémentaire augmente réellement le budget de sondes synthétiques.
-9. En cas d'incertitude de dominance, conserver le candidat est préférable à un faux négatif de recherche.
-
-## Prochaine seam active
-
-**Equipment-Only UI** : raccorder l'interface au nouveau chemin Equipment-First sans supprimer le legacy tant que la migration n'est pas validée.
-
-Interface cible :
-
-- aucun choix de classe sur le chemin actif ;
-- orientations élémentaires + profils synthétiques ;
-- `PA [valeur] [exo]` et `PM [valeur] [exo]` ;
-- autres contraintes via `dropdown + valeur + add` alimenté par le vrai moteur ;
-- résultats affichant équipement, stats finales, panoplies, caractéristiques, exos et diagnostics synthétiques.
-
-## Travail PARKED
-
-Le travail suivant reste dans le repository mais sort du chemin produit actif :
-
-- source truth / semantic certification des sorts ;
-- connaissance Iop Terre ;
-- Certified Combat Planner ;
-- planification spécifique à une classe ;
-- objectifs T1/T2/T3 et préparation inter-tours ;
-- FM offensive historique pilotée par le moteur de sorts ;
-- ancien Candidate Search / Architecture Search spell-driven tant que l'UI n'est pas migrée.
-
-Il n'est ni supprimé ni considéré comme erroné. Aucun nouveau bridge de sorts réels ne doit être ajouté dans les slices Equipment-First sans nouvelle décision directeur.
-
-## Validation attendue
-
-Les gates permanents restent :
-
-- syntaxe/tests Node ;
-- tests ciblés Equipment-First ;
-- oracle exhaustif réduit ;
-- probe catalogue réel `earth + large`, PA >= 12, PM >= 6, top 3 ;
-- recette navigateur réelle ;
-- product smoke ;
-- benchmarks de régression historiques.
-
-Le CI canonique reste exclusivement le runner self-hosted : `[self-hosted, linux, x64, steam-machine, dofus]`.
+```text
+[self-hosted, linux, x64, steam-machine, dofus]
+```

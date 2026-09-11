@@ -139,15 +139,17 @@ test('reject frees the slot and lock and adds the item id to rejectedItemIds', (
   assert.deepEqual(rejected.rejectedItemIds, ['already-rejected', 'item-hat']);
 });
 
-test('UI and Optimizer bridge expose fill-missing without persisting transient requirements', async () => {
+test('Workshop → Equipment-Only bridge preserves transient required/rejected item ids', async () => {
   const [workshopSource, optimizerSource] = await Promise.all([
     readFile(new URL('../js/workshop/workshop-app.js', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8')
   ]);
 
   assert.match(workshopSource, /Compléter le stuff/);
   assert.match(workshopSource, /item\(s\) conservé\(s\).*slot\(s\) à compléter/);
-  assert.match(optimizerSource, /lockedItemsBySlot:\s*refinement\?\.searchRequiredItemsBySlot\s*\|\|\s*\{\}/);
-  assert.match(optimizerSource, /currentPersistentLockedItemsBySlot/);
-  assert.match(optimizerSource, /lockedItemsBySlot:\s*currentPersistentLockedItemsBySlot/);
+  assert.match(optimizerSource, /workshopOptimizationContext/);
+  assert.match(optimizerSource, /requiredItemIds:/);
+  assert.match(optimizerSource, /searchRequiredItemsBySlot/);
+  assert.match(optimizerSource, /rejectedItemIds:/);
+  assert.match(optimizerSource, /Atelier → Optimiseur/);
 });

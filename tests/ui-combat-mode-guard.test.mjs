@@ -3,18 +3,15 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 
 const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-const orchestrator = await readFile(new URL('../js/optimizer-v2-orchestrator.js', import.meta.url), 'utf8');
 const serviceWorker = await readFile(new URL('../service-worker.js', import.meta.url), 'utf8');
 
-test('primary UI exposes only the automatic combat solver', () => {
-  assert.match(index, /id="optimizer-class"/);
-  assert.match(index, /id="optimizer-element"/);
-  assert.match(index, /id="optimizer-turn-mode"/);
+test('primary UI exposes only the Equipment-First optimizer', () => {
+  assert.match(index, /data-optimizer-element/);
+  assert.match(index, /data-optimizer-profile/);
   assert.match(index, /id="optimizer-run"/);
-  assert.doesNotMatch(index, /value="manual"/);
-  assert.doesNotMatch(index, /id="spell-list"/);
-  assert.match(orchestrator, /objectiveMode: 'combat'/);
-  assert.match(orchestrator, /searchProfile: 'BALANCED'/);
+  assert.match(index, /js\/optimizer-app\.js/);
+  assert.doesNotMatch(index, /id="optimizer-class"|id="optimizer-turn-mode"|value="manual"|id="spell-list"/);
+  assert.doesNotMatch(index, /js\/optimizer-v2-app\.js/);
 });
 
 test('fresh service worker activates immediately', () => {

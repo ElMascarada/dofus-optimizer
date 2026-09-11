@@ -255,20 +255,15 @@ test('C18 — normalisation et résultat des minima sont déterministes', () => 
   setActiveMinConditions([]);
 });
 
-test('UI — statique/T1, PV et builder générique sont réellement branchés dans les surfaces produit', async () => {
-  const [spellPanel, statsPanel, index, minUi] = await Promise.all([
+test('UI Atelier — statique/T1 et PV restent branchés indépendamment de l’Optimizer Equipment-Only', async () => {
+  const [spellPanel, statsPanel] = await Promise.all([
     readFile(new URL('../js/workshop/spell-panel.js', import.meta.url), 'utf8'),
-    readFile(new URL('../js/workshop/stats-panel.js', import.meta.url), 'utf8'),
-    readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../js/min-conditions-ui.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/workshop/stats-panel.js', import.meta.url), 'utf8')
   ]);
   assert.match(spellPanel, /STATIQUE · Normal/);
   assert.match(spellPanel, /T1 EFFECTIF · Normal/);
   assert.match(spellPanel, /t1DamageSources/);
   assert.match(statsPanel, /WORKSHOP_STAT_SECTIONS/);
-  assert.match(index, /min-conditions-ui\.js/);
-  assert.match(minUi, /Ajouter condition/);
-  assert.match(minUi, /Condition :/);
   assert.ok(MIN_CONDITION_KEYS.includes('initiative'));
   assert.ok(MIN_CONDITION_KEYS.includes('critDamage'));
   assert.ok(MIN_CONDITION_STATS.length > 20);

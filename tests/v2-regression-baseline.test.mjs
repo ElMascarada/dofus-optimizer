@@ -164,14 +164,14 @@ test('baseline: buff/state spells may improve the chosen sequence', () => {
   assert.ok(result.totalDamage > 240);
 });
 
-test('baseline: manual stop keeps partial results in the simplified production path', async () => {
+test('baseline: manual stop terminates the active Equipment-First Worker cleanly', async () => {
   const index = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-  const app = await readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
+  const app = await readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8');
 
-  assert.match(index, /optimizer-v2-app\.js/);
-  assert.match(app, /function stopSearch\(\)/);
-  assert.match(app, /main\.terminate\(\)/);
-  assert.match(app, /seeds\.terminate\(\)/);
-  assert.match(app, /latestPartialResults/);
+  assert.match(index, /optimizer-app\.js/);
+  assert.match(app, /function stopSearch\(/);
+  assert.match(app, /worker\?\.terminate\(\)/);
+  assert.match(app, /activeRequestId \+= 1/);
   assert.match(app, /Recherche arrêtée/);
+  assert.doesNotMatch(app, /seedWorker|latestPartialResults|mergeSearchOutputs/);
 });
