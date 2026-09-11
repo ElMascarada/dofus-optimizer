@@ -59,8 +59,12 @@ function evaluateLine(stats, element, normalBase, criticalBase, critProbability)
   const genericFlatDamage = stat(stats, 'damage');
   const elementalFlatDamage = stat(stats, ELEMENTAL_FLAT_DAMAGE_STAT[element]);
   const criticalDamage = stat(stats, 'critDamage');
-  const normalValue = normalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage;
-  const criticalValue = criticalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage + criticalDamage;
+  const spellDamagePct = stat(stats, 'spellDamagePct');
+  const spellMultiplier = 1 + spellDamagePct / 100;
+  const normalBeforeSpellPct = normalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage;
+  const criticalBeforeSpellPct = criticalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage + criticalDamage;
+  const normalValue = normalBeforeSpellPct * spellMultiplier;
+  const criticalValue = criticalBeforeSpellPct * spellMultiplier;
   const expectedValue = normalValue * (1 - critProbability) + criticalValue * critProbability;
   return {
     element,
@@ -70,6 +74,8 @@ function evaluateLine(stats, element, normalBase, criticalBase, critProbability)
     genericFlatDamage,
     elementalFlatDamage,
     criticalDamage,
+    spellDamagePct,
+    spellMultiplier,
     normalValue,
     criticalValue,
     expectedValue
