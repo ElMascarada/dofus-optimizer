@@ -10,6 +10,10 @@ const ELEMENTAL_FLAT_DAMAGE_STAT = Object.freeze({
   air: 'damageAir'
 });
 
+export const SYNTHETIC_COMMON_STAT_KEYS = Object.freeze([
+  'power', 'damage', 'crit', 'critDamage', 'spellDamagePct'
+]);
+
 export const SYNTHETIC_OFFENSE_PROFILES = Object.freeze({
   small: Object.freeze({ nominalAp: 2, monoBase: 20, multiLineBase: 5, baseCritChancePct: 15 }),
   medium: Object.freeze({ nominalAp: 3, monoBase: 30, multiLineBase: 7.5, baseCritChancePct: 20 }),
