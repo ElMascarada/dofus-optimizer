@@ -6,7 +6,7 @@
     "test": "node --test",
     "check": "node --check js/*.js && node --check js/workshop/*.js && node --check js/search-memory/*.js && node --check optimizer/*.js && node --check scripts/*.mjs",
     "smoke:product": "node scripts/smoke-product.mjs",
-    "probe:equipment-search": "node scripts/equipment-first-real-probe.mjs",
+    "probe:equipment-search": "node scripts/equipment-first-real-probe.mjs && node scripts/equipment-fm-real-probe.mjs",
     "recipe:v2": "node --test tests/v2-polish-recipe.test.mjs",
     "recipe:browser": "node scripts/recipe-v2-browser-smoke.mjs",
     "benchmark:v2": "node scripts/benchmark-v2-baseline.mjs",
@@ -20,6 +20,6 @@
     "normalize:spell-source-truth": "node scripts/normalize-spell-source-truth.mjs",
     "apply:curated": "node scripts/apply-curated-snapshot-rules.mjs",
     "sync:spell-icons": "node scripts/sync-spell-icons.mjs",
-    "sync:normalize": "npm run sync:data && npm run sync:spells && npm run normalize:data && npm run normalize:spells && npm run normalize:spell-source-truth && npm run apply:curated && npm run sync:spell-icons"
+    "sync:normalize": "npm run sync:data && npm run sync:spells && npm run normalize:data && npm run normalize:spells && npm run normalize:spell-source-truth && npm run apply:curated && npm run sync-spell-icons"
   }
 }
