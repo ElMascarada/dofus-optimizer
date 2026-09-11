@@ -5,11 +5,11 @@
     "game": "dofus3",
     "language": "fr",
     "gameVersion": {
-      "version": "3.6.11.13",
+      "version": "3.6.11.15",
       "release": "main",
-      "update_stamp": "2026-09-09T10:27:15.764966427+02:00"
+      "update_stamp": "2026-09-10T17:27:05.370348462+02:00"
     },
-    "generatedAt": "2026-09-09T10:27:15.764966427+02:00",
+    "generatedAt": "2026-09-10T17:27:05.370348462+02:00",
     "characterLevel": 200,
     "scope": "player-class-spells",
     "rawAssetCounts": {
