@@ -10,7 +10,7 @@ import {
 } from '../js/search-memory/search-repository.js';
 import { spellExpectedDamage } from '../js/spells.js';
 
-const appSource = readFileSync(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
+const appSource = readFileSync(new URL('../js/optimizer-app.js', import.meta.url), 'utf8');
 const spellTruth = JSON.parse(readFileSync(new URL('../data/normalized/spell-source-truth.json', import.meta.url), 'utf8'));
 const runtimeSpells = JSON.parse(readFileSync(new URL('../data/normalized/spell-data.json', import.meta.url), 'utf8'));
 const dofusData = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
@@ -49,7 +49,7 @@ function isAbolitionNormalTargetLine(effect = {}) {
 }
 
 test('product search ignores stale memory and calls the Worker for identical searches', async () => {
-  assert.match(appSource, /const searchMemory = new SearchMemoryRepository\(\);/);
+  assert.doesNotMatch(appSource, /SearchMemoryRepository|searchMemory|seed-worker/);
 
   const item = { id: 'stale-item', name: 'Ancien résultat' };
   const query = {

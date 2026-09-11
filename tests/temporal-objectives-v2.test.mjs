@@ -167,16 +167,14 @@ test('l’analyse Atelier calcule une seule rotation cohérente sur un build fix
   assert.equal(analyzeWorkshopTurns(evaluation), analysis, 'le même rendu réutilise le calcul fixé');
 });
 
-test('l’UI Atelier affiche T1/T2/T3 et la rotation sans appeler la recherche équipement', async () => {
-  const [statsSource, spellSource, analysisSource, html] = await Promise.all([
+test('l’UI Atelier conserve T1/T2/T3 et la rotation sans dépendre de l’Optimizer Equipment-Only', async () => {
+  const [statsSource, spellSource, analysisSource] = await Promise.all([
     readFile(new URL('../js/workshop/stats-panel.js', import.meta.url), 'utf8'),
     readFile(new URL('../js/workshop/spell-panel.js', import.meta.url), 'utf8'),
-    readFile(new URL('../js/workshop/workshop-turn-analysis.js', import.meta.url), 'utf8'),
-    readFile(new URL('../index.html', import.meta.url), 'utf8')
+    readFile(new URL('../js/workshop/workshop-turn-analysis.js', import.meta.url), 'utf8')
   ]);
   assert.match(statsSource, /Tours idéaux/);
   assert.match(spellSource, /Rotation exacte T1–T3/);
   assert.match(analysisSource, /optimizeCombatSequence/);
   assert.doesNotMatch(analysisSource, /candidate-search|architecture-search|optimizer-worker|CandidatePolicy|SetCoreCatalog/);
-  assert.match(html, /Constant utilise la moyenne harmonique T1–T3/);
 });

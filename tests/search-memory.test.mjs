@@ -187,12 +187,3 @@ test('la fusion ajoute les seeds sans supprimer la voie libre quand le topN le p
   assert.equal(merged.diagnostics.searchMemory.seedsValid, 1);
   assert.equal(merged.diagnostics.searchMemory.cacheHit, false);
 });
-
-test('le parcours UI vérifie le cache avant de créer le Worker lourd et utilise un Worker seed séparé', async () => {
-  const source = await readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
-  assert.ok(source.indexOf('recallExact') < source.indexOf("new Worker(new URL('./optimizer-worker.js'"));
-  assert.match(source, /findNearby/);
-  assert.match(source, /seed-worker\.js/);
-  assert.match(source, /searchMemory\.remember/);
-  assert.match(source, /rulesVersion: APP_VERSION/);
-});

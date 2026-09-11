@@ -59,12 +59,11 @@ test('la lecture de vérité PA/PM ne modifie ni résultats, ni ordre, ni scores
   assert.deepEqual(builds.map(({ id, score }) => ({ id, score })), rankingBefore);
 });
 
-test('le renderer V2 explicite permanent, bonus T1 et ressources disponibles avant actions', async () => {
-  const source = await readFile(new URL('../js/optimizer-v2-app.js', import.meta.url), 'utf8');
-  assert.match(source, /optimizerApMpTruth\(build\)/);
-  assert.match(source, /PA permanents/);
-  assert.match(source, /PM permanents/);
-  assert.match(source, /Bonus T1/);
-  assert.match(source, /PA\/PM au T1/);
-  assert.match(source, /disponibles avant actions/);
+test('le renderer Equipment-Only expose directement les PA/PM permanents', async () => {
+  const source = await readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8');
+  assert.match(source, /\['ap', 'PA'\]/);
+  assert.match(source, /\['mp', 'PM'\]/);
+  assert.match(source, /data-result-ap/);
+  assert.match(source, /data-result-mp/);
+  assert.doesNotMatch(source, /optimizerApMpTruth|Bonus T1|PA\/PM au T1|disponibles avant actions/);
 });
