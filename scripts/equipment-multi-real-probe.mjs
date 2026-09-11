@@ -36,6 +36,7 @@ for (const probe of cases) {
   const diagnostics = output.diagnostics || {};
   const requestedProbes = best?.syntheticOffense?.requestedProbes || [];
   const probeElements = requestedProbes.map((entry) => entry.element);
+  const multiScores = best?.syntheticOffense?.multiElementScores || null;
 
   console.log(`${probe.name}_REAL_PROBE_RESULTS=${output.results?.length || 0}`);
   console.log(`${probe.name}_REAL_PROBE_AP=${best?.stats?.ap ?? 'NA'}`);
@@ -51,6 +52,7 @@ for (const probe of cases) {
   console.log(`${probe.name}_REAL_PROBE_DO_FIRE=${best?.stats?.damageFire ?? 'NA'}`);
   console.log(`${probe.name}_REAL_PROBE_DO_WATER=${best?.stats?.damageWater ?? 'NA'}`);
   console.log(`${probe.name}_REAL_PROBE_DO_AIR=${best?.stats?.damageAir ?? 'NA'}`);
+  console.log(`${probe.name}_REAL_PROBE_MULTI_SCORES=${multiScores ? JSON.stringify(multiScores) : 'NA'}`);
   console.log(`${probe.name}_REAL_PROBE_ITEMS=${itemNames(best) || 'NA'}`);
   console.log(`${probe.name}_REAL_PROBE_MS=${elapsedMs.toFixed(1)}`);
 
@@ -69,6 +71,12 @@ for (const probe of cases) {
     const actual = new Set(probeElements);
     for (const element of probe.elements) {
       if (!actual.has(element)) throw new Error(`${probe.name} combined ranking omitted ${element}`);
+    }
+  } else {
+    for (const element of ['earth', 'fire', 'water', 'air']) {
+      if (!Number.isFinite(Number(multiScores?.[element]))) {
+        throw new Error(`MULTI ranking omitted balanced ${element} score`);
+      }
     }
   }
 }
