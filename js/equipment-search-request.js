@@ -1,6 +1,6 @@
 import { compareCompleteEquipmentBuildResults } from './complete-equipment-build-evaluator.js';
 import { searchEquipmentArchitecturesV2 } from './equipment-search-v2.js';
-import { searchMultiElementSetCoreEquipment } from '../optimizer/multi-element-set-core-search.js';
+import { searchCombinedSetCoreEquipment } from '../optimizer/combined-set-core-search.js';
 import {
   compareSyntheticOffenseResults,
   evaluateSyntheticOffense,
@@ -183,8 +183,8 @@ export function searchEquipmentRequest({
     onDiagnostics
   };
 
-  const direct = combinedRequest
-    ? searchMultiElementSetCoreEquipment(request)
+  const direct = combinedRequest && !requiredItemIds.length
+    ? searchCombinedSetCoreEquipment(request)
     : searchEquipmentArchitecturesV2(request);
   const results = finalizeResults(direct?.results || [], syntheticOffense, constraints, resultLimit);
   return {
