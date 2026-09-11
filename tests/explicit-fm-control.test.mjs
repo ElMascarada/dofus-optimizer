@@ -103,9 +103,10 @@ test('FM summary exposes either none or the exact requested policy', () => {
 });
 
 test('Equipment-Only UI exposes one global FM constraint and sends the PA/PM pair from the start', async () => {
-  const [html, app] = await Promise.all([
+  const [html, app, worker] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/optimizer-worker.js', import.meta.url), 'utf8')
   ]);
   assert.match(html, /<option value="fm">FM<\/option>/);
   assert.match(html, /id="optimizer-constraint-fm-value"/);
@@ -115,6 +116,9 @@ test('Equipment-Only UI exposes one global FM constraint and sends the PA/PM pai
   assert.match(app, /exoAp: enabled \? 1 : 0/);
   assert.match(app, /exoMp: enabled \? 1 : 0/);
   assert.match(app, /fmPolicy: readFmPolicy\(\)/);
+  assert.match(worker, /const fmEnabled = payload\.fmPolicy\?\.enabled === true \|\| payload\.fmPolicy\?\.fmEnabled === true;/);
+  assert.match(worker, /enabled: fmEnabled,/);
+  assert.match(worker, /fmEnabled,/);
 });
 
 test('FM policy normalization never invents unsupported user values', () => {
