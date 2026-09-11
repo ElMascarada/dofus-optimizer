@@ -81,15 +81,31 @@ function requestedMonoElements(elements) {
   return (elements || []).filter((element) => ELEMENTS.includes(element));
 }
 
-function scoreTableForElement({ stats, availableAp, element, profiles, minQ, maxQ }) {
+function scoreTableForElement({ stats, availableAp, element, profiles, critMode, minQ, maxQ, multi = false }) {
   const table = [];
   for (let q = minQ; q <= maxQ; q++) {
     const candidateStats = { ...stats, [element]: stat(stats, element) + q };
-    const offense = evaluateSyntheticOffense({ stats: candidateStats, availableAp, elements: [element], profiles });
-    table[q] = {
-      minimum: offense.minimumScore,
-      sum: offense.requestedProbes.reduce((total, probe) => total + probe.totalApBudgetScore, 0)
-    };
+    const offense = evaluateSyntheticOffense({
+      stats: candidateStats,
+      availableAp,
+      elements: multi ? ['multi'] : [element],
+      profiles,
+      critMode
+    });
+    if (multi) {
+      const scores = offense.requestedProbes.flatMap((probe) => probe.lines
+        .filter((line) => line.element === element)
+        .map((line) => line.expectedValue * probe.equivalentProbeCount));
+      table[q] = {
+        minimum: scores.length ? Math.min(...scores) : 0,
+        sum: scores.reduce((total, score) => total + score, 0)
+      };
+    } else {
+      table[q] = {
+        minimum: offense.minimumScore,
+        sum: offense.requestedProbes.reduce((total, probe) => total + probe.totalApBudgetScore, 0)
+      };
+    }
   }
   return table;
 }
@@ -218,6 +234,7 @@ export function optimizeSyntheticCharacteristics({
   availableAp,
   elements,
   profiles,
+  critMode = 'auto',
   softCaps = ELEMENT_SOFT_CAPS
 } = {}) {
   const pointBudget = Math.max(0, Math.floor(Number(points || 0)));
@@ -236,89 +253,65 @@ export function optimizeSyntheticCharacteristics({
   }
 
   const maxQ = maxInvestmentForBudget(elementBudget, softCaps);
-  const requestProbe = evaluateSyntheticOffense({ stats: baseWithScroll, availableAp, elements, profiles });
-  const monoElements = requestedMonoElements(requestProbe.elements);
+  const requestProbe = evaluateSyntheticOffense({ stats: baseWithScroll, availableAp, elements, profiles, critMode });
   const isMulti = requestProbe.elements.length === 1 && requestProbe.elements[0] === 'multi';
+  const optimizationElements = isMulti ? [...ELEMENTS] : requestedMonoElements(requestProbe.elements);
   const tables = {};
 
-  if (!isMulti) {
-    for (const element of monoElements) {
-      tables[element] = scoreTableForElement({
-        stats: baseWithScroll,
-        availableAp,
-        element,
-        profiles: requestProbe.profiles,
-        minQ: minimums[element],
-        maxQ
-      });
-    }
-
-    const thresholds = [];
-    for (const element of monoElements) {
-      for (let q = minimums[element]; q <= maxQ; q++) thresholds.push(tables[element][q].minimum);
-    }
-    thresholds.sort((a, b) => a - b);
-    const uniqueThresholds = thresholds.filter((value, index) => index === 0 || Math.abs(value - thresholds[index - 1]) > EPS);
-
-    const minimumsForThreshold = (target) => {
-      const resolved = { ...minimums };
-      for (const element of monoElements) {
-        const q = firstQMeeting(tables[element], minimums[element], maxQ, target);
-        if (q == null) return null;
-        resolved[element] = Math.max(resolved[element], q);
-      }
-      return resolved;
-    };
-    const thresholdFeasible = (target) => {
-      const resolved = minimumsForThreshold(target);
-      if (!resolved) return false;
-      return minimumCostForInitiative(resolved, requiredTotalQ, softCaps) <= elementBudget;
-    };
-
-    let low = 0;
-    let high = uniqueThresholds.length - 1;
-    let bestThreshold = uniqueThresholds[0] ?? requestProbe.minimumScore;
-    while (low <= high) {
-      const mid = Math.floor((low + high) / 2);
-      if (thresholdFeasible(uniqueThresholds[mid])) {
-        bestThreshold = uniqueThresholds[mid];
-        low = mid + 1;
-      } else {
-        high = mid - 1;
-      }
-    }
-    const scoreMinimums = minimumsForThreshold(bestThreshold);
-    if (!scoreMinimums) return { feasible: false, reason: 'evaluation-failed' };
-
-    const requested = new Set(monoElements);
-    const contributionFor = (element, q) => requested.has(element) ? Number(tables[element][q]?.sum || 0) : 0;
-    const best = optimizeSecondary({
-      minimums: scoreMinimums,
-      elementBudget,
-      requiredTotalQ,
+  for (const element of optimizationElements) {
+    tables[element] = scoreTableForElement({
+      stats: baseWithScroll,
+      availableAp,
+      element,
+      profiles: requestProbe.profiles,
+      critMode,
+      minQ: minimums[element],
       maxQ,
-      softCaps,
-      contributionFor,
-      baseStats,
-      scrolled,
-      points: pointBudget
+      multi: isMulti
     });
-    if (!best) return { feasible: false, reason: 'constraint' };
-    const offense = evaluateSyntheticOffense({ stats: best.stats, availableAp, elements: requestProbe.elements, profiles: requestProbe.profiles });
-    return {
-      feasible: true,
-      stats: best.stats,
-      allocation: best.allocation,
-      minimumStats: { ...minimumStats },
-      offense,
-      deterministicAllocationKey: best.key,
-      requiredTotalElementInvestmentForInitiative: requiredTotalQ
-    };
   }
 
-  const contributionFor = (_element, q) => q;
+  const thresholds = [];
+  for (const element of optimizationElements) {
+    for (let q = minimums[element]; q <= maxQ; q++) thresholds.push(tables[element][q].minimum);
+  }
+  thresholds.sort((a, b) => a - b);
+  const uniqueThresholds = thresholds.filter((value, index) => index === 0 || Math.abs(value - thresholds[index - 1]) > EPS);
+
+  const minimumsForThreshold = (target) => {
+    const resolved = { ...minimums };
+    for (const element of optimizationElements) {
+      const q = firstQMeeting(tables[element], minimums[element], maxQ, target);
+      if (q == null) return null;
+      resolved[element] = Math.max(resolved[element], q);
+    }
+    return resolved;
+  };
+  const thresholdFeasible = (target) => {
+    const resolved = minimumsForThreshold(target);
+    if (!resolved) return false;
+    return minimumCostForInitiative(resolved, requiredTotalQ, softCaps) <= elementBudget;
+  };
+
+  let low = 0;
+  let high = uniqueThresholds.length - 1;
+  let bestThreshold = uniqueThresholds[0] ?? requestProbe.minimumScore;
+  while (low <= high) {
+    const mid = Math.floor((low + high) / 2);
+    if (thresholdFeasible(uniqueThresholds[mid])) {
+      bestThreshold = uniqueThresholds[mid];
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+  const scoreMinimums = minimumsForThreshold(bestThreshold);
+  if (!scoreMinimums) return { feasible: false, reason: 'evaluation-failed' };
+
+  const requested = new Set(optimizationElements);
+  const contributionFor = (element, q) => requested.has(element) ? Number(tables[element][q]?.sum || 0) : 0;
   const best = optimizeSecondary({
-    minimums,
+    minimums: scoreMinimums,
     elementBudget,
     requiredTotalQ,
     maxQ,
@@ -329,7 +322,13 @@ export function optimizeSyntheticCharacteristics({
     points: pointBudget
   });
   if (!best) return { feasible: false, reason: 'constraint' };
-  const offense = evaluateSyntheticOffense({ stats: best.stats, availableAp, elements: requestProbe.elements, profiles: requestProbe.profiles });
+  const offense = evaluateSyntheticOffense({
+    stats: best.stats,
+    availableAp,
+    elements: requestProbe.elements,
+    profiles: requestProbe.profiles,
+    critMode
+  });
   return {
     feasible: true,
     stats: best.stats,
