@@ -277,7 +277,7 @@ async function initWorkshop() {
         const rejectedCount = build.rejectedItemIds?.length || 0;
         const filledCount = Object.values(build.equipmentBySlot || {}).filter(Boolean).length;
         const complete = workshopBuildIsComplete(build);
-        const canOptimize = Boolean(build.classId && filledCount > 0);
+        const canOptimize = filledCount > 0;
         const missingCount = Math.max(0, WORKSHOP_SLOT_COUNT - filledCount);
         clearRejectsButton.hidden = rejectedCount === 0;
         clearRejectsButton.textContent = rejectedCount ? `Effacer les rejets (${rejectedCount})` : 'Effacer les rejets';
@@ -286,11 +286,11 @@ async function initWorkshop() {
         progressPill.textContent = `${filledCount} / ${WORKSHOP_SLOT_COUNT}`;
         progressPill.dataset.complete = String(complete);
         findBetterHint.dataset.ready = String(canOptimize);
-        findBetterHint.textContent = build.classId && complete
+        findBetterHint.textContent = complete
           ? 'Stuff complet : Trouver mieux conserve uniquement les items explicitement verrouillés.'
-          : build.classId && filledCount > 0
+          : filledCount > 0
             ? `${filledCount} item(s) conservé(s) · ${missingCount} slot(s) à compléter.`
-            : 'Choisis une classe et équipe au moins un item pour lancer une optimisation ciblée.';
+            : 'Équipe au moins un item pour lancer une optimisation ciblée.';
         if (autosave && !suppressAutosave) autosave.queue(build);
       }
     });
@@ -318,8 +318,8 @@ async function initWorkshop() {
 
     findBetterButton.addEventListener('click', () => {
       const filledCount = Object.values(controller.build.equipmentBySlot || {}).filter(Boolean).length;
-      if (!controller.build.classId || filledCount === 0) {
-        feedback('Choisis une classe et équipe au moins un item avant de lancer l’optimisation.', 'error');
+      if (filledCount === 0) {
+        feedback('Équipe au moins un item avant de lancer l’optimisation.', 'error');
         return;
       }
       const build = controller.build;

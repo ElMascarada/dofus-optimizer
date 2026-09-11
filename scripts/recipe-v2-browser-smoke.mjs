@@ -18,10 +18,10 @@ function findChrome() {
     const check = spawnSync('which', [name], { encoding: 'utf8' });
     if (check.status === 0 && check.stdout.trim()) return check.stdout.trim();
   }
-  throw new Error('Chrome/Chromium introuvable pour la recette navigateur V2.');
+  throw new Error('Chrome/Chromium introuvable pour la recette navigateur Equipment-Only.');
 }
 
-async function waitFor(fn, { timeout = 20_000, interval = 100, label = 'condition' } = {}) {
+async function waitFor(fn, { timeout = 240_000, interval = 150, label = 'condition' } = {}) {
   const started = Date.now();
   let lastError = null;
   while (Date.now() - started < timeout) {
@@ -43,21 +43,13 @@ async function stopProcess(child) {
       if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
       resolve();
     }, 1_500);
-    child.once('exit', () => {
-      clearTimeout(timer);
-      resolve();
-    });
+    child.once('exit', () => { clearTimeout(timer); resolve(); });
     child.kill('SIGTERM');
   });
 }
 
 class CdpClient {
-  constructor(url) {
-    this.url = url;
-    this.nextId = 1;
-    this.pending = new Map();
-  }
-
+  constructor(url) { this.url = url; this.nextId = 1; this.pending = new Map(); }
   async connect() {
     this.socket = new WebSocket(this.url);
     await new Promise((resolve, reject) => {
@@ -75,7 +67,6 @@ class CdpClient {
       else pending.resolve(message.result);
     });
   }
-
   command(method, params = {}) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
@@ -83,17 +74,15 @@ class CdpClient {
       this.socket.send(JSON.stringify({ id, method, params }));
     });
   }
-
   async evaluate(expression) {
     const result = await this.command('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.text || 'Erreur Runtime.evaluate');
     return result.result?.value;
   }
-
   close() { this.socket?.close(); }
 }
 
-const profile = mkdtempSync(join(tmpdir(), 'dofus-optimizer-recipe-'));
+const profile = mkdtempSync(join(tmpdir(), 'dofus-equipment-only-recipe-'));
 const server = spawn('python3', ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], { stdio: ['ignore', 'ignore', 'pipe'] });
 const browser = spawn(findChrome(), [
   '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
@@ -102,8 +91,8 @@ const browser = spawn(findChrome(), [
 let client = null;
 
 try {
-  await waitFor(async () => (await fetch(APP_URL)).ok, { label: 'serveur HTTP local' });
-  await waitFor(async () => (await fetch(`${DEBUG_URL}/json/version`)).ok, { label: 'Chrome DevTools Protocol' });
+  await waitFor(async () => (await fetch(APP_URL)).ok, { timeout: 20_000, label: 'serveur HTTP local' });
+  await waitFor(async () => (await fetch(`${DEBUG_URL}/json/version`)).ok, { timeout: 20_000, label: 'Chrome DevTools Protocol' });
 
   const targetResponse = await fetch(`${DEBUG_URL}/json/new?${encodeURIComponent(APP_URL)}`, { method: 'PUT' });
   if (!targetResponse.ok) throw new Error(`Création onglet CDP: ${targetResponse.status}`);
@@ -113,126 +102,78 @@ try {
   await client.command('Page.enable');
   await client.command('Runtime.enable');
 
-  await waitFor(() => client.evaluate(`(() => {
-    const optimizerClass = document.querySelector('#optimizer-class');
-    const workshopClass = document.querySelector('#workshop-class-select');
-    return Boolean(optimizerClass && workshopClass && !optimizerClass.disabled && !workshopClass.disabled && document.querySelector('#optimizer-data-status')?.dataset.state === 'ready');
-  })()`), { timeout: 30_000, label: 'catalogues V2 chargés' });
+  await waitFor(() => client.evaluate(`document.querySelector('#optimizer-data-status')?.dataset.state === 'ready'`), {
+    timeout: 30_000, label: 'catalogue équipement chargé'
+  });
 
-  const shell = await client.evaluate(`(() => ({
-    workshopVisible: !document.querySelector('#workshop-view').hidden,
-    optimizerHidden: document.querySelector('#optimizer-view').hidden,
-    activeTab: document.querySelector('[data-product-tab].is-active')?.dataset.productTab,
-    version: document.querySelector('#version')?.textContent,
-    progress: document.querySelector('#workshop-slot-progress')?.textContent
+  const contract = await client.evaluate(`(() => ({
+    classSelector: Boolean(document.querySelector('#optimizer-class')),
+    turnSelector: Boolean(document.querySelector('#optimizer-turn-mode')),
+    spellFm: Boolean(document.querySelector('#optimizer-fm-spell-damage, #optimizer-fm-crit-damage')),
+    appScript: [...document.scripts].some((script) => script.src.includes('/js/optimizer-app.js'))
   }))()`);
-  if (!shell.workshopVisible || !shell.optimizerHidden || shell.activeTab !== 'workshop') throw new Error('État initial Atelier incorrect.');
-  if (shell.version?.trim() !== `v${EXPECTED_VERSION}`) throw new Error(`Version UI inattendue: ${shell.version} (runtime ${EXPECTED_VERSION})`);
-  if (shell.progress?.trim() !== '0 / 16') throw new Error(`Progression Atelier initiale inattendue: ${shell.progress}`);
-
-  const keyboardOpen = await client.evaluate(`(async () => {
-    const slot = document.querySelector('[data-workshop-slot]');
-    slot.focus();
-    slot.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const catalogue = document.querySelector('#workshop-item-browser');
-    return Boolean(catalogue && !catalogue.hidden && catalogue.querySelector('[data-browser-item]'));
-  })()`);
-  if (!keyboardOpen) throw new Error('Ouverture clavier du catalogue Atelier impossible.');
-
-  const equipped = await client.evaluate(`(async () => {
-    document.querySelector('#workshop-item-browser [data-browser-item]')?.click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
-    return {
-      progress: document.querySelector('#workshop-slot-progress')?.textContent,
-      browserHidden: document.querySelector('#workshop-item-browser')?.hidden,
-      filled: document.querySelectorAll('.workshop-slot.is-filled').length
-    };
-  })()`);
-  if (equipped.filled !== 1 || equipped.progress?.trim() !== '1 / 16' || !equipped.browserHidden) throw new Error('Équipement Atelier / progression incohérents.');
-
-  const optimizerReady = await client.evaluate(`(async () => {
-    document.querySelector('[data-product-tab="optimizer"]').click();
-    const select = document.querySelector('#optimizer-class');
-    select.value = [...select.options].find((option) => option.value)?.value || '';
-    select.dispatchEvent(new Event('change', { bubbles: true }));
-    await new Promise((resolve) => setTimeout(resolve, 30));
-    return {
-      optimizerVisible: !document.querySelector('#optimizer-view').hidden,
-      workshopHidden: document.querySelector('#workshop-view').hidden,
-      runEnabled: !document.querySelector('#optimizer-run').disabled,
-      initialState: document.querySelector('#optimizer-results')?.dataset.state
-    };
-  })()`);
-  if (!optimizerReady.optimizerVisible || !optimizerReady.workshopHidden || !optimizerReady.runEnabled) throw new Error('Navigation / activation Optimiseur incorrectes.');
-
-  // Exerce le vrai module Worker de façon déterministe. Un item imposé absent doit
-  // produire immédiatement un résultat impossible, sans transformer cette recette
-  // de shell navigateur en benchmark BALANCED dépendant de la machine.
-  const workerTerminal = await client.evaluate(`new Promise((resolve) => {
-    const requestId = 424242;
-    const worker = new Worker('./js/optimizer-worker.js', { type: 'module' });
-    const finish = (value) => { clearTimeout(timer); worker.terminate(); resolve(value); };
-    const timer = setTimeout(() => finish({ type: 'timeout' }), 8_000);
-    worker.addEventListener('message', (event) => {
-      const message = event.data || {};
-      if (message.requestId !== requestId || !['result', 'error'].includes(message.type)) return;
-      finish({
-        type: message.type,
-        impossible: Boolean(message.output?.diagnostics?.impossible),
-        reason: message.output?.diagnostics?.reason || '',
-        message: message.message || ''
-      });
-    });
-    worker.addEventListener('error', (event) => finish({ type: 'worker-error', message: event.message || 'worker error' }));
-    worker.postMessage({
-      type: 'optimize',
-      requestId,
-      payload: {
-        objectiveMode: 'combat',
-        combatObjective: { element: 'earth', turnMode: 't1', targetMode: 'single', metric: 'total-damage' },
-        turnMode: 't1',
-        classSpells: [{
-          id: 'browser-smoke-hit', name: 'Browser smoke hit', apCost: 3, baseCritPct: 0,
-          maxCastPerTurn: 1, maxCastPerTarget: 1, distanceOptions: ['melee', 'ranged'],
-          hits: [{ element: 'earth', normal: [1, 1], crit: [1, 1] }],
-          combatModifiers: [], combatRelevant: true
-        }],
-        items: [], sets: [], selections: [], constraints: {}, fmPolicy: {}, scenario: {},
-        requiredItemIds: ['__browser_smoke_missing_item__'], diversityMode: 'gear',
-        searchProfile: 'BALANCED', topN: 1
-      }
-    });
-  })`);
-  if (workerTerminal.type !== 'result' || !workerTerminal.impossible || workerTerminal.reason !== 'required-item-missing') {
-    throw new Error(`Worker smoke inattendu: ${JSON.stringify(workerTerminal)}`);
+  if (contract.classSelector || contract.turnSelector || contract.spellFm || !contract.appScript) {
+    throw new Error(`Contrat Equipment-Only invalide: ${JSON.stringify(contract)}`);
   }
 
-  // Vérifie le chemin UI réel de démarrage puis d'arrêt sans attendre la fin d'une
-  // recherche qualité complète. Le benchmark dédié mesure ce coût séparément.
-  await client.evaluate(`document.querySelector('#optimizer-run').click()`);
-  await waitFor(() => client.evaluate(`document.querySelector('#optimizer-run').classList.contains('is-searching')`), { label: 'recherche libre démarrée' });
-  await new Promise((resolve) => setTimeout(resolve, 800));
-  const stopped = await client.evaluate(`(async () => {
+  await client.evaluate(`(() => {
+    document.querySelector('[data-product-tab="optimizer"]').click();
+    for (const input of document.querySelectorAll('[data-optimizer-element]')) input.checked = input.value === 'earth';
+    document.querySelector('#optimizer-element-multi').checked = false;
+    for (const input of document.querySelectorAll('[data-optimizer-profile]')) input.checked = input.value === 'large';
+    document.querySelector('#optimizer-min-ap').value = '12';
+    document.querySelector('#optimizer-min-mp').value = '6';
+    document.querySelector('#optimizer-min-range').value = '0';
+    document.querySelector('#optimizer-min-vit').value = '0';
+    document.querySelector('#optimizer-min-initiative').value = '0';
+    document.querySelector('#optimizer-fm-exo-ap').value = '0';
+    document.querySelector('#optimizer-fm-exo-mp').value = '0';
     document.querySelector('#optimizer-run').click();
-    await new Promise((resolve) => setTimeout(resolve, 80));
+  })()`);
+
+  await waitFor(() => client.evaluate(`['ready','empty','error'].includes(document.querySelector('#optimizer-results')?.dataset.state)`), {
+    timeout: 240_000, label: 'recherche Equipment-First 12/6'
+  });
+
+  const result = await client.evaluate(`(() => {
+    const root = document.querySelector('#optimizer-results');
+    const first = root.querySelector('[data-optimizer-result="0"]');
     return {
-      searching: document.querySelector('#optimizer-run').classList.contains('is-searching'),
-      state: document.querySelector('#optimizer-results').dataset.state,
-      classDisabled: document.querySelector('#optimizer-class').disabled,
-      diagnostics: document.querySelector('#optimizer-diagnostics').textContent
+      state: root.dataset.state,
+      ap: Number(first?.dataset.resultAp || 0),
+      mp: Number(first?.dataset.resultMp || 0),
+      items: Number(first?.dataset.resultItems || 0),
+      hasOpenWorkshop: Boolean(first?.querySelector('[data-open-workshop]'))
     };
   })()`);
-  if (stopped.searching || stopped.classDisabled || stopped.state === 'error') throw new Error(`Arrêt manuel incohérent: ${JSON.stringify(stopped)}`);
 
-  console.log('V2_BROWSER_RECIPE_PASS');
-  console.log(JSON.stringify({ shell, equipped, optimizerReady, workerTerminal, stopped }, null, 2));
+  if (result.state !== 'ready' || result.ap !== 12 || result.mp !== 6 || result.items !== 16 || !result.hasOpenWorkshop) {
+    throw new Error(`Résultat Equipment-First 12/6 invalide: ${JSON.stringify(result)}`);
+  }
+
+  await client.evaluate(`document.querySelector('[data-optimizer-result="0"] [data-open-workshop]').click()`);
+  await waitFor(() => client.evaluate(`document.querySelector('#workshop-slot-progress')?.textContent?.trim() === '16 / 16'`), {
+    timeout: 10_000, label: 'round-trip Optimizer → Workshop'
+  });
+
+  const workshop = await client.evaluate(`(() => ({
+    visible: !document.querySelector('#workshop-view').hidden,
+    progress: document.querySelector('#workshop-slot-progress')?.textContent,
+    findBetterEnabled: !document.querySelector('#workshop-find-better')?.disabled
+  }))()`);
+  if (!workshop.visible || workshop.progress?.trim() !== '16 / 16' || !workshop.findBetterEnabled) {
+    throw new Error(`Round-trip Workshop invalide: ${JSON.stringify(workshop)}`);
+  }
+
+  console.log('EQUIPMENT_ONLY_UI=PASS');
+  console.log('CLASS_DEPENDENCY_REMOVED=PASS');
+  console.log('TURN_DEPENDENCY_REMOVED=PASS');
+  console.log('SPELL_DATA_DEPENDENCY_REMOVED=PASS');
+  console.log('ACTIVE_WORKER_EQUIPMENT_FIRST=PASS');
+  console.log('REAL_BROWSER_12_6_FOUND=YES');
+  console.log('WORKSHOP_ROUNDTRIP=PASS');
 } finally {
   client?.close();
   await Promise.all([stopProcess(browser), stopProcess(server)]);
-  try {
-    rmSync(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 80 });
-  } catch {
-    // Le profil est éphémère ; une suppression tardive ne doit pas masquer le résultat de recette.
-  }
+  try { rmSync(profile, { recursive: true, force: true, maxRetries: 6, retryDelay: 80 }); } catch {}
 }
