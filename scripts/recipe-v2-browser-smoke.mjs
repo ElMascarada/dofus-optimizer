@@ -43,7 +43,7 @@ async function stopProcess(child) {
       if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
       resolve();
     }, 1_500);
-    child.once('exit', () => { clearTimeout(timer); resolve(); });
+    child.once('exit', () => { clearTimeout(timer); resolve(); }, { once: true });
     child.kill('SIGTERM');
   });
 }
@@ -106,14 +106,38 @@ try {
     timeout: 30_000, label: 'catalogue équipement chargé'
   });
 
-  const contract = await client.evaluate(`(() => ({
-    classSelector: Boolean(document.querySelector('#optimizer-class')),
-    turnSelector: Boolean(document.querySelector('#optimizer-turn-mode')),
-    spellFm: Boolean(document.querySelector('#optimizer-fm-spell-damage, #optimizer-fm-crit-damage')),
-    appScript: [...document.scripts].some((script) => script.src.includes('/js/optimizer-app.js'))
-  }))()`);
-  if (contract.classSelector || contract.turnSelector || contract.spellFm || !contract.appScript) {
-    throw new Error(`Contrat Equipment-Only invalide: ${JSON.stringify(contract)}`);
+  const contract = await client.evaluate(`(() => {
+    const text = document.querySelector('#optimizer-view')?.textContent || '';
+    const constraintOptions = [...document.querySelectorAll('#optimizer-constraint-key option')].map((option) => option.value);
+    return {
+      classSelector: Boolean(document.querySelector('#optimizer-class')),
+      turnSelector: Boolean(document.querySelector('#optimizer-turn-mode')),
+      oldExoControls: Boolean(document.querySelector('#optimizer-fm-exo-ap, #optimizer-fm-exo-mp')),
+      topResults: /Top résultats/i.test(text),
+      engineJargon: /Equipment-First|Set-Core-First|minimum synthétique|score synthétique moyen/.test(text),
+      damageTypes: [...document.querySelectorAll('[data-optimizer-profile]')].map((input) => ({ value: input.value, label: input.closest('label')?.textContent?.trim() })),
+      constraintOptions,
+      fmChip: document.querySelector('#optimizer-active-constraints')?.textContent?.includes('FM Oui') || false,
+      appScript: [...document.scripts].some((script) => script.src.includes('/js/optimizer-app.js'))
+    };
+  })()`);
+  const expectedDamageTypes = JSON.stringify([
+    { value: 'small', label: 'Petites lignes' },
+    { value: 'medium', label: 'Mixte' },
+    { value: 'large', label: 'Grosses lignes' }
+  ]);
+  if (
+    contract.classSelector
+    || contract.turnSelector
+    || contract.oldExoControls
+    || contract.topResults
+    || contract.engineJargon
+    || !contract.appScript
+    || !contract.fmChip
+    || !contract.constraintOptions.includes('fm')
+    || JSON.stringify(contract.damageTypes) !== expectedDamageTypes
+  ) {
+    throw new Error(`Contrat Equipment-Only/FM invalide: ${JSON.stringify(contract)}`);
   }
 
   await client.evaluate(`(() => {
@@ -123,32 +147,39 @@ try {
     for (const input of document.querySelectorAll('[data-optimizer-profile]')) input.checked = input.value === 'large';
     document.querySelector('#optimizer-min-ap').value = '12';
     document.querySelector('#optimizer-min-mp').value = '6';
-    document.querySelector('#optimizer-min-range').value = '0';
-    document.querySelector('#optimizer-min-vit').value = '0';
-    document.querySelector('#optimizer-min-initiative').value = '0';
-    document.querySelector('#optimizer-fm-exo-ap').value = '0';
-    document.querySelector('#optimizer-fm-exo-mp').value = '0';
     document.querySelector('#optimizer-run').click();
   })()`);
 
   await waitFor(() => client.evaluate(`['ready','empty','error'].includes(document.querySelector('#optimizer-results')?.dataset.state)`), {
-    timeout: 240_000, label: 'recherche Equipment-First 12/6'
+    timeout: 300_000, label: 'recherche Equipment-Only FM Oui 12/6'
   });
 
   const result = await client.evaluate(`(() => {
     const root = document.querySelector('#optimizer-results');
     const first = root.querySelector('[data-optimizer-result="0"]');
+    const cards = [...root.querySelectorAll('[data-optimizer-result]')];
     return {
       state: root.dataset.state,
       ap: Number(first?.dataset.resultAp || 0),
       mp: Number(first?.dataset.resultMp || 0),
       items: Number(first?.dataset.resultItems || 0),
-      hasOpenWorkshop: Boolean(first?.querySelector('[data-open-workshop]'))
+      count: cards.length,
+      hasOpenWorkshop: Boolean(first?.querySelector('[data-open-workshop]')),
+      fmSummary: first?.textContent?.includes('FM : Oui · Exo PA + PM') || false
     };
   })()`);
 
-  if (result.state !== 'ready' || result.ap !== 12 || result.mp !== 6 || result.items !== 16 || !result.hasOpenWorkshop) {
-    throw new Error(`Résultat Equipment-First 12/6 invalide: ${JSON.stringify(result)}`);
+  if (
+    result.state !== 'ready'
+    || result.ap !== 12
+    || result.mp !== 6
+    || result.items !== 16
+    || result.count < 1
+    || result.count > 5
+    || !result.hasOpenWorkshop
+    || !result.fmSummary
+  ) {
+    throw new Error(`Résultat Equipment-Only FM Oui 12/6 invalide: ${JSON.stringify(result)}`);
   }
 
   await client.evaluate(`document.querySelector('[data-optimizer-result="0"] [data-open-workshop]').click()`);
@@ -166,11 +197,12 @@ try {
   }
 
   console.log('EQUIPMENT_ONLY_UI=PASS');
+  console.log('FM_UI_CONTRACT=PASS');
   console.log('CLASS_DEPENDENCY_REMOVED=PASS');
   console.log('TURN_DEPENDENCY_REMOVED=PASS');
-  console.log('SPELL_DATA_DEPENDENCY_REMOVED=PASS');
-  console.log('ACTIVE_WORKER_EQUIPMENT_FIRST=PASS');
-  console.log('REAL_BROWSER_12_6_FOUND=YES');
+  console.log('ENGINE_JARGON_REMOVED=PASS');
+  console.log('REAL_BROWSER_FM_12_6_FOUND=YES');
+  console.log(`REAL_BROWSER_DISPLAYED_RESULTS=${result.count}`);
   console.log('WORKSHOP_ROUNDTRIP=PASS');
 } finally {
   client?.close();

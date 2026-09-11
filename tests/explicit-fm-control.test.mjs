@@ -102,20 +102,23 @@ test('FM summary exposes either none or the exact requested policy', () => {
   );
 });
 
-test('Equipment-Only UI exposes only structural exos and passes them explicitly', async () => {
-  const [html, app] = await Promise.all([
+test('Equipment-Only UI exposes one global FM constraint and sends the PA/PM pair from the start', async () => {
+  const [html, app, worker] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
-    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8')
+    readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8'),
+    readFile(new URL('../js/optimizer-worker.js', import.meta.url), 'utf8')
   ]);
-  for (const id of ['optimizer-fm-exo-ap', 'optimizer-fm-exo-mp']) {
-    assert.match(html, new RegExp(`id=["']${id}["']`));
-  }
-  assert.match(html, /Exos structurels/);
-  assert.doesNotMatch(html, /optimizer-fm-spell-damage|optimizer-fm-crit-damage|FM Do Sorts|FM Do Crit/);
+  assert.match(html, /<option value="fm">FM<\/option>/);
+  assert.match(html, /id="optimizer-constraint-fm-value"/);
+  assert.doesNotMatch(html, /optimizer-fm-exo-ap|optimizer-fm-exo-mp|Exos structurels/);
   assert.match(app, /function readFmPolicy\(\)/);
-  assert.match(app, /exoAp:/);
-  assert.match(app, /exoMp:/);
+  assert.match(app, /enabled,/);
+  assert.match(app, /exoAp: enabled \? 1 : 0/);
+  assert.match(app, /exoMp: enabled \? 1 : 0/);
   assert.match(app, /fmPolicy: readFmPolicy\(\)/);
+  assert.match(worker, /const fmEnabled = payload\.fmPolicy\?\.enabled === true \|\| payload\.fmPolicy\?\.fmEnabled === true;/);
+  assert.match(worker, /enabled: fmEnabled,/);
+  assert.match(worker, /fmEnabled,/);
 });
 
 test('FM policy normalization never invents unsupported user values', () => {

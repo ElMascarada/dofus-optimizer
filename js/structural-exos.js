@@ -1,10 +1,12 @@
 import { cloneStats } from './stats.js';
 
 export function structuralExoSelection(policy = {}) {
+  const globalFm = policy?.enabled === true || policy?.fmEnabled === true;
   const legacyPair = policy?.structuralExos === true;
+  const forcedPair = globalFm || legacyPair;
   return {
-    exoAp: Number(policy?.exoAp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0,
-    exoMp: Number(policy?.exoMp ?? (legacyPair ? 1 : 0)) === 1 ? 1 : 0
+    exoAp: Number(policy?.exoAp ?? (forcedPair ? 1 : 0)) === 1 ? 1 : 0,
+    exoMp: Number(policy?.exoMp ?? (forcedPair ? 1 : 0)) === 1 ? 1 : 0
   };
 }
 

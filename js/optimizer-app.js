@@ -14,10 +14,15 @@ const ELEMENT_LABELS = Object.freeze({
   multi: 'Multi'
 });
 
-const PROFILE_LABELS = Object.freeze({
-  small: 'SMALL',
-  medium: 'MEDIUM',
-  large: 'LARGE'
+const CONSTRAINT_LABELS = Object.freeze({
+  range: 'PO minimum',
+  vit: 'Vitalité minimum',
+  initiative: 'Initiative minimum',
+  resEarth: '% Résistance Terre',
+  resFire: '% Résistance Feu',
+  resWater: '% Résistance Eau',
+  resAir: '% Résistance Air',
+  fm: 'FM'
 });
 
 const RESULT_STATS = Object.freeze([
@@ -33,12 +38,16 @@ const RESULT_STATS = Object.freeze([
   ['power', 'Puissance'],
   ['crit', 'Crit'],
   ['critDamage', 'Do Crit'],
+  ['spellDamagePct', '% Do sorts'],
   ['damage', 'Dommages'],
   ['damageEarth', 'Do Terre'],
   ['damageFire', 'Do Feu'],
   ['damageWater', 'Do Eau'],
   ['damageAir', 'Do Air']
 ]);
+
+const INTERNAL_RESULT_POOL = 50;
+const DISPLAY_RESULT_LIMIT = 5;
 
 const ui = {
   optimizerTab: document.querySelector('[data-product-tab="optimizer"]'),
@@ -50,9 +59,13 @@ const ui = {
   run: document.querySelector('#optimizer-run'),
   diagnostics: document.querySelector('#optimizer-diagnostics'),
   results: document.querySelector('#optimizer-results'),
-  topN: document.querySelector('#optimizer-top-n'),
-  exoAp: document.querySelector('#optimizer-fm-exo-ap'),
-  exoMp: document.querySelector('#optimizer-fm-exo-mp')
+  constraintKey: document.querySelector('#optimizer-constraint-key'),
+  constraintValue: document.querySelector('#optimizer-constraint-value'),
+  constraintNumberField: document.querySelector('#optimizer-constraint-number-field'),
+  constraintFmField: document.querySelector('#optimizer-constraint-fm-field'),
+  constraintFmValue: document.querySelector('#optimizer-constraint-fm-value'),
+  constraintAdd: document.querySelector('#optimizer-constraint-add'),
+  activeConstraints: document.querySelector('#optimizer-active-constraints')
 };
 
 let dataset = null;
@@ -62,6 +75,7 @@ let refinement = {
   requiredItemIds: [],
   rejectedItemIds: []
 };
+const advancedConstraints = new Map([['fm', 1]]);
 
 function activateTab(name) {
   const optimizer = name === 'optimizer';
@@ -98,35 +112,35 @@ function readSyntheticOffense() {
     throw new Error('Sélectionne entre 1 et 3 éléments, ou Multi.');
   }
 
-  const profiles = [...document.querySelectorAll('[data-optimizer-profile]')]
-    .filter((input) => input.checked)
-    .map((input) => input.value);
-  if (!profiles.length) throw new Error('Sélectionne au moins un profil synthétique.');
+  const profile = document.querySelector('[data-optimizer-profile]:checked')?.value;
+  if (!profile) throw new Error('Choisis un type de dégâts.');
 
   return {
     elements: multi ? ['multi'] : mono,
-    profiles
+    profiles: [profile]
   };
 }
 
 function readConstraints() {
-  return {
+  const constraints = {
     ap: numberValue('#optimizer-min-ap'),
-    mp: numberValue('#optimizer-min-mp'),
-    range: numberValue('#optimizer-min-range'),
-    vit: numberValue('#optimizer-min-vit'),
-    initiative: numberValue('#optimizer-min-initiative'),
-    resEarth: numberValue('#optimizer-res-earth'),
-    resFire: numberValue('#optimizer-res-fire'),
-    resWater: numberValue('#optimizer-res-water'),
-    resAir: numberValue('#optimizer-res-air')
+    mp: numberValue('#optimizer-min-mp')
   };
+  for (const [key, value] of advancedConstraints) {
+    if (key === 'fm') continue;
+    const number = Number(value || 0);
+    if (Number.isFinite(number) && number > 0) constraints[key] = number;
+  }
+  return constraints;
 }
 
 function readFmPolicy() {
+  const enabled = Number(advancedConstraints.get('fm') || 0) === 1;
   return {
-    exoAp: Number(ui.exoAp?.value || 0) === 1 ? 1 : 0,
-    exoMp: Number(ui.exoMp?.value || 0) === 1 ? 1 : 0
+    enabled,
+    fmEnabled: enabled,
+    exoAp: enabled ? 1 : 0,
+    exoMp: enabled ? 1 : 0
   };
 }
 
@@ -139,7 +153,7 @@ function requestPayload() {
     syntheticOffense: readSyntheticOffense(),
     requiredItemIds: normalizedIds(refinement.requiredItemIds),
     rejectedItemIds: normalizedIds(refinement.rejectedItemIds),
-    topN: Math.max(1, Math.min(50, Number(ui.topN?.value || 10))),
+    topN: INTERNAL_RESULT_POOL,
     searchProfile: 'BALANCED'
   };
 }
@@ -150,6 +164,8 @@ function setSearching(searching) {
   for (const element of document.querySelectorAll('#optimizer-view input, #optimizer-view select')) {
     element.disabled = searching;
   }
+  if (ui.constraintAdd) ui.constraintAdd.disabled = searching;
+  for (const button of document.querySelectorAll('[data-remove-optimizer-constraint]')) button.disabled = searching;
 }
 
 function fmt(value, digits = 2) {
@@ -161,13 +177,70 @@ function itemLabel(item) {
   return item?.name || item?.id || 'Item';
 }
 
+function coreItemIds(build) {
+  return (build?.items || [])
+    .filter((item) => item?.slot !== 'dofus')
+    .map((item) => String(item?.id ?? ''));
+}
+
+function dofusItemIds(build) {
+  return (build?.items || [])
+    .filter((item) => item?.slot === 'dofus')
+    .map((item) => String(item?.id ?? ''));
+}
+
+function multisetDifference(left = [], right = []) {
+  const remaining = new Map();
+  for (const id of right) remaining.set(id, Number(remaining.get(id) || 0) + 1);
+  let shared = 0;
+  for (const id of left) {
+    const count = Number(remaining.get(id) || 0);
+    if (count <= 0) continue;
+    shared++;
+    remaining.set(id, count - 1);
+  }
+  return Math.max(left.length, right.length) - shared;
+}
+
+function meaningfullyDifferent(left, right) {
+  if (multisetDifference(coreItemIds(left), coreItemIds(right)) >= 3) return true;
+  if (multisetDifference(dofusItemIds(left), dofusItemIds(right)) >= 3) return true;
+  const leftArchitecture = left?.searchArchitecture || {};
+  const rightArchitecture = right?.searchArchitecture || {};
+  return Boolean(leftArchitecture.branch && rightArchitecture.branch
+    && leftArchitecture.branch !== rightArchitecture.branch);
+}
+
+function selectDisplayedResults(results = []) {
+  const selected = [];
+  for (const result of results) {
+    if (!selected.length || selected.every((other) => meaningfullyDifferent(result, other))) {
+      selected.push(result);
+    }
+    if (selected.length >= DISPLAY_RESULT_LIMIT) break;
+  }
+  return selected;
+}
+
+function fmSummary(result) {
+  const fm = result?.fm || {};
+  if (!fm.enabled) return 'FM : Non';
+  return `FM : Oui · Exo PA + PM · ${Number(fm.spellPctItems || 0)}× +1% Do sorts · ${Number(fm.critItems || 0)}× +8 Do Crit`;
+}
+
+function renderItemList(items = []) {
+  return items
+    .map((item) => `<li><strong>${itemLabel(item)}</strong>${item?.slot ? ` <span>· ${item.slot}</span>` : ''}</li>`)
+    .join('');
+}
+
 function renderResult(result, index) {
   const stats = result?.stats || {};
-  const synthetic = result?.syntheticOffense || {};
   const items = result?.items || [];
   const allocation = result?.characteristics || {};
   const activeSets = result?.activeSets || [];
-  const exos = result?.structuralExos || {};
+  const equipment = items.filter((item) => item?.slot !== 'dofus');
+  const dofus = items.filter((item) => item?.slot === 'dofus');
 
   const statHtml = RESULT_STATS
     .filter(([key]) => Number(stats?.[key] || 0) !== 0 || ['ap', 'mp', 'range', 'vit', 'initiative'].includes(key))
@@ -183,39 +256,36 @@ function renderResult(result, index) {
     ? activeSets.map((set) => `<li>${set?.name || set?.setName || set?.id || 'Panoplie'}${set?.count ? ` ×${set.count}` : ''}</li>`).join('')
     : '<li>Aucune panoplie active</li>';
 
-  const itemsHtml = items
-    .map((item) => `<li><strong>${itemLabel(item)}</strong>${item?.slot ? ` <span>· ${item.slot}</span>` : ''}</li>`)
-    .join('');
-
+  const title = index === 0 ? 'Meilleur stuff' : `Alternative ${index + 1}`;
   return `<article class="panel optimizer-result-card" data-optimizer-result="${index}"
       data-result-ap="${Number(stats.ap || 0)}"
       data-result-mp="${Number(stats.mp || 0)}"
       data-result-items="${items.length}">
     <div class="section-title">
-      <div><span class="eyebrow">BUILD ${index + 1}</span><h3>Équipement complet</h3></div>
-      <span class="pill">minimum ${fmt(synthetic.minimumScore ?? result.score)}</span>
+      <div><span class="eyebrow">${index === 0 ? 'MEILLEUR RÉSULTAT' : 'ALTERNATIVE'}</span><h3>${title}</h3></div>
+      <span class="pill">${fmt(stats.ap, 0)} PA · ${fmt(stats.mp, 0)} PM</span>
     </div>
-    <p class="optimizer-score-line"><strong>Score synthétique moyen : ${fmt(synthetic.meanScore)}</strong></p>
     <ul class="optimizer-result-stats">${statHtml}</ul>
     <div class="optimizer-result-columns">
-      <div><h4>Équipement</h4><ul>${itemsHtml}</ul></div>
-      <div><h4>Panoplies actives</h4><ul>${setsHtml}</ul>
+      <div><h4>Équipement</h4><ul>${renderItemList(equipment)}</ul></div>
+      <div><h4>Dofus / trophées</h4><ul>${renderItemList(dofus)}</ul>
+      <h4>Panoplies actives</h4><ul>${setsHtml}</ul>
       <h4>Caractéristiques</h4><ul>${allocationHtml}</ul>
-      <h4>Exos structurels</h4><p>PA ${Number(exos.exoAp || 0)} · PM ${Number(exos.exoMp || 0)}</p></div>
+      <h4>Forgemagie</h4><p>${fmSummary(result)}</p></div>
     </div>
     <button type="button" class="secondary" data-open-workshop="${index}">Ouvrir dans l’Atelier</button>
   </article>`;
 }
 
 function renderResults(output) {
-  const results = output?.results || [];
+  const results = selectDisplayedResults(output?.results || []);
   ui.results.dataset.state = results.length ? 'ready' : 'empty';
   ui.results.setAttribute('aria-busy', 'false');
 
   if (!results.length) {
     const reason = output?.diagnostics?.reason ? ` · ${output.diagnostics.reason}` : '';
-    ui.results.innerHTML = `<div class="ui-state" data-state="empty"><strong>Aucun équipement légal trouvé</strong><span>Assouplis les contraintes ou autorise un exo PA/PM${reason}.</span></div>`;
-    return;
+    ui.results.innerHTML = `<div class="ui-state" data-state="empty"><strong>Aucun stuff légal trouvé</strong><span>Assouplis les contraintes${reason}.</span></div>`;
+    return [];
   }
 
   ui.results.innerHTML = results.map(renderResult).join('');
@@ -229,6 +299,50 @@ function renderResults(output) {
       document.dispatchEvent(new CustomEvent(OPEN_WORKSHOP_BUILD_EVENT, { detail: { build } }));
     });
   });
+  return results;
+}
+
+function renderActiveConstraints() {
+  if (!ui.activeConstraints) return;
+  const entries = [...advancedConstraints.entries()];
+  if (!entries.length) {
+    ui.activeConstraints.innerHTML = '<span class="hint">Aucune contrainte avancée.</span>';
+    return;
+  }
+  ui.activeConstraints.innerHTML = entries.map(([key, value]) => {
+    const label = CONSTRAINT_LABELS[key] || key;
+    const shown = key === 'fm' ? (Number(value) === 1 ? 'Oui' : 'Non') : `≥ ${fmt(value, 0)}`;
+    return `<span class="optimizer-constraint-chip">${label} ${shown}<button type="button" data-remove-optimizer-constraint="${key}" aria-label="Retirer ${label}">×</button></span>`;
+  }).join('');
+  ui.activeConstraints.querySelectorAll('[data-remove-optimizer-constraint]').forEach((button) => {
+    button.addEventListener('click', () => {
+      advancedConstraints.delete(button.dataset.removeOptimizerConstraint);
+      renderActiveConstraints();
+    });
+  });
+}
+
+function syncConstraintEditor() {
+  const fm = ui.constraintKey?.value === 'fm';
+  if (ui.constraintNumberField) ui.constraintNumberField.hidden = fm;
+  if (ui.constraintFmField) ui.constraintFmField.hidden = !fm;
+}
+
+function addConstraintFromEditor() {
+  const key = ui.constraintKey?.value || '';
+  if (!key) return;
+  const value = key === 'fm'
+    ? (Number(ui.constraintFmValue?.value || 0) === 1 ? 1 : 0)
+    : Math.max(0, Number(ui.constraintValue?.value || 0));
+  if (key !== 'fm' && (!Number.isFinite(value) || value <= 0)) {
+    ui.diagnostics.textContent = 'La valeur de la contrainte doit être supérieure à 0.';
+    return;
+  }
+  advancedConstraints.set(key, value);
+  renderActiveConstraints();
+  if (ui.constraintKey) ui.constraintKey.value = '';
+  if (ui.constraintValue) ui.constraintValue.value = '0';
+  syncConstraintEditor();
 }
 
 function stopSearch(message = 'Recherche arrêtée.') {
@@ -260,8 +374,8 @@ function startSearch() {
   setSearching(true);
   ui.results.dataset.state = 'loading';
   ui.results.setAttribute('aria-busy', 'true');
-  ui.results.innerHTML = '<div class="ui-state" data-state="loading"><strong>Recherche Equipment-First</strong><span>Set-Core-First explore les architectures légales.</span></div>';
-  ui.diagnostics.textContent = 'Recherche Equipment-First en cours…';
+  ui.results.innerHTML = '<div class="ui-state" data-state="loading"><strong>Recherche du meilleur stuff</strong><span>Comparaison des architectures, équipements et Dofus / trophées.</span></div>';
+  ui.diagnostics.textContent = 'Recherche en cours…';
 
   worker.addEventListener('message', (event) => {
     const message = event.data || {};
@@ -285,9 +399,9 @@ function startSearch() {
       worker?.terminate();
       worker = null;
       setSearching(false);
-      renderResults(message.output || {});
-      const count = message.output?.results?.length || 0;
-      ui.diagnostics.textContent = `${count} résultat${count > 1 ? 's' : ''} Equipment-First.`;
+      const displayed = renderResults(message.output || {});
+      const count = displayed.length;
+      ui.diagnostics.textContent = `${count} stuff${count > 1 ? 's' : ''} pertinent${count > 1 ? 's' : ''} affiché${count > 1 ? 's' : ''}.`;
     }
   });
 
@@ -332,16 +446,20 @@ document.addEventListener(FIND_BETTER_BUILD_EVENT, (event) => {
 });
 
 ui.run?.addEventListener('click', startSearch);
+ui.constraintKey?.addEventListener('change', syncConstraintEditor);
+ui.constraintAdd?.addEventListener('click', addConstraintFromEditor);
 setMultiExclusive();
+syncConstraintEditor();
+renderActiveConstraints();
 
 try {
   dataset = await loadDofusData();
   ui.dataStatus.dataset.state = 'ready';
-  ui.dataStatus.textContent = `${dataset.items?.length || 0} équipements chargés · Equipment-First prêt`;
+  ui.dataStatus.textContent = `${dataset.items?.length || 0} équipements chargés · prêt`;
   ui.run.disabled = false;
   ui.results.dataset.state = 'ready';
   ui.results.setAttribute('aria-busy', 'false');
-  ui.results.innerHTML = '<div class="ui-state" data-state="ready"><strong>Equipment-First prêt</strong><span>Choisis une orientation et au moins un profil synthétique, puis optimise.</span></div>';
+  ui.results.innerHTML = '<div class="ui-state" data-state="ready"><strong>Optimiseur prêt</strong><span>Choisis ton élément, ton type de dégâts et tes contraintes.</span></div>';
   ui.diagnostics.textContent = 'Prêt.';
 } catch (error) {
   ui.dataStatus.dataset.state = 'error';

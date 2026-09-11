@@ -2,6 +2,7 @@ import { BASE_CHARACTER, SLOT_RULES } from '../js/config.js';
 import { addStats, effectiveStat, emptyStats } from '../js/stats.js';
 import { applySetBonuses } from '../js/sets.js';
 import { specialSlotRulesAreValid } from '../js/build-legality.js';
+import { statsWithStructuralExos } from '../js/structural-exos.js';
 import {
   compareCompleteEquipmentBuildResults,
   evaluateCompleteEquipmentBuild
@@ -42,6 +43,10 @@ function staticBuildStats(items = [], setsById = {}) {
   for (const item of items || []) addStats(stats, item?.stats || {});
   applySetBonuses(stats, items, setsById);
   return stats;
+}
+
+function contextualBuildStats(items = [], setsById = {}, fmPolicy = {}) {
+  return statsWithStructuralExos(staticBuildStats(items, setsById), fmPolicy).stats;
 }
 
 function choose(values, count) {
@@ -136,7 +141,7 @@ function requestedSingleElement(syntheticOffense = {}) {
   return ELEMENT_PROFILE[raw[0]] ? raw[0] : null;
 }
 
-function keepByResourceBucket(states, limit, perBucket, { setsById, constraints }) {
+function keepByResourceBucket(states, limit, perBucket, { setsById, constraints, fmPolicy = {} }) {
   const dedup = new Map();
   for (const state of states || []) {
     const key = itemKey(state.items);
@@ -151,7 +156,7 @@ function keepByResourceBucket(states, limit, perBucket, { setsById, constraints 
   const output = [];
   const used = new Map();
   function bucket(state) {
-    const stats = staticBuildStats(state.items, setsById);
+    const stats = contextualBuildStats(state.items, setsById, fmPolicy);
     const apTarget = Math.max(1, Number(constraints?.ap || 12));
     const mpTarget = Math.max(1, Number(constraints?.mp || 6));
     const ap = Math.min(apTarget, effectiveStat(stats, 'ap'));
@@ -283,8 +288,6 @@ export function searchSetCoreFirstEquipment({
     elementKey
   });
 
-  // The primary path is intentionally doctrine-first. If the canonical family
-  // is unavailable, let the existing Equipment-First path handle the request.
   if (!doctrine.pourpre || !doctrine.ddg || !doctrine.ocre || !doctrine.vulbis || !doctrine.mono) {
     return {
       applicable: false,
@@ -429,16 +432,16 @@ export function searchSetCoreFirstEquipment({
 
     visit(0, [], []);
     architectureGenerated += local.length;
-    return keepByResourceBucket(local, PER_PATTERN_LIMIT, 4, { setsById, constraints });
+    return keepByResourceBucket(local, PER_PATTERN_LIMIT, 4, { setsById, constraints, fmPolicy });
   }
 
   for (const pattern of patterns) architectureCandidates.push(...enumeratePattern(pattern));
 
-  let architectureStates = keepByResourceBucket(
+  const architectureStates = keepByResourceBucket(
     architectureCandidates,
     PRIMARY_ARCHITECTURE_LIMIT,
     6,
-    { setsById, constraints }
+    { setsById, constraints, fmPolicy }
   );
 
   function poolForSlot(slot) {
@@ -502,7 +505,7 @@ export function searchSetCoreFirstEquipment({
           });
         }
       }
-      states = keepByResourceBucket(expanded, 35, 4, { setsById, constraints });
+      states = keepByResourceBucket(expanded, 35, 4, { setsById, constraints, fmPolicy });
       if (!states.length) break;
     }
 
@@ -513,7 +516,7 @@ export function searchSetCoreFirstEquipment({
     completeEquipment,
     EQUIPMENT_STATE_LIMIT,
     4,
-    { setsById, constraints }
+    { setsById, constraints, fmPolicy }
   );
 
   const companionPool = poolForSlot('companion').slice(0, COMPANION_POOL_LIMIT);
@@ -534,7 +537,7 @@ export function searchSetCoreFirstEquipment({
     companionRaw,
     EQUIPMENT_STATE_LIMIT,
     4,
-    { setsById, constraints }
+    { setsById, constraints, fmPolicy }
   );
 
   const branchOffense = {
@@ -559,7 +562,7 @@ export function searchSetCoreFirstEquipment({
   }
 
   function structuralPoolFor(baseItems, branch) {
-    const stats = staticBuildStats(baseItems, setsById);
+    const stats = contextualBuildStats(baseItems, setsById, fmPolicy);
     const selected = new Map();
 
     const add = (row, reason) => {
@@ -597,7 +600,7 @@ export function searchSetCoreFirstEquipment({
   }
 
   function requestedConstraintsClose(selected) {
-    const stats = staticBuildStats(selected, setsById);
+    const stats = contextualBuildStats(selected, setsById, fmPolicy);
     return positiveEquipmentConstraintKeys(constraints)
       .every((key) => effectiveStat(stats, key) >= Number(constraints[key] || 0));
   }
@@ -631,7 +634,7 @@ export function searchSetCoreFirstEquipment({
       isClosable: (state) => ['CRIT', 'NO_CRIT']
         .some((branch) => budget2Closure(state.items, branch).closes),
       bucketOf: (state) => {
-        const stats = staticBuildStats(state.items, setsById);
+        const stats = contextualBuildStats(state.items, setsById, fmPolicy);
         return `${effectiveStat(stats, 'ap')}:${effectiveStat(stats, 'mp')}`;
       }
     }
@@ -690,7 +693,7 @@ export function searchSetCoreFirstEquipment({
     for (const branch of ['CRIT', 'NO_CRIT']) {
       const completions = canonicalCompletions(context.items, branch);
       if (completions.length) contextsWithCompletions++;
-      const before = staticBuildStats(context.items, setsById);
+      const before = contextualBuildStats(context.items, setsById, fmPolicy);
 
       for (const completion of completions) {
         const evaluation = evaluateCompleteEquipmentBuild({

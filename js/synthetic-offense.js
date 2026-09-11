@@ -10,6 +10,10 @@ const ELEMENTAL_FLAT_DAMAGE_STAT = Object.freeze({
   air: 'damageAir'
 });
 
+export const SYNTHETIC_COMMON_STAT_KEYS = Object.freeze([
+  'power', 'damage', 'crit', 'critDamage', 'spellDamagePct'
+]);
+
 export const SYNTHETIC_OFFENSE_PROFILES = Object.freeze({
   small: Object.freeze({ nominalAp: 2, monoBase: 20, multiLineBase: 5, baseCritChancePct: 15 }),
   medium: Object.freeze({ nominalAp: 3, monoBase: 30, multiLineBase: 7.5, baseCritChancePct: 20 }),
@@ -59,8 +63,12 @@ function evaluateLine(stats, element, normalBase, criticalBase, critProbability)
   const genericFlatDamage = stat(stats, 'damage');
   const elementalFlatDamage = stat(stats, ELEMENTAL_FLAT_DAMAGE_STAT[element]);
   const criticalDamage = stat(stats, 'critDamage');
-  const normalValue = normalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage;
-  const criticalValue = criticalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage + criticalDamage;
+  const spellDamagePct = stat(stats, 'spellDamagePct');
+  const spellMultiplier = 1 + spellDamagePct / 100;
+  const normalBeforeSpellPct = normalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage;
+  const criticalBeforeSpellPct = criticalBase * (1 + characteristic / 100) + genericFlatDamage + elementalFlatDamage + criticalDamage;
+  const normalValue = normalBeforeSpellPct * spellMultiplier;
+  const criticalValue = criticalBeforeSpellPct * spellMultiplier;
   const expectedValue = normalValue * (1 - critProbability) + criticalValue * critProbability;
   return {
     element,
@@ -70,6 +78,8 @@ function evaluateLine(stats, element, normalBase, criticalBase, critProbability)
     genericFlatDamage,
     elementalFlatDamage,
     criticalDamage,
+    spellDamagePct,
+    spellMultiplier,
     normalValue,
     criticalValue,
     expectedValue

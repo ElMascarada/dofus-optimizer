@@ -17,9 +17,9 @@
 <body>
   <header class="topbar">
     <div class="topbar-brand">
-      <span class="eyebrow">DOFUS · EQUIPMENT-FIRST</span>
+      <span class="eyebrow">DOFUS · OPTIMISEUR DE STUFF</span>
       <h1>Dofus Optimizer</h1>
-      <p>Recherche le meilleur équipement légal sous contraintes, orienté par des profils offensifs synthétiques indépendants des classes et des sorts.</p>
+      <p>Recherche le meilleur équipement légal selon ton élément, ton type de dégâts et tes contraintes.</p>
     </div>
     <div class="topbar-meta" aria-label="Version de l’application">
       <span class="pill">V2</span>
@@ -38,9 +38,9 @@
     <section id="optimizer-view" class="product-view" role="tabpanel" aria-labelledby="tab-optimizer" hidden>
       <section class="panel optimizer-v2-hero">
         <div>
-          <span class="eyebrow">OPTIMISEUR · EQUIPMENT-FIRST</span>
-          <h2>Orientation → Profils synthétiques → Contraintes → Équipement</h2>
-          <p>Le moteur recherche directement des équipements complets et légaux. Aucun choix de classe, sort ou tour n’est requis.</p>
+          <span class="eyebrow">OPTIMISEUR DE STUFF</span>
+          <h2>Élément → Type de dégâts → Contraintes → Stuff</h2>
+          <p>Choisis ce que tu veux jouer. Le moteur construit et compare directement les équipements complets.</p>
         </div>
         <span id="optimizer-data-status" class="status" data-state="loading" aria-live="polite">Chargement du catalogue équipement…</span>
       </section>
@@ -50,7 +50,7 @@
       <div class="optimizer-v2-layout">
         <aside class="optimizer-v2-controls" aria-label="Paramètres de recherche équipement">
           <section class="panel">
-            <h2>01 · Orientation offensive</h2>
+            <h2>01 · Élément</h2>
             <div class="form-grid optimizer-v2-constraints">
               <label class="field"><input data-optimizer-element type="checkbox" value="earth" checked> Terre</label>
               <label class="field"><input data-optimizer-element type="checkbox" value="fire"> Feu</label>
@@ -62,44 +62,48 @@
           </section>
 
           <section class="panel">
-            <h2>02 · Profils synthétiques</h2>
-            <div class="form-grid optimizer-v2-constraints">
-              <label class="field"><input data-optimizer-profile type="checkbox" value="small"> SMALL</label>
-              <label class="field"><input data-optimizer-profile type="checkbox" value="medium"> MEDIUM</label>
-              <label class="field"><input data-optimizer-profile type="checkbox" value="large" checked> LARGE</label>
+            <h2>02 · Type de dégâts</h2>
+            <div class="optimizer-damage-types" role="radiogroup" aria-label="Type de dégâts">
+              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="small"> Petites lignes</label>
+              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="medium"> Mixte</label>
+              <label class="field"><input data-optimizer-profile name="optimizer-damage-type" type="radio" value="large" checked> Grosses lignes</label>
             </div>
-            <p class="hint">Au moins un profil est obligatoire. Le classement maximise d’abord le minimum synthétique.</p>
           </section>
 
           <section class="panel">
-            <h2>03 · Contraintes minimales</h2>
+            <h2>03 · Contraintes</h2>
             <div class="form-grid optimizer-v2-constraints">
               <label class="field">PA minimum<input id="optimizer-min-ap" type="number" min="0" step="1" value="12"></label>
               <label class="field">PM minimum<input id="optimizer-min-mp" type="number" min="0" step="1" value="6"></label>
-              <label class="field">PO minimum<input id="optimizer-min-range" type="number" min="0" step="1" value="0"></label>
-              <label class="field">Vitalité minimum<input id="optimizer-min-vit" type="number" min="0" step="1" value="0"></label>
-              <label class="field">Initiative minimum<input id="optimizer-min-initiative" type="number" min="0" step="1" value="0"></label>
-              <label class="field">% Résistance Terre<input id="optimizer-res-earth" type="number" min="0" max="50" step="1" value="0"></label>
-              <label class="field">% Résistance Feu<input id="optimizer-res-fire" type="number" min="0" max="50" step="1" value="0"></label>
-              <label class="field">% Résistance Eau<input id="optimizer-res-water" type="number" min="0" max="50" step="1" value="0"></label>
-              <label class="field">% Résistance Air<input id="optimizer-res-air" type="number" min="0" max="50" step="1" value="0"></label>
             </div>
-            <p class="hint">0 désactive un minimum. Ces clés correspondent directement aux contraintes Equipment-First supportées.</p>
-          </section>
 
-          <section class="panel" aria-labelledby="optimizer-fm-title">
-            <h2 id="optimizer-fm-title">04 · Exos structurels</h2>
-            <div class="form-grid optimizer-v2-constraints">
-              <label class="field">Exo PA
-                <select id="optimizer-fm-exo-ap"><option value="0" selected>0</option><option value="1">+1</option></select>
+            <div class="optimizer-constraint-builder">
+              <label class="field">Ajouter une contrainte
+                <select id="optimizer-constraint-key">
+                  <option value="">Choisir…</option>
+                  <option value="range">PO minimum</option>
+                  <option value="vit">Vitalité minimum</option>
+                  <option value="initiative">Initiative minimum</option>
+                  <option value="resEarth">% Résistance Terre</option>
+                  <option value="resFire">% Résistance Feu</option>
+                  <option value="resWater">% Résistance Eau</option>
+                  <option value="resAir">% Résistance Air</option>
+                  <option value="fm">FM</option>
+                </select>
               </label>
-              <label class="field">Exo PM
-                <select id="optimizer-fm-exo-mp"><option value="0" selected>0</option><option value="1">+1</option></select>
+              <label id="optimizer-constraint-number-field" class="field">Valeur
+                <input id="optimizer-constraint-value" type="number" min="0" step="1" value="0">
               </label>
-              <label class="field">Top résultats
-                <input id="optimizer-top-n" type="number" min="1" max="50" step="1" value="10">
+              <label id="optimizer-constraint-fm-field" class="field" hidden>FM
+                <select id="optimizer-constraint-fm-value">
+                  <option value="1" selected>Oui</option>
+                  <option value="0">Non</option>
+                </select>
               </label>
+              <button id="optimizer-constraint-add" class="secondary" type="button">Ajouter</button>
             </div>
+            <div id="optimizer-active-constraints" class="optimizer-active-constraints" aria-live="polite"></div>
+            <p class="hint">FM Oui inclut dès le départ l’exo PA et l’exo PM, puis optimise les 7 FM offensives restantes.</p>
           </section>
 
           <button id="optimizer-run" class="primary" type="button" disabled>Optimiser</button>
@@ -108,7 +112,7 @@
 
         <section class="optimizer-v2-output" aria-labelledby="optimizer-results-title">
           <div class="section-title">
-            <div><span class="eyebrow">RÉSULTATS</span><h2 id="optimizer-results-title">Équipements Equipment-First</h2></div>
+            <div><span class="eyebrow">RÉSULTATS</span><h2 id="optimizer-results-title">Stuffs recommandés</h2></div>
           </div>
           <div id="optimizer-results" aria-live="polite" aria-busy="true" data-state="loading">
             <div class="ui-state" data-state="loading"><strong>Préparation de l’Optimiseur</strong><span>Chargement des équipements.</span></div>
@@ -121,7 +125,7 @@
   <script src="js/runtime-meta.js?v=20260827-3"></script>
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
   <script type="module" src="js/workshop/workshop-app.js?v=20260827-3"></script>
-  <script type="module" src="js/optimizer-app.js?v=20260911-1"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260911-1', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script type="module" src="js/optimizer-app.js?v=20260911-2"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260911-2', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
