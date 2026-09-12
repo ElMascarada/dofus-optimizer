@@ -1,7 +1,11 @@
 import { BASE_CHARACTER, SLOT_RULES } from '../js/config.js';
 import { addStats, effectiveStat, emptyStats } from '../js/stats.js';
 import { applySetBonuses } from '../js/sets.js';
-import { specialSlotRulesAreValid } from '../js/build-legality.js';
+import {
+  MAX_PERMANENT_AP,
+  MAX_PERMANENT_MP,
+  specialSlotRulesAreValid
+} from '../js/build-legality.js';
 import { statsWithStructuralExos } from '../js/structural-exos.js';
 import {
   compareCompleteEquipmentBuildResults,
@@ -11,12 +15,7 @@ import { buildEquipmentCandidatePools } from './equipment-candidate-policy.js';
 import { filterOptimizerEligibleItems } from './item-eligibility.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
-const ELEMENT_DAMAGE = Object.freeze({
-  earth: 'damageEarth',
-  fire: 'damageFire',
-  water: 'damageWater',
-  air: 'damageAir'
-});
+const ELEMENT_DAMAGE = Object.freeze({ earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' });
 const EQUIPMENT_RULES = SLOT_RULES.filter((rule) => !['companion', 'dofus'].includes(rule.id));
 const EQUIPMENT_CAPS = new Map(EQUIPMENT_RULES.map((rule) => [rule.id, Number(rule.count || 0)]));
 const CORE_PATTERNS = Object.freeze([
@@ -63,10 +62,31 @@ function contextualStats(items = [], setsById = {}, fmPolicy = {}) {
   return statsWithStructuralExos(stats, fmPolicy).stats;
 }
 
+function positiveConstraintKeys(constraints = {}) {
+  return Object.entries(constraints || {})
+    .filter(([, minimum]) => Number.isFinite(Number(minimum)) && Number(minimum) > 0)
+    .map(([key]) => key);
+}
+
+export function combinedOffenseSearchScore(policy, stats = {}) {
+  const ranked = policy.rankStats(stats);
+  return {
+    score: Number(ranked.objectiveGain || 0),
+    meanScore: Number(ranked.meanGain || 0),
+    offense: ranked.syntheticOffense
+  };
+}
+
 function stateScore(items, policy, setsById) {
   const stats = itemStats(items, setsById);
-  const ranked = policy.rankStats(stats);
-  return { stats, score: Number(ranked.rankScore || 0), offense: ranked.syntheticOffense };
+  const ranked = combinedOffenseSearchScore(policy, stats);
+  return { stats, ...ranked };
+}
+
+function compareStatePriority(left, right) {
+  return Number(right?.score || 0) - Number(left?.score || 0)
+    || Number(right?.meanScore || 0) - Number(left?.meanScore || 0)
+    || itemKey(left?.items || []).localeCompare(itemKey(right?.items || []));
 }
 
 function setSignature(items = []) {
@@ -99,10 +119,9 @@ function retainStates(states, limit, context) {
     const key = itemKey(state.items);
     if (!key) continue;
     const previous = dedup.get(key);
-    if (!previous || Number(state.score || 0) > Number(previous.score || 0)) dedup.set(key, state);
+    if (!previous || compareStatePriority(state, previous) < 0) dedup.set(key, state);
   }
-  const ranked = [...dedup.values()].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)
-    || itemKey(a.items).localeCompare(itemKey(b.items)));
+  const ranked = [...dedup.values()].sort(compareStatePriority);
   if (ranked.length <= limit) return ranked;
 
   const output = [];
@@ -125,11 +144,10 @@ function retainStates(states, limit, context) {
       .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
       .sort((a, b) => effectiveStat(b.stats || itemStats(b.items, context.setsById), statKey)
         - effectiveStat(a.stats || itemStats(a.items, context.setsById), statKey)
-        || Number(b.score || 0) - Number(a.score || 0))
+        || compareStatePriority(a, b))
       .slice(0, 3);
     for (const state of specialists) add(state);
   }
-
   for (const state of ranked) add(state, true);
   for (const state of ranked) add(state, false);
   return output;
@@ -209,7 +227,7 @@ function boundedCorePools(policy, axes) {
 function enumerateArchitectures(corePools, context) {
   const all = [];
   for (const pattern of CORE_PATTERNS) {
-    let states = [{ cores: [], items: [], stats: {}, score: 0, pattern: pattern.join('+') }];
+    let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, pattern: pattern.join('+') }];
     for (const pieceCount of pattern) {
       const expanded = [];
       for (const state of states) {
@@ -218,7 +236,7 @@ function enumerateArchitectures(corePools, context) {
           if (!coresCompatible(cores)) continue;
           const items = cores.flatMap((entry) => entry.items);
           const ranked = stateScore(items, context.policy, context.setsById);
-          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, pattern: state.pattern });
+          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore, pattern: state.pattern });
         }
       }
       states = retainStates(expanded, 120, context);
@@ -233,18 +251,47 @@ function slotPool(slot, eligibleItems, prefilter, context) {
   const candidates = new Map();
   const add = (item) => { if (item?.slot === slot) candidates.set(String(item.id), item); };
   for (const item of prefilter.pools?.[slot] || []) add(item);
+
   const rows = eligibleItems
     .filter((item) => item?.slot === slot)
     .map((item) => ({ item, profiled: context.policy.profileItem(item) }));
-  for (const row of [...rows].sort((a, b) => Number(b.profiled.rankScore || 0) - Number(a.profiled.rankScore || 0)).slice(0, 18)) add(row.item);
-  for (const key of context.specialistKeys) {
+  const offenseRows = [...rows].sort((a, b) => Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+    || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0)
+    || String(a.item.id).localeCompare(String(b.item.id)));
+  for (const row of offenseRows.slice(0, 18)) add(row.item);
+
+  for (const key of [...new Set([...context.specialistKeys, ...positiveConstraintKeys(context.constraints)])]) {
     for (const row of [...rows]
       .filter((entry) => effectiveStat(entry.profiled.optimisticStats || {}, key) > 0)
       .sort((a, b) => effectiveStat(b.profiled.optimisticStats || {}, key) - effectiveStat(a.profiled.optimisticStats || {}, key)
-        || Number(b.profiled.rankScore || 0) - Number(a.profiled.rankScore || 0))
+        || Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+        || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0))
       .slice(0, 4)) add(row.item);
   }
-  return [...candidates.values()].slice(0, slot === 'ring' ? 34 : 28);
+
+  const candidateRows = [...candidates.values()].map((item) => ({ item, profiled: context.policy.profileItem(item) }));
+  const limit = slot === 'ring' ? 34 : 28;
+  const selected = new Map();
+  const reserveKeys = [...new Set(['ap', 'mp', ...positiveConstraintKeys(context.constraints)])];
+  for (const key of reserveKeys) {
+    for (const row of [...candidateRows]
+      .filter((entry) => effectiveStat(entry.profiled.optimisticStats || {}, key) > 0)
+      .sort((a, b) => effectiveStat(b.profiled.optimisticStats || {}, key) - effectiveStat(a.profiled.optimisticStats || {}, key)
+        || Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+        || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0))
+      .slice(0, 2)) {
+      if (selected.size >= limit) break;
+      selected.set(String(row.item.id), row.item);
+    }
+  }
+  for (const row of candidateRows.sort((a, b) => Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+    || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0)
+    || Number(b.profiled.rankScore || 0) - Number(a.profiled.rankScore || 0)
+    || String(a.item.id).localeCompare(String(b.item.id)))) {
+    if (selected.size >= limit) break;
+    selected.set(String(row.item.id), row.item);
+  }
+  return [...selected.values()];
 }
 
 function firstMissingEquipmentSlot(items = []) {
@@ -274,7 +321,7 @@ function completeEquipment(architectures, slotPools, context) {
         const items = [...state.items, item];
         if (!equipmentShapeValid(items)) continue;
         const ranked = stateScore(items, context.policy, context.setsById);
-        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score });
+        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
       }
     }
     states = retainStates(expanded, 260, context);
@@ -290,7 +337,7 @@ function completeCompanion(equipmentStates, pool, context) {
       const items = [...state.items, companion];
       if (!specialSlotRulesAreValid(items)) continue;
       const ranked = stateScore(items, context.policy, context.setsById);
-      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score });
+      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
     }
   }
   return retainStates(rows, 55, context);
@@ -305,27 +352,37 @@ function dofusAllowed(item, critMode) {
 
 function dofusPool(eligibleItems, prefilter, context, critMode) {
   const all = eligibleItems.filter((item) => item?.slot === 'dofus' && dofusAllowed(item, critMode));
-  const byId = new Map();
-  const add = (item) => { if (item && dofusAllowed(item, critMode)) byId.set(String(item.id), item); };
-  for (const item of prefilter.pools?.dofus || []) add(item);
+  const rows = all.map((item) => ({ item, profiled: context.policy.profileItem(item) }));
+  const byName = new Map(all.map((item) => [String(item?.name || ''), item]));
+  const limit = 20;
+  const selected = new Map();
+  const add = (item) => {
+    if (!item || !dofusAllowed(item, critMode) || selected.size >= limit) return;
+    selected.set(String(item.id), item);
+  };
 
-  const canonical = /^(Dofus Ocre|Dofus Vulbis|Vulbis|Dofus Pourpre|Dofus des Glaces|Dofus Turquoise|Dolmanax|Robuste(?: majeur)?)$/i;
-  for (const item of all.filter((entry) => canonical.test(String(entry.name || '')))) add(item);
+  const canonicalNames = [
+    'Dofus Ocre', 'Dofus Vulbis', 'Vulbis', 'Dofus Pourpre', 'Dofus des Glaces',
+    'Dofus Turquoise', 'Dolmanax', 'Robuste majeur', 'Turbulent'
+  ];
+  for (const name of canonicalNames) add(byName.get(name));
 
-  const rows = all.map((item) => ({ item, ranked: context.policy.rankStats(item.stats || {}) }));
-  for (const row of [...rows].sort((a, b) => Number(b.ranked.rankScore || 0) - Number(a.ranked.rankScore || 0)).slice(0, 12)) add(row.item);
-  for (const key of context.specialistKeys) {
-    for (const row of [...rows]
-      .filter((entry) => effectiveStat(entry.item.stats || {}, key) > 0)
-      .sort((a, b) => effectiveStat(b.item.stats || {}, key) - effectiveStat(a.item.stats || {}, key)
-        || Number(b.ranked.rankScore || 0) - Number(a.ranked.rankScore || 0))
-      .slice(0, 3)) add(row.item);
+  for (const key of [...new Set([...context.specialistKeys, ...positiveConstraintKeys(context.constraints)])]) {
+    if (key === 'ap' || key === 'mp') continue;
+    const specialist = [...rows]
+      .filter((entry) => effectiveStat(entry.profiled.optimisticStats || {}, key) > 0)
+      .sort((a, b) => effectiveStat(b.profiled.optimisticStats || {}, key) - effectiveStat(a.profiled.optimisticStats || {}, key)
+        || Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+        || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0))[0];
+    add(specialist?.item);
   }
-  return [...byId.values()]
-    .sort((a, b) => Number(context.policy.rankStats(b.stats || {}).rankScore || 0)
-      - Number(context.policy.rankStats(a.stats || {}).rankScore || 0)
-      || String(a.id).localeCompare(String(b.id)))
-    .slice(0, 15);
+
+  for (const row of rows.sort((a, b) => Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
+    || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0)
+    || String(a.item.id).localeCompare(String(b.item.id)))) add(row.item);
+
+  for (const item of prefilter.pools?.dofus || []) add(item);
+  return [...selected.values()];
 }
 
 function resourcesMeet(items, context) {
@@ -334,8 +391,14 @@ function resourcesMeet(items, context) {
     && effectiveStat(stats, 'mp') >= Number(context.constraints?.mp || 0);
 }
 
+function resourcesWithinPermanentCaps(items, context) {
+  const stats = contextualStats(items, context.setsById, context.fmPolicy);
+  return effectiveStat(stats, 'ap') <= MAX_PERMANENT_AP
+    && effectiveStat(stats, 'mp') <= MAX_PERMANENT_MP;
+}
+
 function dofusPackages(baseItems, pool, context) {
-  let states = [{ items: [], next: 0, stats: {}, score: 0 }];
+  let states = [{ items: [], next: 0, stats: {}, score: 0, meanScore: 0 }];
   for (let pick = 0; pick < 6; pick++) {
     const expanded = [];
     for (const state of states) {
@@ -343,8 +406,9 @@ function dofusPackages(baseItems, pool, context) {
         const selected = [...state.items, pool[index]];
         if (!specialSlotRulesAreValid(selected)) continue;
         const complete = [...baseItems, ...selected];
+        if (pick === 5 && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
         const ranked = stateScore(complete, context.policy, context.setsById);
-        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score });
+        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
       }
     }
     states = retainStates(expanded.map((state) => ({ ...state, items: state.items })), 90, {
@@ -356,8 +420,10 @@ function dofusPackages(baseItems, pool, context) {
     if (!states.length) break;
   }
   return states
-    .filter((state) => state.items.length === 6 && resourcesMeet([...baseItems, ...state.items], context))
-    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
+    .filter((state) => state.items.length === 6
+      && resourcesMeet([...baseItems, ...state.items], context)
+      && resourcesWithinPermanentCaps([...baseItems, ...state.items], context))
+    .sort(compareStatePriority)
     .slice(0, 14);
 }
 
@@ -371,44 +437,20 @@ function insertResult(results, candidate, topN) {
 }
 
 export function searchCombinedSetCoreEquipment({
-  items = [],
-  sets = [],
-  constraints = {},
-  fmPolicy = {},
-  syntheticOffense = {},
-  topN = 10,
-  searchProfile = 'BALANCED',
-  onProgress = null,
-  onDiagnostics = null
+  items = [], sets = [], constraints = {}, fmPolicy = {}, syntheticOffense = {}, topN = 10,
+  searchProfile = 'BALANCED', onProgress = null, onDiagnostics = null
 } = {}) {
   if (!combinedSetCoreApplicable(syntheticOffense)) return { applicable: false, results: [] };
 
   const axes = requestedAxes(syntheticOffense);
   const eligibleItems = filterOptimizerEligibleItems(items);
   const setsById = setsByIdFor(sets);
-  const prefilter = buildEquipmentCandidatePools({
-    items: eligibleItems,
-    sets,
-    constraints,
-    fmPolicy,
-    syntheticOffense,
-    searchProfile
-  });
-  const context = {
-    axes,
-    policy: prefilter.policy,
-    setsById,
-    fmPolicy,
-    constraints,
-    specialistKeys: specialistKeys(axes)
-  };
+  const prefilter = buildEquipmentCandidatePools({ items: eligibleItems, sets, constraints, fmPolicy, syntheticOffense, searchProfile });
+  const context = { axes, policy: prefilter.policy, setsById, fmPolicy, constraints, specialistKeys: specialistKeys(axes) };
 
   const corePools = boundedCorePools(prefilter.policy, axes);
   const architectures = enumerateArchitectures(corePools, context);
-  const slotPools = Object.fromEntries(EQUIPMENT_RULES.map((rule) => [
-    rule.id,
-    slotPool(rule.id, eligibleItems, prefilter, context)
-  ]));
+  const slotPools = Object.fromEntries(EQUIPMENT_RULES.map((rule) => [rule.id, slotPool(rule.id, eligibleItems, prefilter, context)]));
   const equipmentStates = completeEquipment(architectures, slotPools, context);
 
   const companionCandidates = slotPool('companion', eligibleItems, prefilter, context).slice(0, 20);
@@ -424,13 +466,7 @@ export function searchCombinedSetCoreEquipment({
     const packages = dofusPackages(state.items, dofusCandidates, context);
     if (packages.length) contextsWithPackages++;
     for (const pack of packages) {
-      const evaluation = evaluateCompleteEquipmentBuild({
-        items: [...state.items, ...pack.items],
-        sets,
-        constraints,
-        fmPolicy,
-        syntheticOffense
-      });
+      const evaluation = evaluateCompleteEquipmentBuild({ items: [...state.items, ...pack.items], sets, constraints, fmPolicy, syntheticOffense });
       evaluated++;
       if (!evaluation.result) {
         const reason = evaluation.reason || 'unknown';
@@ -439,20 +475,17 @@ export function searchCombinedSetCoreEquipment({
       }
       insertResult(results, {
         ...evaluation.result,
-        searchArchitecture: {
-          pattern: state.pattern,
-          branch: critMode,
-          combinedSetCore: true
-        }
+        searchArchitecture: { pattern: state.pattern, branch: critMode, combinedSetCore: true }
       }, Math.max(1, Number(topN || 10)));
     }
   }
 
   const diagnostics = {
-    mode: 'combined-set-core-first-search-v1',
-    applicable: true,
-    nativeCombinedObjective: true,
+    mode: 'combined-set-core-first-search-v1', applicable: true, nativeCombinedObjective: true,
     setBonusBeforeCoreRanking: true,
+    resourceScoring: 'offense-first-with-feasibility-reserves',
+    dofusPoolPolicy: 'canonical-offense-resource-reserve',
+    finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
     core2Pool: (corePools.get(2) || []).length,
     core3Pool: (corePools.get(3) || []).length,
@@ -461,31 +494,14 @@ export function searchCombinedSetCoreEquipment({
     equipmentStatesRetained: equipmentStates.length,
     companionStatesRetained: companionStates.length,
     dofusCandidates: dofusCandidates.length,
-    contextsWithPackages,
-    evaluated,
-    valid: results.length,
-    rejected,
+    contextsWithPackages, evaluated, valid: results.length, rejected,
     fallbackRequired: results.length === 0
   };
 
   if (typeof onProgress === 'function') {
-    onProgress({
-      phase: 'combined-set-core-search',
-      label: results.length ? 'complete' : 'empty',
-      nodes: architectures.length,
-      visited: evaluated,
-      pruned: 0,
-      heuristicTrimmed: 0,
-      best: results[0]?.syntheticOffense?.minimumScore || 0
-    });
+    onProgress({ phase: 'combined-set-core-search', label: results.length ? 'complete' : 'empty', nodes: architectures.length,
+      visited: evaluated, pruned: 0, heuristicTrimmed: 0, best: results[0]?.syntheticOffense?.minimumScore || 0 });
   }
   if (typeof onDiagnostics === 'function') onDiagnostics({ trace: [{ ...diagnostics }] });
-
-  return {
-    applicable: true,
-    results,
-    candidateItems: prefilter.items,
-    candidatePools: prefilter.pools,
-    diagnostics
-  };
+  return { applicable: true, results, candidateItems: prefilter.items, candidatePools: prefilter.pools, diagnostics };
 }

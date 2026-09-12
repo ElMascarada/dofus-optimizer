@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createEquipmentCandidatePolicy } from '../optimizer/equipment-candidate-policy.js';
+import { combinedOffenseSearchScore } from '../optimizer/combined-set-core-search.js';
 
 function policyFor(elements, critMode = 'auto') {
   return createEquipmentCandidatePolicy({
@@ -31,6 +32,24 @@ test('combined candidate scoring optimizes the weakest requested element instead
   assert.deepEqual(balanced.syntheticOffense.elements, ['earth', 'fire']);
   assert.ok(balanced.objective > fireExtreme.objective);
   assert.ok(balanced.meanObjective > 0);
+});
+
+test('native combined beam separates hard-resource feasibility from offensive priority', () => {
+  const policy = createEquipmentCandidatePolicy({
+    items: [],
+    sets: [],
+    constraints: { ap: 12, mp: 6 },
+    fmPolicy: { enabled: true, fmEnabled: true, exoAp: 1, exoMp: 1 },
+    syntheticOffense: { elements: ['multi'], profiles: ['small'], critMode: 'no_crit' },
+    searchProfile: 'BALANCED'
+  });
+  const mpOnlyPolicyScore = policy.rankStats({ mp: 1 });
+  const mpOnlyBeamScore = combinedOffenseSearchScore(policy, { mp: 1 });
+  const offenseBeamScore = combinedOffenseSearchScore(policy, { power: 60 });
+
+  assert.ok(mpOnlyPolicyScore.rankScore > 0, 'hard-resource progress remains visible to candidate policy');
+  assert.equal(mpOnlyBeamScore.score, 0, 'MP-only progress must not become offensive beam score');
+  assert.ok(offenseBeamScore.score > mpOnlyBeamScore.score, 'real offense must outrank resource-only progress once feasibility is reserved separately');
 });
 
 test('each requested elemental flat damage participates in combined ranking', () => {
@@ -140,4 +159,11 @@ test('multi-element request orchestration no longer seeds frozen mono winners', 
   assert.match(source, /requestSearchMode: combinedRequest \? 'multi-element-native'/);
   assert.doesNotMatch(source, /multi-element-seed/);
   assert.doesNotMatch(source, /multiElementSeeded/);
+});
+
+test('native combined Dofus closure filters permanent AP/MP overshoot before the final beam', () => {
+  const source = readFileSync(new URL('../optimizer/combined-set-core-search.js', import.meta.url), 'utf8');
+  assert.match(source, /resourcesWithinPermanentCaps/);
+  assert.match(source, /pick === 5 && \(!resourcesMeet\(complete, context\) \|\| !resourcesWithinPermanentCaps\(complete, context\)\)/);
+  assert.match(source, /finalResourceCapsAppliedBeforeDofusBeamRetention: true/);
 });
