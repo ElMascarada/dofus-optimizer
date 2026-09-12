@@ -73,6 +73,8 @@ export function combinedOffenseSearchScore(policy, stats = {}) {
   return {
     score: Number(ranked.objectiveGain || 0),
     meanScore: Number(ranked.meanGain || 0),
+    completionScore: Number(ranked.rankScore || 0),
+    constraintSignal: Number(ranked.constraintSignal || 0),
     offense: ranked.syntheticOffense
   };
 }
@@ -153,6 +155,87 @@ function retainStates(states, limit, context) {
   return output;
 }
 
+function structuralProgress(state, context) {
+  const stats = contextualStats(state?.items || [], context.setsById, context.fmPolicy);
+  const apTarget = Math.max(1, Number(context.constraints?.ap || 12));
+  const mpTarget = Math.max(1, Number(context.constraints?.mp || 6));
+  const ap = Math.min(apTarget, effectiveStat(stats, 'ap')) / apTarget;
+  const mp = Math.min(mpTarget, effectiveStat(stats, 'mp')) / mpTarget;
+  return ap + mp;
+}
+
+function terminalSetKey(state) {
+  const core = state?.cores?.[state.cores.length - 1];
+  return core?.setId == null ? '' : String(core.setId);
+}
+
+export function retainCombinedArchitectureStates(states, limit, context) {
+  const dedup = new Map();
+  for (const state of states || []) {
+    const key = itemKey(state.items);
+    if (!key) continue;
+    const previous = dedup.get(key);
+    if (!previous || compareStatePriority(state, previous) < 0) dedup.set(key, state);
+  }
+  const ranked = [...dedup.values()].sort(compareStatePriority);
+  if (ranked.length <= limit) return ranked;
+
+  const output = [];
+  const seen = new Set();
+  const add = (state) => {
+    if (!state || output.length >= limit) return;
+    const key = itemKey(state.items);
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  };
+  const take = (values, amount) => {
+    let added = 0;
+    for (const value of values) {
+      if (output.length >= limit || added >= amount) break;
+      const before = output.length;
+      add(value);
+      if (output.length > before) added++;
+    }
+  };
+
+  // Balanced combined offense remains the primary lane.
+  take(ranked, Math.max(12, Math.floor(limit * 0.18)));
+
+  // Structural AP/MP closure is reserved independently instead of dominating offense.
+  take([...ranked].sort((a, b) => structuralProgress(b, context) - structuralProgress(a, context)
+    || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
+
+  // rankScore is retained only as a bounded completion-potential lane.
+  take([...ranked].sort((a, b) => Number(b?.completionScore || 0) - Number(a?.completionScore || 0)
+    || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
+
+  // Preserve the best lineage for many distinct terminal sets. This prevents a strong
+  // late 2-piece/3-piece set completion from disappearing only because its partial
+  // immediate offense is below another set family.
+  const bestByTerminalSet = new Map();
+  for (const state of ranked) {
+    const key = terminalSetKey(state);
+    if (key && !bestByTerminalSet.has(key)) bestByTerminalSet.set(key, state);
+  }
+  take([...bestByTerminalSet.values()].sort(compareStatePriority), Math.max(36, Math.floor(limit * 0.48)));
+
+  // Requested-element/common-stat specialists keep a small independent lane.
+  for (const statKey of context.specialistKeys || []) {
+    const specialist = [...ranked]
+      .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
+      .sort((a, b) => effectiveStat(b.stats || itemStats(b.items, context.setsById), statKey)
+        - effectiveStat(a.stats || itemStats(a.items, context.setsById), statKey)
+        || compareStatePriority(a, b))[0];
+    add(specialist);
+  }
+
+  // Reuse the general feasibility-aware reserve policy for any capacity left.
+  for (const state of retainStates(ranked, limit, context)) add(state);
+  for (const state of ranked) add(state);
+  return output;
+}
+
 function equipmentShapeValid(items = []) {
   const counts = new Map();
   for (const item of items) {
@@ -227,7 +310,7 @@ function boundedCorePools(policy, axes) {
 function enumerateArchitectures(corePools, context) {
   const all = [];
   for (const pattern of CORE_PATTERNS) {
-    let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, pattern: pattern.join('+') }];
+    let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, completionScore: 0, pattern: pattern.join('+') }];
     for (const pieceCount of pattern) {
       const expanded = [];
       for (const state of states) {
@@ -236,15 +319,16 @@ function enumerateArchitectures(corePools, context) {
           if (!coresCompatible(cores)) continue;
           const items = cores.flatMap((entry) => entry.items);
           const ranked = stateScore(items, context.policy, context.setsById);
-          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore, pattern: state.pattern });
+          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+            completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal, pattern: state.pattern });
         }
       }
-      states = retainStates(expanded, 120, context);
+      states = retainCombinedArchitectureStates(expanded, 120, context);
       if (!states.length) break;
     }
     all.push(...states);
   }
-  return retainStates(all, 180, context);
+  return retainCombinedArchitectureStates(all, 180, context);
 }
 
 function slotPool(slot, eligibleItems, prefilter, context) {
@@ -321,7 +405,8 @@ function completeEquipment(architectures, slotPools, context) {
         const items = [...state.items, item];
         if (!equipmentShapeValid(items)) continue;
         const ranked = stateScore(items, context.policy, context.setsById);
-        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
       }
     }
     states = retainStates(expanded, 260, context);
@@ -337,7 +422,8 @@ function completeCompanion(equipmentStates, pool, context) {
       const items = [...state.items, companion];
       if (!specialSlotRulesAreValid(items)) continue;
       const ranked = stateScore(items, context.policy, context.setsById);
-      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+        completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
     }
   }
   return retainStates(rows, 55, context);
@@ -408,7 +494,8 @@ function dofusPackages(baseItems, pool, context) {
         const complete = [...baseItems, ...selected];
         if (pick === 5 && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
         const ranked = stateScore(complete, context.policy, context.setsById);
-        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
       }
     }
     states = retainStates(expanded.map((state) => ({ ...state, items: state.items })), 90, {
@@ -484,6 +571,7 @@ export function searchCombinedSetCoreEquipment({
     mode: 'combined-set-core-first-search-v1', applicable: true, nativeCombinedObjective: true,
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
+    architectureRetention: 'balanced+structural+specialist+set-diversity+completion',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
