@@ -1,6 +1,7 @@
 import { compareCompleteEquipmentBuildResults } from './complete-equipment-build-evaluator.js';
 import { searchEquipmentArchitecturesV2 } from './equipment-search-v2.js';
 import { searchCombinedSetCoreEquipment } from '../optimizer/combined-set-core-search.js';
+import { refineDofusPackagesForResults } from '../optimizer/dofus-package-refiner.js';
 import {
   compareSyntheticOffenseResults,
   evaluateSyntheticOffense,
@@ -164,18 +165,19 @@ export function searchEquipmentRequest({
   const critMode = normalizeSyntheticCritMode(syntheticOffense?.critMode);
   const combinedRequest = isMultiElementRequest(syntheticOffense);
   const rawLimit = combinedRequest
-    ? Math.max(resultLimit, critMode === 'auto' ? 100 : 120)
+    ? Math.max(resultLimit, 160)
     : (critMode === 'auto' ? resultLimit : Math.max(resultLimit, 80));
 
+  const normalizedSyntheticOffense = {
+    ...syntheticOffense,
+    critMode
+  };
   const request = {
     items,
     sets,
     constraints: effectiveConstraints,
     fmPolicy,
-    syntheticOffense: {
-      ...syntheticOffense,
-      critMode
-    },
+    syntheticOffense: normalizedSyntheticOffense,
     requiredItemIds,
     topN: rawLimit,
     searchProfile,
@@ -186,7 +188,24 @@ export function searchEquipmentRequest({
   const direct = combinedRequest && !requiredItemIds.length
     ? searchCombinedSetCoreEquipment(request)
     : searchEquipmentArchitecturesV2(request);
-  const results = finalizeResults(direct?.results || [], syntheticOffense, constraints, resultLimit);
+
+  const dofusRefine = combinedRequest && !requiredItemIds.length
+    ? refineDofusPackagesForResults({
+      results: direct?.results || [],
+      items,
+      sets,
+      constraints,
+      fmPolicy,
+      syntheticOffense: normalizedSyntheticOffense,
+      searchProfile,
+      topN: rawLimit
+    })
+    : {
+      results: direct?.results || [],
+      diagnostics: { applied: false, reason: 'not-combined-request' }
+    };
+
+  const results = finalizeResults(dofusRefine.results, syntheticOffense, constraints, resultLimit);
   return {
     ...direct,
     results,
@@ -195,6 +214,7 @@ export function searchEquipmentRequest({
       requestSearchMode: combinedRequest ? 'multi-element-native' : 'single-element',
       requestedElements: requestedElements(syntheticOffense),
       nativeCombinedObjective: combinedRequest,
+      exactDofusRefine: dofusRefine.diagnostics,
       critMode,
       valid: results.length
     }
