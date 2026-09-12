@@ -185,10 +185,14 @@ export function searchEquipmentRequest({
     onDiagnostics
   };
 
+  const totalStartedAt = Date.now();
+  const directStartedAt = Date.now();
   const direct = combinedRequest && !requiredItemIds.length
     ? searchCombinedSetCoreEquipment(request)
     : searchEquipmentArchitecturesV2(request);
+  const directMs = Date.now() - directStartedAt;
 
+  const refineStartedAt = Date.now();
   const dofusRefine = combinedRequest && !requiredItemIds.length
     ? refineDofusPackagesForResults({
       results: direct?.results || [],
@@ -204,8 +208,12 @@ export function searchEquipmentRequest({
       results: direct?.results || [],
       diagnostics: { applied: false, reason: 'not-combined-request' }
     };
+  const dofusRefineMs = Date.now() - refineStartedAt;
 
+  const finalizeStartedAt = Date.now();
   const results = finalizeResults(dofusRefine.results, syntheticOffense, constraints, resultLimit);
+  const finalizeMs = Date.now() - finalizeStartedAt;
+  const totalMs = Date.now() - totalStartedAt;
   return {
     ...direct,
     results,
@@ -215,6 +223,7 @@ export function searchEquipmentRequest({
       requestedElements: requestedElements(syntheticOffense),
       nativeCombinedObjective: combinedRequest,
       exactDofusRefine: dofusRefine.diagnostics,
+      performance: { directMs, dofusRefineMs, finalizeMs, totalMs },
       critMode,
       valid: results.length
     }
