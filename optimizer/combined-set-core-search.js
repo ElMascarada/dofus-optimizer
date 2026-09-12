@@ -259,6 +259,16 @@ function equipmentShapeValid(items = []) {
   return specialSlotRulesAreValid(items);
 }
 
+function missingEquipmentSlotCount(items = []) {
+  const counts = new Map();
+  for (const item of items) counts.set(item?.slot, Number(counts.get(item?.slot) || 0) + 1);
+  let missing = 0;
+  for (const rule of EQUIPMENT_RULES) {
+    missing += Math.max(0, Number(rule.count || 0) - Number(counts.get(rule.id) || 0));
+  }
+  return missing;
+}
+
 function coresCompatible(cores = []) {
   const setIds = new Set();
   const itemIds = new Set();
@@ -322,6 +332,17 @@ export function boundedCorePools(policy, axes) {
   return byCount;
 }
 
+export function retainFinalArchitectureCandidates(states, limit, context) {
+  const primary = retainCombinedArchitectureStates(states, limit, context);
+  const selected = new Map(primary.map((state) => [itemKey(state.items), state]));
+  for (const state of [...(states || [])].sort(compareStatePriority)) {
+    if (missingEquipmentSlotCount(state.items) > 1) continue;
+    const key = itemKey(state.items);
+    if (!selected.has(key)) selected.set(key, state);
+  }
+  return [...selected.values()].sort(compareStatePriority);
+}
+
 function enumerateArchitectures(corePools, context) {
   const all = [];
   for (const pattern of CORE_PATTERNS) {
@@ -343,7 +364,7 @@ function enumerateArchitectures(corePools, context) {
     }
     all.push(...states);
   }
-  return retainCombinedArchitectureStates(all, 180, context);
+  return retainFinalArchitectureCandidates(all, 180, context);
 }
 
 function slotPool(slot, eligibleItems, prefilter, context) {
@@ -587,7 +608,7 @@ export function searchCombinedSetCoreEquipment({
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
     corePoolRetention: 'semantic-lane-union-no-post-truncation',
-    architectureRetention: 'balanced+structural+parent-terminal-lineage+specialist+completion',
+    architectureRetention: 'balanced+structural+parent-terminal-lineage+near-complete-before-final-trim+specialist+completion',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
