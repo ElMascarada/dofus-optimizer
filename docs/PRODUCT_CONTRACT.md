@@ -1,8 +1,8 @@
 # Contrat produit
 
-Ce document définit la **direction produit canonique active** de Dofus Optimizer à partir du pivot Equipment-First du 9 septembre 2026.
+Ce document définit la **direction produit canonique active** de Dofus Optimizer depuis le pivot Equipment-First du 9 septembre 2026 et sa fermeture combined-search de septembre 2026.
 
-L'ancien contrat combat-plan-first est conservé intégralement dans `docs/history/PRODUCT_CONTRACT-combat-plan-first-2026-09-09.md`. Il reste une trace historique valide du travail réalisé, mais ses objectifs classe/sorts/T1-T3 sont désormais **PARKED** et ne pilotent plus le chemin produit actif.
+L'ancien contrat combat-plan-first est conservé dans `docs/history/PRODUCT_CONTRACT-combat-plan-first-2026-09-09.md`. Il reste une trace historique valide, mais ses objectifs classe/sorts/T1-T3 sont **PARKED** pour l'Optimiseur actif.
 
 ## Objectif primaire actif
 
@@ -10,18 +10,18 @@ Dofus Optimizer est un **optimiseur d'équipement**.
 
 > **Trouver le meilleur équipement légal sous les contraintes utilisateur, puis classer les builds faisables avec des sondes offensives synthétiques indépendantes des classes et des sorts réels.**
 
-Flux produit actif cible :
+Flux produit actif :
 
-1. lire les contraintes d'équipement de l'utilisateur ;
-2. ne conserver que les builds légaux qui satisfont toutes les contraintes ;
+1. lire les contraintes d'équipement ;
+2. ne conserver que les builds légaux satisfaisant toutes les contraintes ;
 3. mesurer chaque build avec les profils offensifs synthétiques demandés ;
 4. maximiser d'abord le plus faible score demandé ;
 5. à égalité, maximiser la moyenne ;
-6. à nouvelle égalité, appliquer un tie-break canonique déterministe.
+6. appliquer un tie-break canonique déterministe.
 
-L'identité de classe, les sorts réels, les rotations, T1/T2/T3, la préparation de combat, l'état de combat et la sémantique source des sorts ne font pas partie de l'entrée du produit actif.
+Classe, sorts réels, rotations, T1/T2/T3 et scénario combat ne font pas partie de l'entrée Optimiseur active.
 
-## Invariant de recherche
+## Invariants de recherche
 
 Les minima utilisateur restent des contraintes dures.
 
@@ -29,27 +29,21 @@ Les minima utilisateur restent des contraintes dures.
 
 Le score synthétique ne crée jamais la faisabilité et ne peut jamais remplacer les règles de légalité.
 
-Ordre futur obligatoire de la recherche :
+Pour les recherches combinées, un second invariant est canonique :
 
-1. satisfaire toutes les contraintes d'équipement ;
-2. parmi les candidats faisables, maximiser le **minimum** des scores synthétiques demandés ;
-3. à égalité, maximiser leur **moyenne** ;
-4. appliquer un tie-break déterministe.
+> **Une architecture sémantiquement distincte ne doit pas être détruite uniquement parce que son score partiel est faible avant que son dernier équipement, son compagnon ou sa fermeture Dofus soient visibles.**
 
-La PR Equipment-First Synthetic Offense Core V1 n'intègre pas encore ce ranking dans la recherche.
+Les corrections de complétude doivent donc préserver des lignées et spécialistes bornés plutôt qu'élargir arbitrairement un beam global.
 
-## Sondes offensives synthétiques
+## Type de dégâts
 
-Les sondes synthétiques sont des **métriques internes de qualité d'équipement**. Elles ne sont pas des sorts Dofus et ne doivent jamais être présentées comme des sorts sélectionnables.
+L'interface active expose **Type de dégâts** :
 
-Orientations élémentaires : `earth`, `fire`, `water`, `air`, `multi`.
+- `Petites lignes` → `small`
+- `Mixte` → `medium`
+- `Grosses lignes` → `large`
 
-- mono : 1 à 3 éléments sélectionnés, de poids égal ;
-- plus de 3 éléments mono : invalide ;
-- `multi` est exclusif ;
-- `multi` représente exactement quatre lignes, une Terre, une Feu, une Eau et une Air.
-
-Profils :
+Profils synthétiques :
 
 | Profil | PA nominal | Base mono normale | Base MULTI normale | Crit de base |
 | --- | ---: | ---: | ---: | ---: |
@@ -59,31 +53,48 @@ Profils :
 
 Invariant : **1 PA = 10 dégâts de base synthétiques normaux** en mono comme en MULTI.
 
-La base critique synthétique vaut `base normale × 1,25`. Les valeurs sont continues : la ligne `7,5` de MEDIUM MULTI ne doit jamais être arrondie pour imiter un sort réel.
+La base critique synthétique vaut `base normale × 1,25`. Les valeurs restent continues ; `4 × 7,5` n'est jamais arrondi pour imiter un sort réel.
 
-## Sémantique des statistiques offensives
+## Éléments et ranking combiné
 
-Le scoring synthétique réutilise le vocabulaire de stats normalisé du repository :
+Orientations : `earth`, `fire`, `water`, `air`, `multi`.
+
+- 1 élément explicite : chemin mono ;
+- 2 ou 3 éléments explicites : chemin combined natif ;
+- plus de 3 éléments explicites : invalide ;
+- `multi` est exclusif et représente exactement quatre axes indépendants Terre, Feu, Eau, Air.
+
+Pour plusieurs axes/profils, chaque combinaison demandée produit une sonde indépendante.
+
+Le classement agrégé est :
+
+1. **minimum** des scores demandés ;
+2. **moyenne** des scores demandés ;
+3. tie-break déterministe.
+
+Un élément fort ne peut donc pas masquer un axe faible.
+
+## Sémantique offensive
+
+Le scoring synthétique réutilise le vocabulaire de stats normalisé :
 
 - caractéristiques : `earth`, `fire`, `water`, `air` ;
-- Puissance : `power` ;
-- dommage fixe générique : `damage` ;
-- dommages fixes élémentaires : `damageEarth`, `damageFire`, `damageWater`, `damageAir` ;
-- Crit : `crit` ;
-- Dommages Critiques : `critDamage`.
+- `power` ;
+- `damage` ;
+- `damageEarth`, `damageFire`, `damageWater`, `damageAir` ;
+- `crit` ;
+- `critDamage` ;
+- `spellDamagePct` lorsque la FM offensive active l'ajoute.
 
-Le critique d'équipement s'ajoute en points de pourcentage au critique de base du profil, avec la borne canonique `0..100 %` déjà utilisée par le moteur Dofus.
-
-Pour une ligne élémentaire synthétique :
+Pour une ligne élémentaire :
 
 - caractéristique effective = caractéristique élémentaire + Puissance ;
-- `damage` et le dommage fixe de l'élément s'appliquent à la ligne normale et critique ;
+- dégâts fixes génériques + élémentaires s'appliquent à la ligne ;
 - `critDamage` s'applique uniquement à la branche critique ;
-- espérance = normale × `(1-p)` + critique × `p`.
+- la probabilité critique est bornée canoniquement à `0..100 %` ;
+- l'espérance mélange branche normale et critique selon cette probabilité.
 
-Le calcul synthétique est volontairement **continu**. Il ne passe pas par `dofusDamageEndpoint()` ni par l'exécution d'un sort réel, car ces chemins appliquent des floors Dofus légitimes pour les vrais sorts mais incompatibles avec `4 × 7,5 = 30`.
-
-Les modificateurs `spellDamagePct`, `weaponDamagePct`, `meleeDamagePct` et `rangedDamagePct` ne sont pas inclus dans ce cœur : ils portent un contexte source/position que la sonde synthétique pure ne doit pas inventer. Aucun modificateur offensif ambigu n'est ajouté silencieusement.
+Le calcul synthétique est indépendant de l'exécution d'un vrai sort.
 
 ## Budget PA et reste proportionnel
 
@@ -92,61 +103,92 @@ Pour `A` PA disponibles et un profil de coût nominal `X` :
 - `fullCount = floor(A / X)` ;
 - `remainder = A % X` ;
 - `partialFactor = remainder / X` ;
-- contribution partielle = **résultat complet de la sonde × partialFactor**.
+- contribution partielle = résultat complet de la sonde × `partialFactor`.
 
-Le reste conserve l'identité du profil. `11 PA + LARGE` vaut `2,75 × LARGE`, et non `2 × LARGE + MEDIUM`.
+Le reste conserve l'identité du profil. Toutes les composantes sont proratisées ensemble.
 
-Toutes les composantes sont proratisées ensemble, y compris dégâts fixes et Dommages Critiques. Un reste ne crée jamais une nouvelle application complète de dégâts fixes. La même règle s'applique à la sonde MULTI quatre lignes.
+## Forgemagie active
 
-## Équilibre multi-profils
+L'interface expose un contrôle global :
 
-Pour plusieurs éléments/profils, chaque combinaison demandée produit une sonde indépendante. Le ranking agrégé n'est **pas** une somme :
+`FM → Oui / Non`
 
-- score primaire = minimum des scores demandés ;
-- score secondaire = moyenne des scores demandés.
+### FM = Non
 
-Ainsi un build équilibré peut battre un build très spécialisé dès que son profil le plus faible est meilleur.
+Aucun Exo PA/PM ni bonus offensif FM n'est inventé par le produit.
 
-## Travail combat désormais PARKED
+### FM = Oui
 
-Sont préservés mais hors du chemin produit actif :
+Le contrat actif est :
+
+- Exo PA +1 **et** Exo PM +1 sont intégrés structurellement dès le début ;
+- le personnage de recherche commence donc à **8 PA / 4 PM** avant équipement ;
+- les neuf slots forgeables sont : coiffe, cape, amulette, deux anneaux, ceinture, bottes, arme, bouclier ;
+- les deux exos structurels consomment deux assignments ;
+- il reste **sept assignments offensifs** ;
+- chaque assignment offensif choisit automatiquement entre :
+  - `+1 % dommages sorts` ;
+  - `+8 dommages critiques`, uniquement si l'item n'a pas déjà de dommages critiques natifs et si cette option donne un meilleur résultat.
+
+Compagnon et Dofus/trophées ne reçoivent jamais ces FM.
+
+L'utilisateur ne règle pas manuellement le nombre de FM Do Crit ou Do Sorts.
+
+## Contraintes
+
+PA et PM restent visibles. Les autres contraintes passent par le contrôle de contraintes avancées supporté par le moteur.
+
+Toute contrainte activée est un minimum dur ; elle n'est jamais transformée en bonus de score.
+
+Exemples supportés selon le runtime courant : Initiative, Portée, Invocations, Vitalité, résistances et autres clés explicitement exposées par le moteur.
+
+L'UI ne doit pas inventer un modèle de contraintes parallèle.
+
+## Recherche combinée — doctrine active
+
+Pour 2/3 éléments et Multi, la recherche doit suivre la fermeture suivante :
+
+```text
+candidate pools
+→ set cores
+→ architecture retention
+→ equipment completion
+→ companion context
+→ Dofus/trophy closure
+→ authoritative final evaluator
+```
+
+Règles obligatoires :
+
+- les bonus de panoplie activés sont inclus avant ranking du core ;
+- les lignées parent→set terminal distinctes sont préservées ;
+- une architecture à un slot de la fin peut franchir le trim d'architecture ;
+- à la completion équipement, conserver le meilleur descendant et des spécialistes sémantiques par architecture ;
+- ajouter le compagnon avant le dernier classement inter-architectures ;
+- réserver un nombre borné de descendants à fort gain marginal parent→enfant ;
+- fermer les Dofus/trophées dans le contexte réel de l'équipement + compagnon ;
+- appliquer caps PA/PM, conditions et légalité avant de considérer un candidat final ;
+- comparer finalement avec `evaluateCompleteEquipmentBuild()`.
+
+Il est interdit de résoudre une perte de qualité uniquement par une augmentation opaque du beam jusqu'à ce qu'un témoin réapparaisse.
+
+## Résultats
+
+Le produit vise **5 stuffs** lorsqu'une diversité réellement utile est disponible. Si aucun résultat distinct pertinent n'existe, un résultat unique est acceptable.
+
+La diversité ne doit jamais dégrader le classement final : l'appartenance/diversité sélectionne les candidats, puis le score final détermine leur ordre.
+
+## Travail combat PARKED
+
+Sont préservés mais hors du chemin Optimiseur actif :
 
 - certification sémantique des vrais sorts ;
 - vérité source des sorts ;
 - Certified Combat Planner ;
-- planification de combat spécifique aux classes ;
+- planification spécifique aux classes ;
 - objectifs T1/T2/T3 et préparation inter-tours.
 
-Ce travail n'est ni supprimé ni déclaré incorrect. Il pourra être réévalué dans un autre produit ou une phase future, mais aucun développement actif ne doit le prolonger sans nouvelle décision directeur.
-
-## Interface cible — contrat futur, non implémenté ici
-
-L'interface active future doit supprimer le choix de classe.
-
-Contraintes principales toujours visibles :
-
-- `PA [valeur] [exo]`
-- `PM [valeur] [exo]`
-
-Le contrôle adjacent représente l'autorisation Exo PA/PM selon le modèle d'équipement/exo existant.
-
-Les autres contraintes passent par un contrôle unique :
-
-`[ constraint dropdown ] [ value ] [ add ]`
-
-Exemple : `Initiative | 4000 | Add`, puis liste compacte des contraintes actives :
-
-- `Initiative ≥ 4000`
-- `Range ≥ 4`
-- `Summons ≥ 2`
-
-Le dropdown doit exposer uniquement les contraintes réellement supportées par le moteur de contraintes. Il est interdit de créer un modèle de contraintes propre à l'UI.
-
-## Forgemagie et légalité
-
-Les règles structurelles d'équipement, conditions, panoplies, PA/PM, exos et FM restent des règles de légalité ou des choix d'équipement. Elles ne sont pas assouplies par le scoring synthétique.
-
-Les autorisations Exo PA/PM sont des permissions, pas des obligations. Les travaux FM détaillés restent soumis aux règles de jeu certifiées et aux tranches produit ultérieures.
+Ce travail n'est ni supprimé ni déclaré incorrect. Il reste légitime dans l'Atelier ou dans un futur produit explicitement décidé.
 
 ## Hiérarchie de vérité
 
@@ -155,5 +197,5 @@ En cas de contradiction :
 1. données/règles Dofus certifiées pour les faits d'équipement et de légalité ;
 2. `docs/PRODUCT_CONTRACT.md` pour l'intention produit active ;
 3. code runtime + tests pour savoir ce qui est déjà implémenté ;
-4. `PROJECT_STATE.md` pour les écarts connus ;
-5. documents `docs/history/`, historique Git et anciennes PR comme contexte historique.
+4. `PROJECT_STATE.md` pour l'état de certification et les écarts connus ;
+5. `docs/history/`, historique Git et anciennes PR comme contexte historique.
