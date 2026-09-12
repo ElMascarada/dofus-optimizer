@@ -54,6 +54,11 @@ function scoreState(items, policy, setsById) {
     constraintSignal: ranked.constraintSignal
   };
 }
+function comparePriority(a, b) {
+  return Number(b.score || 0) - Number(a.score || 0)
+    || Number(b.meanScore || 0) - Number(a.meanScore || 0)
+    || itemKey(a.items).localeCompare(itemKey(b.items));
+}
 function equipmentShapeValid(items = []) {
   const counts = new Map();
   const caps = { hat: 1, cape: 1, amulet: 1, ring: 2, belt: 1, boots: 1, weapon: 1, shield: 1 };
@@ -86,6 +91,17 @@ function exactWitnessCoreState(states, count) {
 }
 function overlap(state) {
   return (state?.items || []).filter((item) => witnessIds.has(String(item.id))).length;
+}
+function parentTerminalLineageKey(state) {
+  const cores = state?.cores || [];
+  const terminal = cores.at(-1)?.setId == null ? '' : String(cores.at(-1).setId);
+  if (!terminal) return '';
+  if (cores.length < 2) return terminal;
+  const parents = cores.slice(0, -1).map((core) => String(core?.setId ?? '')).filter(Boolean).sort().join('+');
+  return parents ? `${parents}->${terminal}` : terminal;
+}
+function coreIdentityKey(state) {
+  return (state?.cores || []).map((core) => String(core?.id ?? '')).filter(Boolean).sort().join('|');
 }
 
 const eligibleItems = filterOptimizerEligibleItems(dataset.items);
@@ -134,9 +150,7 @@ for (const pattern of CORE_PATTERNS) {
     }
     cumulative += pieceCount;
     const witnessBefore = exactWitnessCoreState(expanded, cumulative);
-    const ranked = [...expanded].sort((a, b) => Number(b.score || 0) - Number(a.score || 0)
-      || Number(b.meanScore || 0) - Number(a.meanScore || 0)
-      || itemKey(a.items).localeCompare(itemKey(b.items)));
+    const ranked = [...expanded].sort(comparePriority);
     const rawRank = witnessBefore ? ranked.findIndex((state) => itemKey(state.items) === itemKey(witnessBefore.items)) + 1 : null;
     states = retainCombinedArchitectureStates(expanded, 120, context);
     const witnessAfter = exactWitnessCoreState(states, cumulative);
@@ -157,7 +171,33 @@ for (const pattern of CORE_PATTERNS) {
   all.push(...states);
 }
 const beforeFinal = exactWitnessCoreState(all, 8);
+const rankedAll = [...all].sort(comparePriority);
+const witnessGlobalRank = beforeFinal ? rankedAll.findIndex((state) => itemKey(state.items) === itemKey(beforeFinal.items)) + 1 : null;
+const samePattern = rankedAll.filter((state) => state.pattern === '3+3+2');
+const witnessPatternRank = beforeFinal ? samePattern.findIndex((state) => itemKey(state.items) === itemKey(beforeFinal.items)) + 1 : null;
+
+const lineageWinners = new Map();
+for (const state of rankedAll) {
+  const key = parentTerminalLineageKey(state);
+  if (key && !lineageWinners.has(key)) lineageWinners.set(key, state);
+}
+const lineageRanked = [...lineageWinners.values()].sort(comparePriority);
+const witnessLineageKey = beforeFinal ? parentTerminalLineageKey(beforeFinal) : '';
+const witnessLineageWinner = witnessLineageKey ? lineageWinners.get(witnessLineageKey) : null;
+const witnessIsLineageWinner = Boolean(beforeFinal && witnessLineageWinner && itemKey(witnessLineageWinner.items) === itemKey(beforeFinal.items));
+const witnessLineageRank = witnessLineageKey ? lineageRanked.findIndex((state) => parentTerminalLineageKey(state) === witnessLineageKey) + 1 : null;
+
+const coreWinners = new Map();
+for (const state of rankedAll) {
+  const key = coreIdentityKey(state);
+  if (key && !coreWinners.has(key)) coreWinners.set(key, state);
+}
+const coreRanked = [...coreWinners.values()].sort(comparePriority);
+const witnessCoreKey = beforeFinal ? coreIdentityKey(beforeFinal) : '';
+const witnessCoreRank = witnessCoreKey ? coreRanked.findIndex((state) => coreIdentityKey(state) === witnessCoreKey) + 1 : null;
+
 const finalStates = retainCombinedArchitectureStates(all, 180, context);
 const afterFinal = exactWitnessCoreState(finalStates, 8);
 console.log(`FW_LARGE_ARCH_ROUNDS=${JSON.stringify(targetRounds)}`);
+console.log(`FW_LARGE_ARCH_FINAL_RANKS=${JSON.stringify({ witnessGlobalRank, witnessPatternRank, patternStates: samePattern.length, lineageCount: lineageRanked.length, witnessLineageRank, witnessIsLineageWinner, coreIdentityCount: coreRanked.length, witnessCoreRank })}`);
 console.log(`FW_LARGE_ARCH_FINAL=${JSON.stringify({ beforeFinal: Boolean(beforeFinal), afterFinal: Boolean(afterFinal), all: all.length, retained: finalStates.length, bestOverlap: Math.max(0, ...finalStates.map(overlap)) })}`);
