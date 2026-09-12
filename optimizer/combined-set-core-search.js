@@ -15,12 +15,7 @@ import { buildEquipmentCandidatePools } from './equipment-candidate-policy.js';
 import { filterOptimizerEligibleItems } from './item-eligibility.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
-const ELEMENT_DAMAGE = Object.freeze({
-  earth: 'damageEarth',
-  fire: 'damageFire',
-  water: 'damageWater',
-  air: 'damageAir'
-});
+const ELEMENT_DAMAGE = Object.freeze({ earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' });
 const EQUIPMENT_RULES = SLOT_RULES.filter((rule) => !['companion', 'dofus'].includes(rule.id));
 const EQUIPMENT_CAPS = new Map(EQUIPMENT_RULES.map((rule) => [rule.id, Number(rule.count || 0)]));
 const CORE_PATTERNS = Object.freeze([
@@ -153,7 +148,6 @@ function retainStates(states, limit, context) {
       .slice(0, 3);
     for (const state of specialists) add(state);
   }
-
   for (const state of ranked) add(state, true);
   for (const state of ranked) add(state, false);
   return output;
@@ -192,12 +186,12 @@ function boundedCorePools(policy, axes) {
   const rows = (policy.setCoreCatalog?.cores || [])
     .filter((core) => core?.legality?.valid)
     .map((core) => {
-      const ranked = combinedOffenseSearchScore(policy, core.searchStats || core.aggregateStats || {});
+      const ranked = policy.rankStats(core.searchStats || core.aggregateStats || {});
       return {
         core,
         stats: core.searchStats || core.aggregateStats || {},
-        score: ranked.score,
-        meanScore: ranked.meanScore
+        score: Number(ranked.rankScore || 0),
+        objective: Number(ranked.objectiveGain || 0)
       };
     });
 
@@ -208,19 +202,14 @@ function boundedCorePools(policy, axes) {
     const add = (values, amount) => {
       for (const row of values.slice(0, amount)) selected.set(row.core.id, row);
     };
-    const byOffense = [...pool].sort((a, b) => b.score - a.score
-      || b.meanScore - a.meanScore
-      || String(a.core.id).localeCompare(String(b.core.id)));
-    add(byOffense, 55);
+    add([...pool].sort((a, b) => b.score - a.score), 55);
     for (const key of keys) {
       add([...pool]
         .filter((row) => effectiveStat(row.stats, key) > 0)
-        .sort((a, b) => effectiveStat(b.stats, key) - effectiveStat(a.stats, key)
-          || b.score - a.score
-          || b.meanScore - a.meanScore), 8);
+        .sort((a, b) => effectiveStat(b.stats, key) - effectiveStat(a.stats, key) || b.score - a.score), 8);
     }
     const perSet = new Map();
-    for (const row of byOffense) {
+    for (const row of [...pool].sort((a, b) => b.score - a.score)) {
       const setId = String(row.core.setId);
       const used = Number(perSet.get(setId) || 0);
       if (used >= 2) continue;
@@ -228,9 +217,7 @@ function boundedCorePools(policy, axes) {
       selected.set(row.core.id, row);
     }
     byCount.set(count, [...selected.values()]
-      .sort((a, b) => b.score - a.score
-        || b.meanScore - a.meanScore
-        || String(a.core.id).localeCompare(String(b.core.id)))
+      .sort((a, b) => b.score - a.score || String(a.core.id).localeCompare(String(b.core.id)))
       .slice(0, 95)
       .map((row) => row.core));
   }
@@ -249,14 +236,7 @@ function enumerateArchitectures(corePools, context) {
           if (!coresCompatible(cores)) continue;
           const items = cores.flatMap((entry) => entry.items);
           const ranked = stateScore(items, context.policy, context.setsById);
-          expanded.push({
-            cores,
-            items,
-            stats: ranked.stats,
-            score: ranked.score,
-            meanScore: ranked.meanScore,
-            pattern: state.pattern
-          });
+          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore, pattern: state.pattern });
         }
       }
       states = retainStates(expanded, 120, context);
@@ -289,10 +269,7 @@ function slotPool(slot, eligibleItems, prefilter, context) {
       .slice(0, 4)) add(row.item);
   }
 
-  const candidateRows = [...candidates.values()].map((item) => ({
-    item,
-    profiled: context.policy.profileItem(item)
-  }));
+  const candidateRows = [...candidates.values()].map((item) => ({ item, profiled: context.policy.profileItem(item) }));
   const limit = slot === 'ring' ? 34 : 28;
   const selected = new Map();
   const reserveKeys = [...new Set(['ap', 'mp', ...positiveConstraintKeys(context.constraints)])];
@@ -344,13 +321,7 @@ function completeEquipment(architectures, slotPools, context) {
         const items = [...state.items, item];
         if (!equipmentShapeValid(items)) continue;
         const ranked = stateScore(items, context.policy, context.setsById);
-        expanded.push({
-          ...state,
-          items,
-          stats: ranked.stats,
-          score: ranked.score,
-          meanScore: ranked.meanScore
-        });
+        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
       }
     }
     states = retainStates(expanded, 260, context);
@@ -366,13 +337,7 @@ function completeCompanion(equipmentStates, pool, context) {
       const items = [...state.items, companion];
       if (!specialSlotRulesAreValid(items)) continue;
       const ranked = stateScore(items, context.policy, context.setsById);
-      rows.push({
-        ...state,
-        items,
-        stats: ranked.stats,
-        score: ranked.score,
-        meanScore: ranked.meanScore
-      });
+      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
     }
   }
   return retainStates(rows, 55, context);
@@ -397,15 +362,8 @@ function dofusPool(eligibleItems, prefilter, context, critMode) {
   };
 
   const canonicalNames = [
-    'Dofus Ocre',
-    'Dofus Vulbis',
-    'Vulbis',
-    'Dofus Pourpre',
-    'Dofus des Glaces',
-    'Dofus Turquoise',
-    'Dolmanax',
-    'Robuste majeur',
-    'Turbulent'
+    'Dofus Ocre', 'Dofus Vulbis', 'Vulbis', 'Dofus Pourpre', 'Dofus des Glaces',
+    'Dofus Turquoise', 'Dolmanax', 'Robuste majeur', 'Turbulent'
   ];
   for (const name of canonicalNames) add(byName.get(name));
 
@@ -421,9 +379,7 @@ function dofusPool(eligibleItems, prefilter, context, critMode) {
 
   for (const row of rows.sort((a, b) => Number(b.profiled.objectiveGain || 0) - Number(a.profiled.objectiveGain || 0)
     || Number(b.profiled.meanGain || 0) - Number(a.profiled.meanGain || 0)
-    || String(a.item.id).localeCompare(String(b.item.id)))) {
-    add(row.item);
-  }
+    || String(a.item.id).localeCompare(String(b.item.id)))) add(row.item);
 
   for (const item of prefilter.pools?.dofus || []) add(item);
   return [...selected.values()];
@@ -452,13 +408,7 @@ function dofusPackages(baseItems, pool, context) {
         const complete = [...baseItems, ...selected];
         if (pick === 5 && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
         const ranked = stateScore(complete, context.policy, context.setsById);
-        expanded.push({
-          items: selected,
-          next: index + 1,
-          stats: ranked.stats,
-          score: ranked.score,
-          meanScore: ranked.meanScore
-        });
+        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
       }
     }
     states = retainStates(expanded.map((state) => ({ ...state, items: state.items })), 90, {
@@ -487,44 +437,20 @@ function insertResult(results, candidate, topN) {
 }
 
 export function searchCombinedSetCoreEquipment({
-  items = [],
-  sets = [],
-  constraints = {},
-  fmPolicy = {},
-  syntheticOffense = {},
-  topN = 10,
-  searchProfile = 'BALANCED',
-  onProgress = null,
-  onDiagnostics = null
+  items = [], sets = [], constraints = {}, fmPolicy = {}, syntheticOffense = {}, topN = 10,
+  searchProfile = 'BALANCED', onProgress = null, onDiagnostics = null
 } = {}) {
   if (!combinedSetCoreApplicable(syntheticOffense)) return { applicable: false, results: [] };
 
   const axes = requestedAxes(syntheticOffense);
   const eligibleItems = filterOptimizerEligibleItems(items);
   const setsById = setsByIdFor(sets);
-  const prefilter = buildEquipmentCandidatePools({
-    items: eligibleItems,
-    sets,
-    constraints,
-    fmPolicy,
-    syntheticOffense,
-    searchProfile
-  });
-  const context = {
-    axes,
-    policy: prefilter.policy,
-    setsById,
-    fmPolicy,
-    constraints,
-    specialistKeys: specialistKeys(axes)
-  };
+  const prefilter = buildEquipmentCandidatePools({ items: eligibleItems, sets, constraints, fmPolicy, syntheticOffense, searchProfile });
+  const context = { axes, policy: prefilter.policy, setsById, fmPolicy, constraints, specialistKeys: specialistKeys(axes) };
 
   const corePools = boundedCorePools(prefilter.policy, axes);
   const architectures = enumerateArchitectures(corePools, context);
-  const slotPools = Object.fromEntries(EQUIPMENT_RULES.map((rule) => [
-    rule.id,
-    slotPool(rule.id, eligibleItems, prefilter, context)
-  ]));
+  const slotPools = Object.fromEntries(EQUIPMENT_RULES.map((rule) => [rule.id, slotPool(rule.id, eligibleItems, prefilter, context)]));
   const equipmentStates = completeEquipment(architectures, slotPools, context);
 
   const companionCandidates = slotPool('companion', eligibleItems, prefilter, context).slice(0, 20);
@@ -540,13 +466,7 @@ export function searchCombinedSetCoreEquipment({
     const packages = dofusPackages(state.items, dofusCandidates, context);
     if (packages.length) contextsWithPackages++;
     for (const pack of packages) {
-      const evaluation = evaluateCompleteEquipmentBuild({
-        items: [...state.items, ...pack.items],
-        sets,
-        constraints,
-        fmPolicy,
-        syntheticOffense
-      });
+      const evaluation = evaluateCompleteEquipmentBuild({ items: [...state.items, ...pack.items], sets, constraints, fmPolicy, syntheticOffense });
       evaluated++;
       if (!evaluation.result) {
         const reason = evaluation.reason || 'unknown';
@@ -555,19 +475,13 @@ export function searchCombinedSetCoreEquipment({
       }
       insertResult(results, {
         ...evaluation.result,
-        searchArchitecture: {
-          pattern: state.pattern,
-          branch: critMode,
-          combinedSetCore: true
-        }
+        searchArchitecture: { pattern: state.pattern, branch: critMode, combinedSetCore: true }
       }, Math.max(1, Number(topN || 10)));
     }
   }
 
   const diagnostics = {
-    mode: 'combined-set-core-first-search-v1',
-    applicable: true,
-    nativeCombinedObjective: true,
+    mode: 'combined-set-core-first-search-v1', applicable: true, nativeCombinedObjective: true,
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
@@ -580,31 +494,14 @@ export function searchCombinedSetCoreEquipment({
     equipmentStatesRetained: equipmentStates.length,
     companionStatesRetained: companionStates.length,
     dofusCandidates: dofusCandidates.length,
-    contextsWithPackages,
-    evaluated,
-    valid: results.length,
-    rejected,
+    contextsWithPackages, evaluated, valid: results.length, rejected,
     fallbackRequired: results.length === 0
   };
 
   if (typeof onProgress === 'function') {
-    onProgress({
-      phase: 'combined-set-core-search',
-      label: results.length ? 'complete' : 'empty',
-      nodes: architectures.length,
-      visited: evaluated,
-      pruned: 0,
-      heuristicTrimmed: 0,
-      best: results[0]?.syntheticOffense?.minimumScore || 0
-    });
+    onProgress({ phase: 'combined-set-core-search', label: results.length ? 'complete' : 'empty', nodes: architectures.length,
+      visited: evaluated, pruned: 0, heuristicTrimmed: 0, best: results[0]?.syntheticOffense?.minimumScore || 0 });
   }
   if (typeof onDiagnostics === 'function') onDiagnostics({ trace: [{ ...diagnostics }] });
-
-  return {
-    applicable: true,
-    results,
-    candidateItems: prefilter.items,
-    candidatePools: prefilter.pools,
-    diagnostics
-  };
+  return { applicable: true, results, candidateItems: prefilter.items, candidatePools: prefilter.pools, diagnostics };
 }
