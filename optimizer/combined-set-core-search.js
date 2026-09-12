@@ -212,20 +212,12 @@ export function retainCombinedArchitectureStates(states, limit, context) {
     }
   };
 
-  // Balanced combined offense remains the primary lane.
   take(ranked, Math.max(12, Math.floor(limit * 0.18)));
-
-  // Structural AP/MP closure is reserved independently instead of dominating offense.
   take([...ranked].sort((a, b) => structuralProgress(b, context) - structuralProgress(a, context)
     || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
-
-  // rankScore is retained only as a bounded completion-potential lane.
   take([...ranked].sort((a, b) => Number(b?.completionScore || 0) - Number(a?.completionScore || 0)
     || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
 
-  // Preserve distinct parent -> terminal set lineages, not only one winner per terminal
-  // set. This keeps semantically different set combinations alive when their immediate
-  // offense is close but their later slot/resource closure differs.
   const bestByParentTerminalLineage = new Map();
   for (const state of ranked) {
     const key = parentTerminalLineageKey(state);
@@ -233,7 +225,6 @@ export function retainCombinedArchitectureStates(states, limit, context) {
   }
   take([...bestByParentTerminalLineage.values()].sort(compareStatePriority), Math.max(48, Math.floor(limit * 0.58)));
 
-  // Requested-element/common-stat specialists keep a small independent lane.
   for (const statKey of context.specialistKeys || []) {
     const specialist = [...ranked]
       .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
@@ -243,7 +234,6 @@ export function retainCombinedArchitectureStates(states, limit, context) {
     add(specialist);
   }
 
-  // Reuse the general feasibility-aware reserve policy for any capacity left.
   for (const state of retainStates(ranked, limit, context)) add(state);
   for (const state of ranked) add(state);
   return output;
@@ -309,8 +299,6 @@ export function boundedCorePools(policy, axes) {
       for (const row of values.slice(0, amount)) selected.set(row.core.id, row);
     };
 
-    // Keep the semantic union of the explicit retention lanes. A final global
-    // top-N trim here would silently undo the per-set lineage reservation below.
     add([...pool].sort((a, b) => b.score - a.score), 55);
     for (const key of keys) {
       add([...pool]
@@ -423,32 +411,123 @@ function firstMissingEquipmentSlot(items = []) {
   return null;
 }
 
+function architectureIdentityKey(state) {
+  return (state?.cores || [])
+    .map((core) => String(core?.id ?? ''))
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
+
+export function retainCompletedEquipmentArchitectureSpecialists(states, context) {
+  const byArchitecture = new Map();
+  for (const state of states || []) {
+    const key = architectureIdentityKey(state);
+    if (!key) continue;
+    if (!byArchitecture.has(key)) byArchitecture.set(key, []);
+    byArchitecture.get(key).push(state);
+  }
+
+  const selected = new Map();
+  const add = (state) => {
+    if (!state) return;
+    const key = itemKey(state.items);
+    if (key && !selected.has(key)) selected.set(key, state);
+  };
+
+  for (const family of byArchitecture.values()) {
+    const ranked = [...family].sort(compareStatePriority);
+    add(ranked[0]);
+    for (const statKey of context.specialistKeys || []) {
+      const specialist = [...family]
+        .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
+        .sort((a, b) => effectiveStat(b.stats || itemStats(b.items, context.setsById), statKey)
+          - effectiveStat(a.stats || itemStats(a.items, context.setsById), statKey)
+          || compareStatePriority(a, b))[0];
+      add(specialist);
+    }
+  }
+
+  return [...selected.values()].sort(compareStatePriority);
+}
+
 function completeEquipment(architectures, slotPools, context) {
   let states = architectures;
+  let completed = [];
   for (let round = 0; round < 9; round++) {
-    const expanded = [];
-    let incomplete = false;
+    const incompleteChildren = [];
+    const completedChildren = [];
     for (const state of states) {
       const slot = firstMissingEquipmentSlot(state.items);
       if (!slot) {
-        expanded.push(state);
+        completedChildren.push(state);
         continue;
       }
-      incomplete = true;
       const used = new Set(state.items.map((item) => String(item.id)));
       for (const item of slotPools[slot] || []) {
         if (used.has(String(item.id))) continue;
         const items = [...state.items, item];
         if (!equipmentShapeValid(items)) continue;
         const ranked = stateScore(items, context.policy, context.setsById);
-        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
-          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
+        const child = { ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal };
+        if (firstMissingEquipmentSlot(items)) incompleteChildren.push(child);
+        else completedChildren.push(child);
       }
     }
-    states = retainStates(expanded, 260, context);
-    if (!incomplete) break;
+
+    if (completedChildren.length) {
+      completed = retainCompletedEquipmentArchitectureSpecialists([...completed, ...completedChildren], context);
+    }
+    if (!incompleteChildren.length) break;
+    states = retainStates(incompleteChildren, 260, context);
   }
-  return retainStates(states.filter((state) => !firstMissingEquipmentSlot(state.items)), 90, context);
+  return retainCompletedEquipmentArchitectureSpecialists(completed, context);
+}
+
+function equipmentParentKey(items = []) {
+  return itemKey((items || []).filter((item) => item?.slot !== 'companion' && item?.slot !== 'dofus'));
+}
+
+export function retainCompanionParentMarginals(equipmentStates, rows, limit, context) {
+  const primary = retainStates(rows, limit, context);
+  if (!equipmentStates?.length || !rows?.length || limit <= 1) return primary;
+
+  const parents = new Map(equipmentStates.map((state) => [itemKey(state.items), state]));
+  const bestChildByParent = new Map();
+  for (const child of [...rows].sort(compareStatePriority)) {
+    const key = equipmentParentKey(child.items);
+    if (key && !bestChildByParent.has(key)) bestChildByParent.set(key, child);
+  }
+
+  const marginal = [...bestChildByParent.entries()]
+    .map(([parentKey, child]) => {
+      const parent = parents.get(parentKey);
+      return parent ? { child, marginal: Number(child.score || 0) - Number(parent.score || 0) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.marginal - a.marginal || compareStatePriority(a.child, b.child));
+
+  const reserveLimit = Math.min(
+    limit - 1,
+    Math.max(12, Number(context.specialistKeys?.length || 0) * 3)
+  );
+  const reserved = marginal.slice(0, reserveLimit).map((entry) => entry.child);
+  const output = [];
+  const seen = new Set();
+  const add = (state) => {
+    if (!state || output.length >= limit) return;
+    const key = itemKey(state.items);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  };
+
+  const primaryCount = Math.max(0, limit - reserved.length);
+  for (const state of primary.slice(0, primaryCount)) add(state);
+  for (const state of reserved) add(state);
+  for (const state of primary) add(state);
+  return output;
 }
 
 function completeCompanion(equipmentStates, pool, context) {
@@ -462,7 +541,7 @@ function completeCompanion(equipmentStates, pool, context) {
         completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
     }
   }
-  return retainStates(rows, 55, context);
+  return retainCompanionParentMarginals(equipmentStates, rows, 55, context);
 }
 
 function dofusAllowed(item, critMode) {
@@ -609,6 +688,8 @@ export function searchCombinedSetCoreEquipment({
     resourceScoring: 'offense-first-with-feasibility-reserves',
     corePoolRetention: 'semantic-lane-union-no-post-truncation',
     architectureRetention: 'balanced+structural+parent-terminal-lineage+near-complete-before-final-trim+specialist+completion',
+    equipmentRetention: 'architecture-best+specialists-until-companion-context',
+    companionRetention: 'primary+parent-marginal-reserve',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
