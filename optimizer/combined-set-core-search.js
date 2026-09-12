@@ -169,6 +169,19 @@ function terminalSetKey(state) {
   return core?.setId == null ? '' : String(core.setId);
 }
 
+function parentTerminalLineageKey(state) {
+  const cores = state?.cores || [];
+  const terminal = terminalSetKey(state);
+  if (!terminal) return '';
+  if (cores.length < 2) return terminal;
+  const parents = cores.slice(0, -1)
+    .map((core) => String(core?.setId ?? ''))
+    .filter(Boolean)
+    .sort()
+    .join('+');
+  return parents ? `${parents}->${terminal}` : terminal;
+}
+
 export function retainCombinedArchitectureStates(states, limit, context) {
   const dedup = new Map();
   for (const state of states || []) {
@@ -210,15 +223,15 @@ export function retainCombinedArchitectureStates(states, limit, context) {
   take([...ranked].sort((a, b) => Number(b?.completionScore || 0) - Number(a?.completionScore || 0)
     || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
 
-  // Preserve the best lineage for many distinct terminal sets. This prevents a strong
-  // late 2-piece/3-piece set completion from disappearing only because its partial
-  // immediate offense is below another set family.
-  const bestByTerminalSet = new Map();
+  // Preserve distinct parent -> terminal set lineages, not only one winner per terminal
+  // set. This keeps semantically different set combinations alive when their immediate
+  // offense is close but their later slot/resource closure differs.
+  const bestByParentTerminalLineage = new Map();
   for (const state of ranked) {
-    const key = terminalSetKey(state);
-    if (key && !bestByTerminalSet.has(key)) bestByTerminalSet.set(key, state);
+    const key = parentTerminalLineageKey(state);
+    if (key && !bestByParentTerminalLineage.has(key)) bestByParentTerminalLineage.set(key, state);
   }
-  take([...bestByTerminalSet.values()].sort(compareStatePriority), Math.max(36, Math.floor(limit * 0.48)));
+  take([...bestByParentTerminalLineage.values()].sort(compareStatePriority), Math.max(48, Math.floor(limit * 0.58)));
 
   // Requested-element/common-stat specialists keep a small independent lane.
   for (const statKey of context.specialistKeys || []) {
@@ -574,7 +587,7 @@ export function searchCombinedSetCoreEquipment({
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
     corePoolRetention: 'semantic-lane-union-no-post-truncation',
-    architectureRetention: 'balanced+structural+specialist+set-diversity+completion',
+    architectureRetention: 'balanced+structural+parent-terminal-lineage+specialist+completion',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
