@@ -1,104 +1,139 @@
 # Modèle Dofus courant
 
-Ce document sépare volontairement **ce que le runtime sait faire aujourd'hui** de **ce que le contrat produit exige à terme**. Il ne remplace ni les données normalisées ni les règles exécutables.
+Ce document décrit les règles métier réellement utilisées par l'Optimiseur Equipment-Only. Les modules combat/sorts encore présents dans le repository sont conservés pour Atelier, tests et historique ; ils ne définissent plus le contrat de l'Optimiseur actif.
 
-## 1. Personnage et équipement — état courant
+## 1. Build courant
 
-La recherche compose un build depuis les slots du runtime et applique les règles de légalité, conditions d'items, panoplies, caractéristiques et politiques FM/exo prises en charge.
+Le build final comporte 16 items :
 
-Les minima utilisateur (PA, PM, initiative, vitalité, résistances, etc.) sont traités comme des contraintes dures lorsqu'ils sont actifs. Les heuristiques de recherche servent à trouver plus vite ; elles ne doivent pas redéfinir la légalité.
+- 9 slots d'équipement forgeables : coiffe, cape, amulette, deux anneaux, ceinture, bottes, arme, bouclier ;
+- 1 compagnon ;
+- 6 emplacements Dofus/trophées.
 
-Le produit manipule 16 slots au total dans son build courant, dont 9 slots d'équipement ordinaires éligibles au futur budget FM spécial : coiffe, cape, amulette, deux anneaux, ceinture, bottes, arme, bouclier. Les autres slots incluent le compagnon et six emplacements Dofus/trophées.
+La légalité finale est évaluée par `js/complete-equipment-build-evaluator.js` avec :
 
-## 2. Sorts — état courant
+- règles de slots ;
+- unicité/conditions d'items ;
+- restrictions Dofus/trophées ;
+- bonus de panoplies ;
+- caps permanents PA/PM ;
+- contraintes utilisateur ;
+- politique FM active.
 
-Le produit possède deux niveaux de connaissance distincts :
+## 2. PA / PM
 
-- `data/normalized/spell-data.json` : représentation combat directement consommable ;
-- `data/normalized/spell-source-truth.json` : représentation source plus riche, pouvant rester non résolue.
+PA et PM sont des ressources et des contraintes, pas un score offensif.
 
-La présence d'un sort dans le catalogue combat ne signifie pas que tous ses effets source sont compris. Les mécaniques spécifiques explicitement prises en charge peuvent vivre dans `js/combat/mechanics/`.
+Le produit respecte les caps permanents certifiés ; notamment un build permanent à 13 PA est invalide même s'il aurait un meilleur score offensif.
 
-Le problème P0 actuel est la **couverture d'interprétation**, pas seulement l'import de données.
+Quand `FM = Oui`, le modèle structurel actif est :
 
-## 3. Combat — état courant
+- base personnage : **8 PA / 4 PM** ;
+- Exo PA : +1 ;
+- Exo PM : +1 ;
+- équipement, bonus de sets et Dofus/trophées ferment ensuite les minima demandés.
 
-Le moteur sait raisonner sur le coût PA, les lancers, le temps et les mécaniques explicitement intégrées au runtime. Le score d'un build découle d'un plan de sorts évalué, pas d'une simple somme de caractéristiques offensives.
+Quand `FM = Non`, aucun exo structurel n'est ajouté implicitement.
 
-Ce moteur n'est toutefois pas encore un simulateur exhaustif de toutes les mécaniques Dofus. Les buffs/états/charges/passifs non certifiés doivent rester hors activation plutôt qu'être inventés.
+## 3. FM
 
-## 4. Temps — état courant vs contrat
+### FM = Oui
 
-Le runtime définit T1, T2, T3 et les modes `sum`, `average`, `min`, `constant`.
+Les neuf slots forgeables peuvent recevoir au plus un assignment spécial chacun.
 
-Dans `js/temporal-objectives.js` aujourd'hui :
+Les deux exos structurels PA/PM consomment deux assignments. Il reste donc **sept assignments offensifs**.
 
-- `t1` score T1 ;
-- `t2` score T2 et demande explicitement une simulation `[T1, T2]` ;
-- `t3` score T3 mais la fonction de tours simulés ne demande actuellement que T3 ;
-- `sum`, `average`, `min`, `constant` évaluent plusieurs tours selon leurs formules courantes.
+Pour chaque assignment offensif, le moteur compare automatiquement :
 
-**Écart important :** le contrat produit exige que T3 simule T1 puis T2 comme préparation et ne score que T3. Ce n'est pas encore vrai dans le helper temporel courant et ne doit pas être présenté comme implémenté.
+- `+1 % dommages sorts` ;
+- `+8 dommages critiques` si l'item n'a pas de dommages critiques natifs.
 
-## 5. Scénario combat — cible
+Le choix est fait selon le score synthétique final et les contraintes FM sensibles. Le produit ne demande pas à l'utilisateur de répartir lui-même les sept assignments.
 
-Le scénario canonique de plafond offensif demandé par le produit est : cible unique, passive, 0 % résistances, placée en mêlée ou à distance selon les besoins du plan. Le placement n'est pas encore une simulation tactique complète ; il sert à comparer les plans offensifs dans leur contexte légal.
+Dofus/trophées et compagnon ne sont jamais forgeables par cette politique.
 
-La classification mêlée/distance doit appartenir au plan candidat et non à une étiquette fixe sur la classe.
+### FM = Non
 
-## 6. PA / PM — contrat
+Aucun exo PA/PM ni bonus offensif FM n'est appliqué.
 
-PA et PM sont des ressources du plan, pas des scores à maximiser.
+## 4. Contraintes
 
-Le produit travaille autour d'un maximum permanent de référence 12 PA / 6 PM selon les règles certifiées. Si l'utilisateur n'impose pas 6 PM et qu'un plan à 5 PM permet davantage de dégâts, le moteur cible doit pouvoir le préférer.
+Les contraintes actives sont des minima durs : PA, PM, Initiative, Vitalité, résistances et toute autre clé explicitement supportée par le moteur.
 
-Le runtime courant traite encore ses champs PA/PM comme des minima de recherche. La future UI doit distinguer clairement valeur souhaitée/contrainte et permission d'Exo PA/PM.
+Une contrainte ne devient jamais un bonus de score. Les heuristiques peuvent réserver un spécialiste utile à une contrainte, mais la validation finale reste booléenne : satisfait / non satisfait.
 
-## 7. FM — état courant vs contrat
+## 5. Panoplies
 
-### Runtime courant
+Les bonus de panoplie doivent être appliqués avant de juger la valeur réelle d'un core de set.
 
-`js/optimizer-v2-orchestrator.js` normalise encore la politique historique suivante :
+Conséquence : des pièces individuellement moyennes peuvent former une architecture supérieure une fois le bonus 2/3/4 pièces actif. Le moteur ne doit pas supprimer destructivement un core uniquement sur la somme brute de ses membres.
 
-- Exo PA : 0 ou +1 ;
-- Exo PM : 0 ou +1 ;
-- dommages sorts : toggle conduisant à `+3 % / slot` ;
-- dommages critiques : `+8` lorsqu'autorisé.
+## 6. Compagnon
 
-Cette politique est **l'implémentation actuelle**, pas la cible validée.
+Le compagnon fait partie du contexte offensif final. Il doit être évalué avec l'équipement déjà complété.
 
-### Contrat cible
+Dans la recherche combined, le dernier trim inter-architectures ne doit pas intervenir avant que les descendants d'équipement aient pu voir au moins leur contexte compagnon. Une architecture faible avant compagnon peut avoir un gain marginal élevé après compagnon.
 
-Le moteur doit disposer d'un budget de 9 objets FM spéciaux, un bonus maximum par objet. Un Exo PA ou PM consomme l'emplacement spécial de l'objet qui le porte, laissant respectivement 8 ou 7 emplacements offensifs selon les exos utilisés.
+## 7. Dofus et trophées
 
-Le domaine offensif cible est 1 % / 2 % dommages sorts, avec possibilité de +8 dommages critiques lorsque plus rentable et lorsque l'objet n'a pas déjà naturellement cette ligne, après certification des règles exactes.
+Les six slots Dofus/trophées sont fermés dans le contexte réel du reste du build.
 
-Le moteur doit choisir cette distribution en fonction du plan combat ; l'interface ne doit pas obliger l'utilisateur à optimiser manuellement la FM.
+Le moteur doit notamment :
 
-## 8. Recherche — état courant
+- conserver les pièces de ressources nécessaires à 12/6 lorsqu'elles débloquent un meilleur build ;
+- appliquer les conditions de trophées/panoplies ;
+- respecter les caps permanents ;
+- éviter les incohérences Crit/Sans crit ;
+- comparer les packages complets avec l'évaluateur autoritatif.
 
-Le chemin courant combine :
+Ocre n'est pas un hardcode obligatoire ; Remueur ou d'autres pièces de ressources restent légitimes si le contexte légal/final les rend meilleurs.
 
-- préfiltrage et espace de candidats ;
-- architectures/panoplies ;
-- recherche guidée par contraintes ;
-- évaluations de build complet ;
-- score combat/temporal ;
-- mécanismes de complétude et de réparation destinés à empêcher les heuristiques de perdre tout build faisable.
+## 8. Crit / Sans crit
 
-Les heuristiques servent à réduire le coût de recherche. Elles ne doivent pas redéfinir la légalité ni rendre impossible un ensemble faisable.
+Le mode `Sans crit` ignore Crit et Dommages Critiques dans l'objectif synthétique et ne doit pas sélectionner Turquoise uniquement pour ces stats.
 
-## 9. Méthode d'extension du modèle
+Le mode Crit/Auto conserve le calcul critique normal. `Robuste majeur` n'est pas interdit par nom dans tous les contextes, mais il ne doit pas gagner contre une alternative strictement meilleure uniquement parce qu'un score partiel a perdu l'effet de sa pénalité Crit.
 
-Pour étendre une mécanique Dofus :
+## 9. Recherche combinée
 
-1. prouver ce que la source dit réellement ;
-2. préserver la donnée utile dans la normalisation ;
-3. produire une interprétation structurée et traçable ;
-4. définir la primitive runtime nécessaire ;
-5. ajouter des tests de vérité mécanique ;
-6. l'intégrer au planner et à l'état inter-tour ;
-7. vérifier que la recherche d'équipement réagit au nouveau plan ;
-8. seulement alors déclarer la mécanique supportée.
+Pour 2/3 éléments et Multi, le moteur optimise chaque axe demandé indépendamment.
 
-Ne pas contourner cette chaîne par un bonus de scoring ad hoc.
+- score primaire : minimum des axes/profils demandés ;
+- score secondaire : moyenne ;
+- tie-break : déterministe.
+
+`multi` = quatre axes Terre/Feu/Eau/Air. Aucun élément mono ne peut porter le score des trois autres.
+
+La chaîne structurelle active est :
+
+```text
+candidate pools
+→ set cores
+→ architectures
+→ equipment completion
+→ companion
+→ Dofus/trophies
+→ authoritative final evaluation
+```
+
+Les réserves sémantiques/lineage empêchent qu'un bon build final soit perdu à cause d'un score intermédiaire incomplet.
+
+## 10. Sorts et combat
+
+Le repository conserve une importante connaissance sorts/combat certifiée. Elle est valide pour Atelier/tests/historique, mais elle n'est pas consommée par le chemin Equipment-Only actif.
+
+Une future réactivation du combat dans l'Optimiseur exigerait une décision produit explicite et ne doit jamais être déduite du simple fait que ces modules existent encore dans l'arbre.
+
+## 11. Méthode d'extension
+
+Pour modifier une règle Dofus :
+
+1. prouver la règle ;
+2. préserver/normaliser la donnée nécessaire ;
+3. modifier une primitive métier partagée ;
+4. ajouter un test ciblé ;
+5. vérifier la légalité finale ;
+6. vérifier la recherche réelle sur catalogue ;
+7. seulement ensuite modifier les heuristiques de performance.
+
+Ne pas compenser une mauvaise modélisation par un bonus ad hoc de scoring ou un beam arbitrairement plus large.
