@@ -97,9 +97,13 @@ const parentBonimenteurBucket = terminalBucket.filter((state) => String(state.co
 const terminalRank = terminalBucket.findIndex((state) => itemKey(state.items) === witnessKey) + 1;
 const globalRank = ranked.findIndex((state) => itemKey(state.items) === witnessKey) + 1;
 const distinctParentsAhead = new Set(terminalBucket.slice(0, Math.max(0, terminalRank - 1)).map((state) => String(state.cores[0]?.setId))).size;
+const retained = retainCombinedArchitectureStates(expanded, 120, context);
+const retainedTerminal = retained.filter((state) => String(state.cores.at(-1)?.setId) === String(mekamouth.setId));
 console.log(`FW_LARGE_PAIR_GLOBAL_RANK=${globalRank}`);
 console.log(`FW_LARGE_MEKAMOUTH_BUCKET_SIZE=${terminalBucket.length}`);
 console.log(`FW_LARGE_PAIR_RANK_WITHIN_MEKAMOUTH=${terminalRank}`);
 console.log(`FW_LARGE_DISTINCT_PARENTS_AHEAD=${distinctParentsAhead}`);
 console.log(`FW_LARGE_BONIMENTEUR_MEKAMOUTH_VARIANTS=${parentBonimenteurBucket.length}`);
-console.log(`FW_LARGE_PAIR_AFTER_CURRENT_RETENTION=${retainCombinedArchitectureStates(expanded, 120, context).some((state) => itemKey(state.items) === witnessKey) ? 'YES' : 'NO'}`);
+console.log(`FW_LARGE_MEKAMOUTH_RETAINED_STATES=${retainedTerminal.length}`);
+console.log(`FW_LARGE_MEKAMOUTH_RETAINED_PARENT_SETS=${JSON.stringify(retainedTerminal.map((state) => state.cores[0]?.setName || state.cores[0]?.setId))}`);
+console.log(`FW_LARGE_PAIR_AFTER_CURRENT_RETENTION=${retained.some((state) => itemKey(state.items) === witnessKey) ? 'YES' : 'NO'}`);
