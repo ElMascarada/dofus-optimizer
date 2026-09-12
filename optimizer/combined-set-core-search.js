@@ -264,7 +264,7 @@ function coresCompatible(cores = []) {
   return equipmentShapeValid(items);
 }
 
-function boundedCorePools(policy, axes) {
+export function boundedCorePools(policy, axes) {
   const keys = specialistKeys(axes);
   const rows = (policy.setCoreCatalog?.cores || [])
     .filter((core) => core?.legality?.valid)
@@ -285,6 +285,9 @@ function boundedCorePools(policy, axes) {
     const add = (values, amount) => {
       for (const row of values.slice(0, amount)) selected.set(row.core.id, row);
     };
+
+    // Keep the semantic union of the explicit retention lanes. A final global
+    // top-N trim here would silently undo the per-set lineage reservation below.
     add([...pool].sort((a, b) => b.score - a.score), 55);
     for (const key of keys) {
       add([...pool]
@@ -301,7 +304,6 @@ function boundedCorePools(policy, axes) {
     }
     byCount.set(count, [...selected.values()]
       .sort((a, b) => b.score - a.score || String(a.core.id).localeCompare(String(b.core.id)))
-      .slice(0, 95)
       .map((row) => row.core));
   }
   return byCount;
@@ -571,6 +573,7 @@ export function searchCombinedSetCoreEquipment({
     mode: 'combined-set-core-first-search-v1', applicable: true, nativeCombinedObjective: true,
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
+    corePoolRetention: 'semantic-lane-union-no-post-truncation',
     architectureRetention: 'balanced+structural+specialist+set-diversity+completion',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
