@@ -10,7 +10,8 @@ import { filterOptimizerEligibleItems } from '../optimizer/item-eligibility.js';
 import {
   boundedCorePools,
   combinedOffenseSearchScore,
-  retainCombinedArchitectureStates
+  retainCombinedArchitectureStates,
+  retainFinalArchitectureCandidates
 } from '../optimizer/combined-set-core-search.js';
 
 const raw = JSON.parse(readFileSync(new URL('../data/normalized/dofus-data.json', import.meta.url), 'utf8'));
@@ -196,7 +197,7 @@ const coreRanked = [...coreWinners.values()].sort(comparePriority);
 const witnessCoreKey = beforeFinal ? coreIdentityKey(beforeFinal) : '';
 const witnessCoreRank = witnessCoreKey ? coreRanked.findIndex((state) => coreIdentityKey(state) === witnessCoreKey) + 1 : null;
 
-const finalStates = retainCombinedArchitectureStates(all, 180, context);
+const finalStates = retainFinalArchitectureCandidates(all, 180, context);
 const afterFinal = exactWitnessCoreState(finalStates, 8);
 console.log(`FW_LARGE_ARCH_ROUNDS=${JSON.stringify(targetRounds)}`);
 console.log(`FW_LARGE_ARCH_FINAL_RANKS=${JSON.stringify({ witnessGlobalRank, witnessPatternRank, patternStates: samePattern.length, lineageCount: lineageRanked.length, witnessLineageRank, witnessIsLineageWinner, coreIdentityCount: coreRanked.length, witnessCoreRank })}`);
