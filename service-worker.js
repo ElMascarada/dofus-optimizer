@@ -10,6 +10,7 @@ const APP_SHELL = [
   './styles-v2-polish.css',
   './styles-damage-truth.css',
   './styles-optimizer-results.css',
+  './styles-optimizer-desktop.css',
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
