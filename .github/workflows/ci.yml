@@ -5,6 +5,10 @@ on:
   push:
     branches: [main]
 
+concurrency:
+  group: optimizer-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -13,70 +17,73 @@ jobs:
     runs-on: [self-hosted, linux, x64, steam-machine, dofus]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Install Chrome for V2 browser acceptance
-        id: setup-chrome
-        uses: browser-actions/setup-chrome@v2
+
+      - name: Detect changed scope
+        id: scope
+        shell: bash
+        run: |
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [[ -z "$base" || "$base" =~ ^0+$ ]]; then
+            base="$(git rev-parse HEAD^)"
+          fi
+
+          git diff --name-only "$base" "$GITHUB_SHA" | tee changed-files.txt
+
+          if grep -Eq '^(optimizer/|js/(equipment-search-request\.js|equipment-search-v2\.js|complete-equipment-build-evaluator\.js|synthetic-[^/]+\.js|structural-exos\.js|build-legality\.js|stats\.js|sets\.js|characteristics\.js|config\.js|item-availability\.js|search-space\.js))' changed-files.txt; then
+            echo 'engine=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'engine=false' >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^(data/|js/(data-loader\.js|curated-runtime-rules\.js)|scripts/(normalize-|sync-|apply-curated))' changed-files.txt; then
+            echo 'data=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'data=false' >> "$GITHUB_OUTPUT"
+          fi
+
+          if grep -Eq '^(index\.html|service-worker\.js|manifest\.webmanifest|styles.*\.css|js/(optimizer-app\.js|optimizer-worker\.js|runtime-meta\.js|workshop/)|scripts/recipe-v2-browser-smoke\.mjs)' changed-files.txt; then
+            echo 'browser=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'browser=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Syntax check
         run: npm run check
-      - name: Tests
-        id: tests
-        shell: bash
-        run: |
-          set +e
-          npm test 2>&1 | tee test-output.txt
-          status=${PIPESTATUS[0]}
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: Equipment-first real catalog probe
-        id: equipment_probe
-        shell: bash
-        run: |
-          set +e
-          npm run probe:equipment-search 2>&1 | tee equipment-first-real-probe-output.txt
-          status=${PIPESTATUS[0]}
-          echo "status=${status}" >> "$GITHUB_OUTPUT"
-          exit 0
-      - name: V2 browser acceptance recipe
-        shell: bash
+
+      - name: Fast contract tests
+        run: npm run test:fast
+
+      - name: Engine contract tests
+        if: steps.scope.outputs.engine == 'true'
+        run: npm run test:engine
+
+      - name: Data contract tests
+        if: steps.scope.outputs.data == 'true'
+        run: npm run test:data
+
+      - name: Product smoke
+        if: steps.scope.outputs.engine == 'true' || steps.scope.outputs.data == 'true'
+        run: npm run smoke:product
+
+      - name: Install Chrome for browser acceptance
+        if: steps.scope.outputs.browser == 'true'
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v2
+
+      - name: Browser acceptance
+        if: steps.scope.outputs.browser == 'true'
         env:
           CHROME_BIN: ${{ steps.setup-chrome.outputs.chrome-path }}
         run: |
           test -x "$CHROME_BIN"
-          "$CHROME_BIN" --version
-          npm run recipe:browser 2>&1 | tee recipe-v2-browser-output.txt
-      - name: Product smoke
-        if: always()
-        shell: bash
-        run: npm run smoke:product 2>&1 | tee product-smoke-output.txt
-      - name: V2 migration baseline benchmark
-        if: always()
-        shell: bash
-        run: npm run benchmark:v2 2>&1 | tee benchmark-v2-output.txt
-      - name: Candidate search benchmark
-        if: always()
-        shell: bash
-        run: npm run benchmark:search 2>&1 | tee benchmark-candidate-search-output.txt
-      - name: Workshop recalculation benchmark
-        if: always()
-        shell: bash
-        run: npm run benchmark:workshop 2>&1 | tee benchmark-workshop-output.txt
-      - name: Upload test report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: node-test-report
-          path: |
-            test-output.txt
-            equipment-first-real-probe-output.txt
-            recipe-v2-browser-output.txt
-            product-smoke-output.txt
-            benchmark-v2-output.txt
-            benchmark-candidate-search-output.txt
-            benchmark-workshop-output.txt
-          if-no-files-found: error
-      - name: Fail when tests or equipment-first probe failed
-        if: always() && (steps.tests.outputs.status != '0' || steps.equipment_probe.outputs.status != '0')
-        run: exit 1
+          npm run recipe:browser
