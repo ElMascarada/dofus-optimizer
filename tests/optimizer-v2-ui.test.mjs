@@ -25,7 +25,7 @@ test('le parcours visible est un Optimiseur de stuff simple', async () => {
   assert.match(html, /<option value="fm">FM<\/option>/);
   assert.match(html, /js\/optimizer-app\.js/);
   assert.match(html, /styles-optimizer-results\.css/);
-  assert.match(html, /theme-color" content="#1c1a17"/);
+  assert.match(html, /theme-color" content="#f4ece3"/);
   assert.doesNotMatch(html, /id=["']optimizer-class["']|id=["']optimizer-turn-mode["']/);
   assert.doesNotMatch(html, /js\/optimizer-v2-app\.js|js\/app-experimental\.js/);
   assert.doesNotMatch(html, /id=["']spell-list["']|FM Do Sorts|FM Do Crit/);
