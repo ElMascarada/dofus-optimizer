@@ -73,6 +73,8 @@ export function combinedOffenseSearchScore(policy, stats = {}) {
   return {
     score: Number(ranked.objectiveGain || 0),
     meanScore: Number(ranked.meanGain || 0),
+    completionScore: Number(ranked.rankScore || 0),
+    constraintSignal: Number(ranked.constraintSignal || 0),
     offense: ranked.syntheticOffense
   };
 }
@@ -153,6 +155,90 @@ function retainStates(states, limit, context) {
   return output;
 }
 
+function structuralProgress(state, context) {
+  const stats = contextualStats(state?.items || [], context.setsById, context.fmPolicy);
+  const apTarget = Math.max(1, Number(context.constraints?.ap || 12));
+  const mpTarget = Math.max(1, Number(context.constraints?.mp || 6));
+  const ap = Math.min(apTarget, effectiveStat(stats, 'ap')) / apTarget;
+  const mp = Math.min(mpTarget, effectiveStat(stats, 'mp')) / mpTarget;
+  return ap + mp;
+}
+
+function terminalSetKey(state) {
+  const core = state?.cores?.[state.cores.length - 1];
+  return core?.setId == null ? '' : String(core.setId);
+}
+
+function parentTerminalLineageKey(state) {
+  const cores = state?.cores || [];
+  const terminal = terminalSetKey(state);
+  if (!terminal) return '';
+  if (cores.length < 2) return terminal;
+  const parents = cores.slice(0, -1)
+    .map((core) => String(core?.setId ?? ''))
+    .filter(Boolean)
+    .sort()
+    .join('+');
+  return parents ? `${parents}->${terminal}` : terminal;
+}
+
+export function retainCombinedArchitectureStates(states, limit, context) {
+  const dedup = new Map();
+  for (const state of states || []) {
+    const key = itemKey(state.items);
+    if (!key) continue;
+    const previous = dedup.get(key);
+    if (!previous || compareStatePriority(state, previous) < 0) dedup.set(key, state);
+  }
+  const ranked = [...dedup.values()].sort(compareStatePriority);
+  if (ranked.length <= limit) return ranked;
+
+  const output = [];
+  const seen = new Set();
+  const add = (state) => {
+    if (!state || output.length >= limit) return;
+    const key = itemKey(state.items);
+    if (seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  };
+  const take = (values, amount) => {
+    let added = 0;
+    for (const value of values) {
+      if (output.length >= limit || added >= amount) break;
+      const before = output.length;
+      add(value);
+      if (output.length > before) added++;
+    }
+  };
+
+  take(ranked, Math.max(12, Math.floor(limit * 0.18)));
+  take([...ranked].sort((a, b) => structuralProgress(b, context) - structuralProgress(a, context)
+    || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
+  take([...ranked].sort((a, b) => Number(b?.completionScore || 0) - Number(a?.completionScore || 0)
+    || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
+
+  const bestByParentTerminalLineage = new Map();
+  for (const state of ranked) {
+    const key = parentTerminalLineageKey(state);
+    if (key && !bestByParentTerminalLineage.has(key)) bestByParentTerminalLineage.set(key, state);
+  }
+  take([...bestByParentTerminalLineage.values()].sort(compareStatePriority), Math.max(48, Math.floor(limit * 0.58)));
+
+  for (const statKey of context.specialistKeys || []) {
+    const specialist = [...ranked]
+      .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
+      .sort((a, b) => effectiveStat(b.stats || itemStats(b.items, context.setsById), statKey)
+        - effectiveStat(a.stats || itemStats(a.items, context.setsById), statKey)
+        || compareStatePriority(a, b))[0];
+    add(specialist);
+  }
+
+  for (const state of retainStates(ranked, limit, context)) add(state);
+  for (const state of ranked) add(state);
+  return output;
+}
+
 function equipmentShapeValid(items = []) {
   const counts = new Map();
   for (const item of items) {
@@ -161,6 +247,16 @@ function equipmentShapeValid(items = []) {
     counts.set(item?.slot, count);
   }
   return specialSlotRulesAreValid(items);
+}
+
+function missingEquipmentSlotCount(items = []) {
+  const counts = new Map();
+  for (const item of items) counts.set(item?.slot, Number(counts.get(item?.slot) || 0) + 1);
+  let missing = 0;
+  for (const rule of EQUIPMENT_RULES) {
+    missing += Math.max(0, Number(rule.count || 0) - Number(counts.get(rule.id) || 0));
+  }
+  return missing;
 }
 
 function coresCompatible(cores = []) {
@@ -181,7 +277,7 @@ function coresCompatible(cores = []) {
   return equipmentShapeValid(items);
 }
 
-function boundedCorePools(policy, axes) {
+export function boundedCorePools(policy, axes) {
   const keys = specialistKeys(axes);
   const rows = (policy.setCoreCatalog?.cores || [])
     .filter((core) => core?.legality?.valid)
@@ -202,6 +298,7 @@ function boundedCorePools(policy, axes) {
     const add = (values, amount) => {
       for (const row of values.slice(0, amount)) selected.set(row.core.id, row);
     };
+
     add([...pool].sort((a, b) => b.score - a.score), 55);
     for (const key of keys) {
       add([...pool]
@@ -218,16 +315,26 @@ function boundedCorePools(policy, axes) {
     }
     byCount.set(count, [...selected.values()]
       .sort((a, b) => b.score - a.score || String(a.core.id).localeCompare(String(b.core.id)))
-      .slice(0, 95)
       .map((row) => row.core));
   }
   return byCount;
 }
 
+export function retainFinalArchitectureCandidates(states, limit, context) {
+  const primary = retainCombinedArchitectureStates(states, limit, context);
+  const selected = new Map(primary.map((state) => [itemKey(state.items), state]));
+  for (const state of [...(states || [])].sort(compareStatePriority)) {
+    if (missingEquipmentSlotCount(state.items) > 1) continue;
+    const key = itemKey(state.items);
+    if (!selected.has(key)) selected.set(key, state);
+  }
+  return [...selected.values()].sort(compareStatePriority);
+}
+
 function enumerateArchitectures(corePools, context) {
   const all = [];
   for (const pattern of CORE_PATTERNS) {
-    let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, pattern: pattern.join('+') }];
+    let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, completionScore: 0, pattern: pattern.join('+') }];
     for (const pieceCount of pattern) {
       const expanded = [];
       for (const state of states) {
@@ -236,15 +343,16 @@ function enumerateArchitectures(corePools, context) {
           if (!coresCompatible(cores)) continue;
           const items = cores.flatMap((entry) => entry.items);
           const ranked = stateScore(items, context.policy, context.setsById);
-          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore, pattern: state.pattern });
+          expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+            completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal, pattern: state.pattern });
         }
       }
-      states = retainStates(expanded, 120, context);
+      states = retainCombinedArchitectureStates(expanded, 120, context);
       if (!states.length) break;
     }
     all.push(...states);
   }
-  return retainStates(all, 180, context);
+  return retainFinalArchitectureCandidates(all, 180, context);
 }
 
 function slotPool(slot, eligibleItems, prefilter, context) {
@@ -303,31 +411,123 @@ function firstMissingEquipmentSlot(items = []) {
   return null;
 }
 
+function architectureIdentityKey(state) {
+  return (state?.cores || [])
+    .map((core) => String(core?.id ?? ''))
+    .filter(Boolean)
+    .sort()
+    .join('|');
+}
+
+export function retainCompletedEquipmentArchitectureSpecialists(states, context) {
+  const byArchitecture = new Map();
+  for (const state of states || []) {
+    const key = architectureIdentityKey(state);
+    if (!key) continue;
+    if (!byArchitecture.has(key)) byArchitecture.set(key, []);
+    byArchitecture.get(key).push(state);
+  }
+
+  const selected = new Map();
+  const add = (state) => {
+    if (!state) return;
+    const key = itemKey(state.items);
+    if (key && !selected.has(key)) selected.set(key, state);
+  };
+
+  for (const family of byArchitecture.values()) {
+    const ranked = [...family].sort(compareStatePriority);
+    add(ranked[0]);
+    for (const statKey of context.specialistKeys || []) {
+      const specialist = [...family]
+        .filter((state) => effectiveStat(state.stats || itemStats(state.items, context.setsById), statKey) > 0)
+        .sort((a, b) => effectiveStat(b.stats || itemStats(b.items, context.setsById), statKey)
+          - effectiveStat(a.stats || itemStats(a.items, context.setsById), statKey)
+          || compareStatePriority(a, b))[0];
+      add(specialist);
+    }
+  }
+
+  return [...selected.values()].sort(compareStatePriority);
+}
+
 function completeEquipment(architectures, slotPools, context) {
   let states = architectures;
+  let completed = [];
   for (let round = 0; round < 9; round++) {
-    const expanded = [];
-    let incomplete = false;
+    const incompleteChildren = [];
+    const completedChildren = [];
     for (const state of states) {
       const slot = firstMissingEquipmentSlot(state.items);
       if (!slot) {
-        expanded.push(state);
+        completedChildren.push(state);
         continue;
       }
-      incomplete = true;
       const used = new Set(state.items.map((item) => String(item.id)));
       for (const item of slotPools[slot] || []) {
         if (used.has(String(item.id))) continue;
         const items = [...state.items, item];
         if (!equipmentShapeValid(items)) continue;
         const ranked = stateScore(items, context.policy, context.setsById);
-        expanded.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+        const child = { ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal };
+        if (firstMissingEquipmentSlot(items)) incompleteChildren.push(child);
+        else completedChildren.push(child);
       }
     }
-    states = retainStates(expanded, 260, context);
-    if (!incomplete) break;
+
+    if (completedChildren.length) {
+      completed = retainCompletedEquipmentArchitectureSpecialists([...completed, ...completedChildren], context);
+    }
+    if (!incompleteChildren.length) break;
+    states = retainStates(incompleteChildren, 260, context);
   }
-  return retainStates(states.filter((state) => !firstMissingEquipmentSlot(state.items)), 90, context);
+  return retainCompletedEquipmentArchitectureSpecialists(completed, context);
+}
+
+function equipmentParentKey(items = []) {
+  return itemKey((items || []).filter((item) => item?.slot !== 'companion' && item?.slot !== 'dofus'));
+}
+
+export function retainCompanionParentMarginals(equipmentStates, rows, limit, context) {
+  const primary = retainStates(rows, limit, context);
+  if (!equipmentStates?.length || !rows?.length || limit <= 1) return primary;
+
+  const parents = new Map(equipmentStates.map((state) => [itemKey(state.items), state]));
+  const bestChildByParent = new Map();
+  for (const child of [...rows].sort(compareStatePriority)) {
+    const key = equipmentParentKey(child.items);
+    if (key && !bestChildByParent.has(key)) bestChildByParent.set(key, child);
+  }
+
+  const marginal = [...bestChildByParent.entries()]
+    .map(([parentKey, child]) => {
+      const parent = parents.get(parentKey);
+      return parent ? { child, marginal: Number(child.score || 0) - Number(parent.score || 0) } : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.marginal - a.marginal || compareStatePriority(a.child, b.child));
+
+  const reserveLimit = Math.min(
+    limit - 1,
+    Math.max(12, Number(context.specialistKeys?.length || 0) * 3)
+  );
+  const reserved = marginal.slice(0, reserveLimit).map((entry) => entry.child);
+  const output = [];
+  const seen = new Set();
+  const add = (state) => {
+    if (!state || output.length >= limit) return;
+    const key = itemKey(state.items);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    output.push(state);
+  };
+
+  const primaryCount = Math.max(0, limit - reserved.length);
+  for (const state of primary.slice(0, primaryCount)) add(state);
+  for (const state of reserved) add(state);
+  for (const state of primary) add(state);
+  return output;
 }
 
 function completeCompanion(equipmentStates, pool, context) {
@@ -337,10 +537,11 @@ function completeCompanion(equipmentStates, pool, context) {
       const items = [...state.items, companion];
       if (!specialSlotRulesAreValid(items)) continue;
       const ranked = stateScore(items, context.policy, context.setsById);
-      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+      rows.push({ ...state, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+        completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
     }
   }
-  return retainStates(rows, 55, context);
+  return retainCompanionParentMarginals(equipmentStates, rows, 55, context);
 }
 
 function dofusAllowed(item, critMode) {
@@ -408,7 +609,8 @@ function dofusPackages(baseItems, pool, context) {
         const complete = [...baseItems, ...selected];
         if (pick === 5 && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
         const ranked = stateScore(complete, context.policy, context.setsById);
-        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore });
+        expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
+          completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });
       }
     }
     states = retainStates(expanded.map((state) => ({ ...state, items: state.items })), 90, {
@@ -484,6 +686,10 @@ export function searchCombinedSetCoreEquipment({
     mode: 'combined-set-core-first-search-v1', applicable: true, nativeCombinedObjective: true,
     setBonusBeforeCoreRanking: true,
     resourceScoring: 'offense-first-with-feasibility-reserves',
+    corePoolRetention: 'semantic-lane-union-no-post-truncation',
+    architectureRetention: 'balanced+structural+parent-terminal-lineage+near-complete-before-final-trim+specialist+completion',
+    equipmentRetention: 'architecture-best+specialists-until-companion-context',
+    companionRetention: 'primary+parent-marginal-reserve',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,

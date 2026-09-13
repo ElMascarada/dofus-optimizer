@@ -1,5 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -7,17 +8,47 @@ await import('../js/runtime-meta.js');
 const EXPECTED_VERSION = globalThis.DofusOptimizerRuntime?.appVersion;
 if (!EXPECTED_VERSION) throw new Error('Version runtime introuvable.');
 
-const HTTP_PORT = 4173;
-const DEBUG_PORT = 9222;
-const APP_URL = `http://127.0.0.1:${HTTP_PORT}/`;
-const DEBUG_URL = `http://127.0.0.1:${DEBUG_PORT}`;
-
-function findChrome() {
-  const names = [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean);
-  for (const name of names) {
-    const check = spawnSync('which', [name], { encoding: 'utf8' });
-    if (check.status === 0 && check.stdout.trim()) return check.stdout.trim();
+async function allocateLocalPorts(count = 2) {
+  const servers = [];
+  const ports = [];
+  try {
+    for (let index = 0; index < count; index++) {
+      const server = createServer();
+      servers.push(server);
+      await new Promise((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('Port local dynamique introuvable.');
+      ports.push(address.port);
+    }
+    return ports;
+  } finally {
+    await Promise.all(servers.map((server) => new Promise((resolve) => server.close(() => resolve()))));
   }
+}
+
+function commandPath(name) {
+  if (!name) return null;
+  const check = spawnSync('which', [name], { encoding: 'utf8' });
+  return check.status === 0 && check.stdout.trim() ? check.stdout.trim() : null;
+}
+
+function findChromeLauncher() {
+  for (const name of [process.env.CHROME_BIN, 'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'].filter(Boolean)) {
+    const executable = commandPath(name);
+    if (executable) return { command: executable, prefixArgs: [] };
+  }
+
+  const flatpak = commandPath('flatpak');
+  if (flatpak) {
+    const info = spawnSync(flatpak, ['info', 'org.chromium.Chromium'], { encoding: 'utf8' });
+    if (info.status === 0) {
+      return { command: flatpak, prefixArgs: ['run', 'org.chromium.Chromium'] };
+    }
+  }
+
   throw new Error('Chrome/Chromium introuvable pour la recette navigateur Equipment-Only.');
 }
 
@@ -36,8 +67,18 @@ async function waitFor(fn, { timeout = 240_000, interval = 150, label = 'conditi
   throw new Error(`Timeout: ${label}${lastError ? ` · ${lastError.message}` : ''}`);
 }
 
+function releaseChildStreams(child) {
+  child?.stdin?.destroy?.();
+  child?.stdout?.destroy?.();
+  child?.stderr?.destroy?.();
+}
+
 async function stopProcess(child) {
-  if (!child || child.exitCode !== null || child.signalCode) return;
+  if (!child) return;
+  if (child.exitCode !== null || child.signalCode) {
+    releaseChildStreams(child);
+    return;
+  }
   await new Promise((resolve) => {
     const timer = setTimeout(() => {
       if (child.exitCode === null && !child.signalCode) child.kill('SIGKILL');
@@ -46,6 +87,7 @@ async function stopProcess(child) {
     child.once('exit', () => { clearTimeout(timer); resolve(); }, { once: true });
     child.kill('SIGTERM');
   });
+  releaseChildStreams(child);
 }
 
 class CdpClient {
@@ -82,12 +124,17 @@ class CdpClient {
   close() { this.socket?.close(); }
 }
 
+const [HTTP_PORT, DEBUG_PORT] = await allocateLocalPorts(2);
+const APP_URL = `http://127.0.0.1:${HTTP_PORT}/`;
+const DEBUG_URL = `http://127.0.0.1:${DEBUG_PORT}`;
+const chrome = findChromeLauncher();
 const profile = mkdtempSync(join(tmpdir(), 'dofus-equipment-only-recipe-'));
-const server = spawn('python3', ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], { stdio: ['ignore', 'ignore', 'pipe'] });
-const browser = spawn(findChrome(), [
+const server = spawn('python3', ['-m', 'http.server', String(HTTP_PORT), '--bind', '127.0.0.1'], { stdio: ['ignore', 'ignore', 'ignore'] });
+const browser = spawn(chrome.command, [
+  ...chrome.prefixArgs,
   '--headless=new', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage',
   `--remote-debugging-port=${DEBUG_PORT}`, `--user-data-dir=${profile}`, 'about:blank'
-], { stdio: ['ignore', 'ignore', 'pipe'] });
+], { stdio: ['ignore', 'ignore', 'ignore'] });
 let client = null;
 
 try {
@@ -112,7 +159,7 @@ try {
     return {
       classSelector: Boolean(document.querySelector('#optimizer-class')),
       turnSelector: Boolean(document.querySelector('#optimizer-turn-mode')),
-      oldExoControls: Boolean(document.querySelector('#optimizer-fm-exo-ap, #optimizer-fm-exo-mp')),
+      oldExoControls: Boolean(document.querySelector('#optimizer-fm-exo-ap, #optimizer-fm-exo-pm')),
       topResults: /Top résultats/i.test(text),
       engineJargon: /Equipment-First|Set-Core-First|minimum synthétique|score synthétique moyen/.test(text),
       damageTypes: [...document.querySelectorAll('[data-optimizer-profile]')].map((input) => ({ value: input.value, label: input.closest('label')?.textContent?.trim() })),

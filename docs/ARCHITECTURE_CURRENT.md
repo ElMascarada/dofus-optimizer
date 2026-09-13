@@ -1,113 +1,162 @@
 # Architecture courante
 
-Ce document décrit uniquement l'architecture réellement utilisée par le produit courant. La cible fonctionnelle est dans `docs/PRODUCT_CONTRACT.md`.
+Ce document décrit uniquement l'architecture réellement utilisée par le produit courant. La direction fonctionnelle canonique est dans `docs/PRODUCT_CONTRACT.md` ; l'état d'avancement et les preuves de certification sont dans `PROJECT_STATE.md`.
 
 ## Entrée navigateur
 
-`index.html` charge l'interface Atelier + Optimiseur et enregistre le service worker.
+`index.html` charge deux surfaces actives partageant les mêmes données normalisées :
 
-Deux surfaces produit partagent les mêmes données normalisées :
+- **Atelier** : construction/édition manuelle d'un build, avec analyse combat propre à l'Atelier ;
+- **Optimiseur** : recherche **Equipment-Only** sous contraintes, indépendante des classes/sorts/rotations.
 
-- Atelier : construction/édition manuelle d'un build ;
-- Optimiseur : recherche automatisée sous contraintes avec évaluation combat.
+L'ancien message « le plan de combat est l'objectif, l'équipement est un moyen » ne décrit plus l'Optimiseur actif. Il appartient au travail combat historique/Atelier.
 
-Le message produit canonique reste : **le plan de combat est l'objectif, l'équipement est un moyen**.
+## Optimiseur Equipment-Only
 
-## Optimiseur
-
-Chemin principal :
+Chemin navigateur canonique :
 
 ```text
 index.html
-  -> js/optimizer-v2-app.js
+  -> js/optimizer-app.js
   -> js/optimizer-worker.js
-  -> js/architecture-search-v2.js
-  -> optimizer/candidate-search.js
-  -> js/complete-build-evaluator.js / combat
-  -> résultats
+  -> js/equipment-search-request.js
 ```
 
-`js/architecture-search-v2.js` est actif malgré son suffixe `v2` : ne pas le traiter comme une ancienne version.
+`js/equipment-search-request.js` choisit ensuite le chemin de recherche :
 
-Le worker isole le calcul coûteux de l'UI. Les messages entre UI et worker constituent une frontière produit : les modifier exige de préserver les états d'arrêt/erreur/résultat.
+```text
+mono
+  -> js/equipment-search-v2.js
+  -> Equipment-First / Set-Core-First
 
-## Recherche équipement
+2 ou 3 éléments explicites, ou Multi
+  -> optimizer/combined-set-core-search.js
+  -> optimizer/dofus-package-refiner.js
+```
 
-`optimizer/` porte les politiques et primitives de recherche récentes : profils, guidance, bornes, Pareto/complétude et sélection de candidats.
+Tous les résultats finaux repassent par `js/complete-equipment-build-evaluator.js`, qui reste l'autorité pour la légalité, les stats finales, la FM et le score synthétique final.
 
-Les modules sous `js/` fournissent les règles partagées : légalité, statistiques, FM, sets, caractéristiques, préfiltrage, évaluation de build et recherche d'architectures.
+Le worker isole le calcul coûteux de l'UI. Les messages UI/worker sont une frontière produit : toute modification doit préserver les états d'arrêt, erreur, progression et résultat.
 
-Les optimisations de recherche sont des heuristiques de performance. Elles ne doivent pas modifier les règles de faisabilité.
+## Recherche combinée
 
-## Combat
+Le chemin combiné ne doit pas être réduit à un beam scalaire unique. Son architecture active est :
 
-Le calcul combat s'appuie notamment sur :
+```text
+catalogue
+  -> candidate pools
+  -> set cores avec bonus de panoplie activés
+  -> architecture retention
+       • balanced offense
+       • AP/PM structure
+       • parent -> terminal set lineage
+       • near-complete architecture reserve
+       • requested-stat specialists
+  -> equipment completion
+       • best descendant per architecture
+       • semantic specialists per architecture
+  -> companion expansion
+       • primary score
+       • bounded parent->child marginal-gain reserve
+  -> Dofus/trophy closure
+       • resource compatibility
+       • static item conditions
+       • exact/contextual final evaluation
+  -> final min/mean synthetic ranking
+```
 
-- `js/spells.js`
-- `js/spell-selection.js`
-- `js/spell-combat-effects.js`
-- `js/combat-state.js`
-- `js/turn-optimizer.js`
-- `js/combat-turn-refiner.js`
-- `js/combat/`
-- `js/temporal-objectives.js`
+Les réserves sémantiques existent parce qu'une architecture faible à un étage peut devenir la meilleure après ajout du dernier slot, du compagnon ou du package Dofus. Une optimisation ne doit pas supprimer cette capacité seulement pour réduire un compteur de beam.
 
-Les mécaniques spécifiques explicitement prises en charge vivent sous `js/combat/mechanics/`.
+## FM active
 
-Le but architectural est de faire remonter la vérité sémantique des sorts vers le planner, puis le plan combat vers la recherche d'équipement — jamais de fabriquer une rotation depuis un score statique de stuff.
+Le produit expose un seul choix utilisateur `FM Oui / Non`.
 
-### Limite temporelle actuelle
+Quand `FM Oui` :
 
-`js/temporal-objectives.js` distingue tours scorés et tours simulés. L'objectif T2 demande actuellement `[T1, T2]` en simulation, mais T3 ne demande encore que T3. Le contrat cible `T1/T2 préparation -> score T3` reste donc à implémenter après la certification sémantique.
+- +1 Exo PA et +1 Exo PM sont structurellement intégrés dès le début de recherche ;
+- le contexte personnage part donc de 8 PA / 4 PM avant équipement ;
+- les deux exos consomment deux assignments sur les neuf slots forgeables ;
+- les sept assignments offensifs restants sont optimisés automatiquement ;
+- chaque assignment offensif choisit `+1 % dommages sorts` ou `+8 dommages critiques` si l'item n'a pas déjà une ligne native de dommages critiques et si ce choix est supérieur.
+
+Les Dofus/trophées et le compagnon ne reçoivent jamais ces FM.
+
+## Scoring synthétique
+
+L'Optimiseur actif ne lance pas de vrais sorts.
+
+Les profils synthétiques sont :
+
+- Petites lignes (`small`)
+- Mixte (`medium`)
+- Grosses lignes (`large`)
+
+Pour plusieurs éléments, chaque axe est calculé indépendamment. Le classement final maximise :
+
+1. le minimum des scores demandés ;
+2. puis leur moyenne ;
+3. puis un tie-break déterministe.
+
+`multi` exige quatre axes réels : Terre, Feu, Eau et Air. Aucun axe mono ne peut porter seul le score Multi.
+
+## Contraintes et légalité
+
+Les minima utilisateur sont des contraintes dures. Les heuristiques de recherche peuvent ordonner et réserver des états, mais ne doivent jamais :
+
+- rendre légal un build illégal ;
+- dépasser les caps permanents PA/PM ;
+- supprimer toute solution d'un ensemble faisable ;
+- remplacer la comparaison finale par un score partiel.
+
+Invariant permanent :
+
+> **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**
 
 ## Atelier
 
-`js/workshop/` contient l'application Atelier, ses événements, son modèle de build et ses recalculs.
+`js/workshop/` reste une application active distincte.
 
-L'Atelier et l'Optimiseur doivent partager les mêmes règles de légalité/statistiques plutôt que maintenir deux vérités métier.
+L'Atelier peut utiliser classe, sorts, rotations, T1/T2/T3 et modules combat. Ces dépendances ne doivent pas remonter dans le contrat de requête de l'Optimiseur Equipment-Only.
+
+L'Atelier et l'Optimiseur partagent les règles communes de build, légalité, statistiques, sets, FM et évaluation finale quand elles concernent l'équipement.
+
+## Combat historique / partagé
+
+Les modules sous `js/combat/`, `js/spells.js`, `js/turn-optimizer.js` et autres composants combat ne sont pas une dépendance du chemin Optimiseur actif. Ils sont conservés pour Atelier, tests, connaissances certifiées et travail historique.
+
+Ne pas les supprimer ou les réactiver dans l'Optimiseur sur simple impression de conversation.
 
 ## Search Memory
 
-`js/search-memory/` contient encore les primitives de requête, sérialisation, stockage, distance, seeds et fusion.
-
-**État produit courant :** `SearchMemoryRepository` instancié sans options utilise un `InertSearchStore`. Le parcours produit n'exploite donc pas actuellement de cache persistant par défaut, même si les primitives et tests de stockage restent disponibles pour outils/tests.
-
-Cette couche ne doit pas être présentée comme une optimisation active tant que cette inertie est volontaire. Si elle est réactivée un jour, un cache ne devra jamais rendre valide un résultat qui ne l'est plus selon la vérité courante.
+Les primitives sous `js/search-memory/` restent présentes, mais la mémoire ne doit jamais servir un ancien résultat à la place d'une recherche fraîche lorsque la vérité produit/cataloque/règles a changé. Le chemin produit actif est certifié pour recalculer les recherches.
 
 ## Données
-
-`js/data-loader.js` charge les snapshots normalisés nécessaires au runtime et applique les règles de curation prévues.
 
 Pipeline de maintenance :
 
 ```text
 Dofusdude
   -> scripts de sync
-  -> normalisation / conservation de la vérité source
+  -> normalisation
   -> curation/certification
-  -> snapshots sous data/normalized/
-  -> data-loader
-  -> runtime
+  -> data/normalized/
+  -> js/data-loader.js
+  -> Optimiseur / Atelier
 ```
 
-La vérité source riche des sorts est volontairement séparée du catalogue combat actif tant que son interprétation n'est pas certifiée.
-
-## FM actuelle
-
-La politique FM actuellement construite par `js/optimizer-v2-orchestrator.js` reste historique (`+3 % dommages sorts / slot`, +8 do crit, Exo PA/PM). Le budget cible de 9 objets avec arbitrage 1 % / 2 % / do crit n'est pas encore implémenté ; voir `docs/DOFUS_MODEL.md`.
+La vérité source des sorts reste séparée du catalogue combat actif et ne fait pas partie de l'entrée Optimiseur Equipment-Only.
 
 ## PWA
 
-`service-worker.js` est actif. Il met en cache le shell applicatif et les données nécessaires à l'usage offline.
-
-Toute suppression/renommage de fichier du shell doit mettre à jour `APP_SHELL` dans la même tranche et être validée par la recette navigateur.
+`service-worker.js` reste actif. Toute suppression/renommage d'un fichier du shell doit mettre à jour son cache applicatif et être validé par la recette navigateur.
 
 ## Validation permanente
 
 - `npm run check`
 - `npm test`
-- `npm run recipe:browser`
 - `npm run smoke:product`
-- benchmarks CI des chemins principaux
+- `npm run recipe:browser`
+- `git diff --check`
+- probes réels combinés quand la recherche 2/3 éléments ou Multi est modifiée
 
-Les workflows GitHub sont une partie de l'architecture de maintenance ; ils ne doivent pas contenir de diagnostics temporaires ni deux propriétaires concurrents pour le même snapshot généré.
+La recette navigateur nécessite un exécutable Chrome/Chromium détectable dans le `PATH` ou fourni via `CHROME_BIN`.

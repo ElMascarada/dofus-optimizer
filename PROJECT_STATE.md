@@ -2,72 +2,134 @@
 
 ## Active product
 
-As of the Equipment-Only Product Cleanup V1 candidate based on `7307df28eb23b73bef46d07d5459f30872f99302`:
+As of the PR #120 combined-search closure candidate (12 September 2026):
 
-- **Equipment-First is the sole active Optimizer runtime.**
-- **Set-Core-First is the primary real-catalog search strategy.**
-- **`js/complete-equipment-build-evaluator.js` is the authoritative final evaluator.**
-- The browser UI is wired directly to Equipment-First through `js/optimizer-app.js` and the thin `js/optimizer-worker.js`.
-- The active Optimizer does not require class, spell data, turn selection, a Combat Planner objective, or a combat scenario.
-- There is no active fallback from Equipment-First to the historical spell-driven Optimizer.
-- Search Memory is intentionally removed from the active Optimizer path; old combat fingerprints are therefore never reused by the new product.
-- Workshop remains active and may keep its own class/spell combat tooling.
+- **Equipment-Only is the sole active Optimizer product path.**
+- `js/equipment-search-request.js` is the request orchestrator.
+- `js/complete-equipment-build-evaluator.js` is the authoritative final evaluator.
+- Mono requests use the Equipment-First architecture search.
+- Requests with 2 or 3 explicit elements, and `multi`, use the native combined Set-Core search in `optimizer/combined-set-core-search.js`, followed by exact/contextual Dofus-package refinement.
+- The browser UI is wired through `js/optimizer-app.js` and the thin `js/optimizer-worker.js`.
+- The active Optimizer does not require class, spell data, turn selection, combat planning, T1/T2/T3 or a combat scenario.
+- Workshop remains active as a separate surface and may keep class/spell/combat analysis tooling.
+- Search Memory is intentionally not allowed to replace a fresh product search.
 
 ## Active Optimizer flow
 
 ```text
 Equipment-Only UI
         ↓
-Equipment-First Worker
+optimizer-worker.js
         ↓
-searchEquipmentArchitecturesV2()
+searchEquipmentRequest()
         ↓
-Set-Core-First
-        ↓
+┌──────────────────────────────┬───────────────────────────────────────┐
+│ mono element                 │ 2/3 elements or Multi                 │
+│ searchEquipmentArchitecturesV2 │ searchCombinedSetCoreEquipment()   │
+└──────────────────────────────┴───────────────────────────────────────┘
+        ↓                              ↓
+complete build evaluation       exact/contextual Dofus closure
+        └───────────────┬──────────────┘
+                        ↓
 evaluateCompleteEquipmentBuild()
+                        ↓
+final synthetic-offense ranking
 ```
 
-The active request is equipment-only: catalog items/sets, hard constraints, structural exo policy, synthetic offensive orientation/profiles, optional Workshop equipment requirements/rejections, Top N and search profile.
+## Canonical product contract
 
-## Canonical acceptance scenario
+### Damage orientation
 
-```text
-Element = Earth
-Profile = LARGE
-AP >= 12
-MP >= 6
-Exo AP = 0
-Exo MP = 0
-```
+The UI exposes **Type de dégâts**:
 
-A feasible real catalog must return at least one complete legal build with final AP=12 and MP=6.
+- Petites lignes (`small`)
+- Mixte (`medium`)
+- Grosses lignes (`large`)
+
+Element selection remains independent. Combined requests rank the weakest requested axis first, then mean score. `multi` balances Earth, Fire, Water and Air independently.
+
+### FM
+
+`FM = Oui` is a single product choice.
+
+For active Equipment-Only search it means:
+
+- structural Exo PA = +1;
+- structural Exo PM = +1;
+- search starts from the corresponding 8 PA / 4 PM character baseline;
+- those two structural exos consume two forgeable item assignments;
+- seven remaining offensive FM assignments are optimized automatically;
+- each offensive assignment chooses either `+1 % dommages sorts`, or `+8 dommages critiques` when the item has no native critical-damage line and that choice is better.
+
+The user does not manually distribute those seven offensive assignments.
+
+### Hard constraints
+
+PA, PM and every enabled advanced constraint are hard minima. Scoring never creates feasibility.
+
+Canonical invariant:
+
+> **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**
+
+Quality invariant added by the combined-search closure work:
+
+> **A semantically distinct architecture must not disappear only because an intermediate scalar score is weak before its remaining equipment/companion/Dofus context is visible.**
+
+## Combined search retention doctrine
+
+For 2-element / 3-element / Multi requests:
+
+1. candidate pools preserve balanced offense, requested-element/common-stat specialists and resource feasibility;
+2. set cores include activated set bonuses before ranking;
+3. architecture retention preserves parent→terminal set lineages and near-complete architectures before the final architecture trim;
+4. when an architecture reaches complete ordinary equipment, retention keeps its best descendant plus semantic specialists instead of immediately applying a destructive global trim;
+5. companion expansion happens before the final inter-architecture reduction;
+6. companion retention combines primary score with a bounded parent→child marginal-gain reserve;
+7. Dofus/trophy closure preserves resource-compatible packages and is evaluated by the authoritative complete evaluator;
+8. final request ranking maximizes the minimum requested synthetic score, then the mean, then a deterministic identity tie-break.
+
+Do not replace these semantic reserves with arbitrary beam widening.
+
+## Current certified quality gates for PR #120
+
+Real Steam Machine catalog, FM Oui, AP >= 12, PM >= 6:
+
+- Fire + Water / Petites lignes / Auto crit: optimizer `3895.335` vs owner witness `3718.785` → **SEARCH_BETTER**.
+- Fire + Water / Grosses lignes / Auto crit: optimizer `3008.88` vs owner witness `2778.3` → **SEARCH_BETTER**.
+- Multi / Grosses lignes / Auto crit: returns 20 legal 12/6 results through `multi-element-native`; best four elemental scores are approximately `1391.11 / 1391.11 / 1391.11 / 1391.52`.
+- Multi isolated runtime on the Steam Machine: approximately `103.5 s` on the certified candidate.
+- Full suite on the product candidate before final documentation cleanup: `623 tests`, `622 pass`, `0 fail`, `1 skip`.
+- Product smoke: **PASS**.
+
+The browser recipe still requires an actual Chrome/Chromium executable (or `CHROME_BIN`) on the certification machine; absence of the executable is an infrastructure blocker, not a product verdict.
 
 ## Workshop boundary
 
-Workshop remains a separate active product surface. Its class, spell, rotation and combat-evaluation features are legitimate Workshop functionality and are not dependencies of the Optimizer.
+Workshop remains a separate active product surface.
 
-- Optimizer → Workshop hydrates an equipment result without requiring a class.
+- Optimizer → Workshop hydrates a complete equipment result without requiring a class.
 - Workshop → Find better / Complete exports equipment locks/requirements and rejected item IDs only.
-- A Workshop class selection may remain stored for Workshop analysis, but it is not part of the Equipment-First Optimizer request.
+- A Workshop class selection may remain stored for Workshop analysis, but it is not part of the Equipment-Only Optimizer request.
 
-## Historical implementation
+## Historical combat work
 
-The historical Combat Planner / spell-driven Optimizer is no longer an active runtime or fallback. Git history is the canonical source for the removed active entrypoint. Combat modules still present in the tree are retained only when they have a current Workshop/shared/test consumer; their presence does not make them part of the active Optimizer.
+The historical spell-driven Optimizer / Combat Planner is not an active Optimizer runtime or fallback. Combat modules still in the tree remain valid for Workshop/shared/tests and preserved historical work. Do not reactivate or delete them on conversational impression alone; any product reactivation requires an explicit director decision.
 
 ## Validation
 
-Remote candidate generation performs only static/materializer validation. Authoritative certification is local on the Steam Machine:
+Authoritative local certification is performed on the real Steam Machine:
 
 ```bash
 npm run check
 npm test
-npm run probe:equipment-search
 npm run smoke:product
 npm run recipe:browser
 git diff --check
 ```
 
-Canonical CI remains the self-hosted runner labels:
+Combined-search changes additionally require real-catalog quality probes for representative bi-element and Multi requests.
+
+Canonical CI runner labels:
 
 ```text
 [self-hosted, linux, x64, steam-machine, dofus]

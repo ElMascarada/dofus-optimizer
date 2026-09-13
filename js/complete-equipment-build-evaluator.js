@@ -9,7 +9,7 @@ import {
   specialSlotRulesAreValid
 } from './build-legality.js';
 import { statsWithStructuralExos } from './structural-exos.js';
-import { optimizeSyntheticCharacteristics } from './synthetic-characteristics.js';
+import { optimizeSyntheticCharacteristicsTwoElementLinear as optimizeSyntheticCharacteristics } from './synthetic-characteristics-two-element-linear.js';
 import { optimizeSyntheticFm, syntheticFmEnabled } from './synthetic-fm.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);

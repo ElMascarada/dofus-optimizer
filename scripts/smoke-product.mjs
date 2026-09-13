@@ -21,8 +21,8 @@ const constraints = {
   resWater: 0,
   resAir: 0
 };
-const fmPolicy = { exoAp: 0, exoMp: 0 };
-const syntheticOffense = { elements: ['earth'], profiles: ['large'] };
+const fmPolicy = { enabled: true, fmEnabled: true, exoAp: 1, exoMp: 1 };
+const syntheticOffense = { elements: ['earth'], profiles: ['large'], critMode: 'auto' };
 const request = {
   items: dataset.items,
   sets: dataset.sets,
@@ -48,7 +48,7 @@ globalThis.self = {
 await import('../js/optimizer-worker.js');
 
 if (!workerHandler) throw new Error('Optimizer Worker Equipment-First indisponible hors UI.');
-workerHandler({ data: { type: 'optimize', requestId: 'equipment-only-product-smoke-v1', payload: request } });
+workerHandler({ data: { type: 'optimize', requestId: 'equipment-only-product-smoke-v2', payload: request } });
 
 const resultMessage = messages.findLast((message) => message?.type === 'result');
 const errorMessage = messages.findLast((message) => message?.type === 'error');
@@ -102,6 +102,9 @@ const searchMode = String(diagnostics.searchMode || diagnostics.mode || 'UNKNOWN
 const equipmentCount = Number(best?.items?.length || 0);
 const ap = Number(stats.ap || 0);
 const mp = Number(stats.mp || 0);
+const exoAp = Number(best?.fm?.exoAp || 0);
+const exoMp = Number(best?.fm?.exoMp || 0);
+const offensiveFmAssignments = Number(best?.fm?.spellPctItems || 0) + Number(best?.fm?.critItems || 0);
 const minimum = Number(best?.syntheticOffense?.minimumScore ?? best?.score ?? NaN);
 const mean = Number(best?.syntheticOffense?.meanScore ?? NaN);
 const pass = !errorMessage
@@ -109,6 +112,9 @@ const pass = !errorMessage
   && equipmentCount === 16
   && ap === 12
   && mp === 6
+  && exoAp === 1
+  && exoMp === 1
+  && offensiveFmAssignments === 7
   && Number.isFinite(minimum)
   && minimum > 0
   && Number.isFinite(mean)
@@ -119,8 +125,8 @@ const pass = !errorMessage
   && workshopComplete === 'PASS';
 
 console.log('PRODUCT_SMOKE');
-console.log('product=Equipment-First');
-console.log('scenario=Earth/LARGE/12AP/6MP/0ExoAP/0ExoMP');
+console.log('product=Equipment-Only');
+console.log('scenario=Earth/LARGE/12AP/6MP/FM_OUI');
 console.log('spellDataLoaded=NO');
 console.log('classDependency=NO');
 console.log('turnDependency=NO');
@@ -131,6 +137,9 @@ console.log(`bestItems=${equipmentCount}`);
 console.log(`bestItemNames=${best ? (best.items || []).map((item) => item.name || item.id).join(' | ') : 'UNKNOWN'}`);
 console.log(`ap=${number(ap)}`);
 console.log(`mp=${number(mp)}`);
+console.log(`exoAp=${number(exoAp)}`);
+console.log(`exoMp=${number(exoMp)}`);
+console.log(`offensiveFmAssignments=${number(offensiveFmAssignments)}`);
 console.log(`earth=${number(stats.earth)}`);
 console.log(`power=${number(stats.power)}`);
 console.log(`crit=${number(stats.crit)}`);
