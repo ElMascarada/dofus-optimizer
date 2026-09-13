@@ -162,3 +162,18 @@ test('le placement visuel des dix équipements suit le layout produit canonique'
   assert.match(css, /\.optimizer-character-portrait \{ grid-column:2; grid-row:1\/6;/);
   assert.match(css, /\.optimizer-dofus-row \{ grid-column:1\/-1; grid-row:6;/);
 });
+
+test('le contrat desktop élargit le résultat sans chevauchement et applique la palette claire', async () => {
+  const css = await readFile(new URL('../styles-optimizer-desktop.css', import.meta.url), 'utf8');
+
+  assert.match(css, /--bg:\s*#fbf6ec;/i);
+  assert.match(css, /--dominant:\s*#e2a23a;/i);
+  assert.match(css, /--accent:\s*#c47a2a;/i);
+  assert.match(css, /--tertiary:\s*#a9b48c;/i);
+  assert.match(css, /width:\s*min\(1888px,\s*calc\(100% - 24px\)\)/);
+  assert.match(css, /grid-template-columns:\s*minmax\(245px,\s*\.85fr\)\s*minmax\(540px,\s*2\.1fr\)\s*minmax\(285px,\s*1fr\)/);
+  assert.match(css, /@media \(min-width: 1800px\)[\s\S]*grid-template-columns:\s*290px\s*minmax\(740px,\s*1fr\)\s*330px/);
+  assert.match(css, /\.optimizer-v2-output \.section-title \{[\s\S]*?border-bottom:\s*1px solid var\(--line\)/);
+  assert.match(css, /\.optimizer-build-inspector \{[\s\S]*?overflow:\s*hidden/);
+  assert.doesNotMatch(css, /#1f2120|#000000|background:\s*#000\b/i);
+});
