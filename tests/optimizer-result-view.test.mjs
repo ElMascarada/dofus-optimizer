@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import { renderOptimizerResult } from '../js/optimizer-result-view.js';
 
 function item(id, name, slot) {
@@ -90,4 +91,29 @@ test('le résultat visuel place les équipements autour du portrait et garde les
   assert.match(html, /Panoplie Test/);
   assert.match(html, /data-stat-key="crit"/);
   assert.match(html, /Ouvrir dans l’Atelier/);
+});
+
+test('le placement visuel des dix équipements suit le layout produit canonique', async () => {
+  const css = await readFile(new URL('../styles-optimizer-results.css', import.meta.url), 'utf8');
+
+  const expected = [
+    ['amulet', 1, 1],
+    ['shield', 1, 2],
+    ['ring-1', 1, 3],
+    ['belt', 1, 4],
+    ['boots', 1, 5],
+    ['hat', 3, 1],
+    ['weapon', 3, 2],
+    ['ring-2', 3, 3],
+    ['cape', 3, 4],
+    ['companion', 3, 5]
+  ];
+
+  for (const [slot, column, row] of expected) {
+    const pattern = new RegExp(`\\.optimizer-loadout \\.${slot.replace('-', '\\-')} \\{ grid-column:${column}; grid-row:${row}; \\}`);
+    assert.match(css, pattern, `${slot} doit être en colonne ${column}, ligne ${row}`);
+  }
+
+  assert.match(css, /\.optimizer-character-portrait \{ grid-column:2; grid-row:1 \/ 6;/);
+  assert.match(css, /\.optimizer-dofus-row \{ grid-column:1\/-1; grid-row:6;/);
 });
