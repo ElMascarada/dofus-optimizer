@@ -12,7 +12,7 @@ const STAT_LABELS = Object.freeze({
   power: 'Puissance',
   crit: 'Critique',
   critDamage: 'Do Critique',
-  damage: 'Dommages fixes',
+  damage: 'Do fixe',
   damageNeutral: 'Do Neutre',
   damageEarth: 'Do Terre',
   damageFire: 'Do Feu',
@@ -21,8 +21,6 @@ const STAT_LABELS = Object.freeze({
   spellDamagePct: '% Do Sorts',
   meleeDamagePct: '% Do Mêlée',
   rangedDamagePct: '% Do Distance',
-  weaponDamagePct: '% Do Armes',
-  finalDamagePct: '% Do Finaux',
   resNeutral: '% Ré Neutre',
   resEarth: '% Ré Terre',
   resFire: '% Ré Feu',
@@ -44,30 +42,30 @@ const STAT_LABELS = Object.freeze({
   pods: 'Pods'
 });
 
-const OFFENSE_STAT_KEYS = Object.freeze([
-  'earth', 'fire', 'water', 'air', 'power',
-  'crit', 'critDamage', 'damage',
-  'damageNeutral', 'damageEarth', 'damageFire', 'damageWater', 'damageAir',
-  'spellDamagePct', 'meleeDamagePct', 'rangedDamagePct', 'weaponDamagePct', 'finalDamagePct'
+const RIGHT_STAT_KEYS = Object.freeze([
+  'wisdom', 'range',
+  'dodge', 'lock',
+  'apParry', 'mpParry',
+  'apReduction', 'mpReduction',
+  'prospecting', 'summons',
+  'heals', 'pods',
+  'resNeutral', 'resEarth',
+  'resFire', 'resWater',
+  'resAir', 'critResistance',
+  'meleeResistance', 'rangedResistance',
+  'weaponResistance'
 ]);
-
-const SECONDARY_STAT_KEYS = Object.freeze([
-  'vit', 'wisdom', 'initiative', 'range',
-  'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir',
-  'critResistance', 'meleeResistance', 'rangedResistance', 'weaponResistance',
-  'dodge', 'lock', 'apParry', 'mpParry', 'apReduction', 'mpReduction',
-  'prospecting', 'summons', 'heals', 'pods'
-]);
-
-const HIDDEN_STAT_KEYS = new Set(['ap', 'mp']);
-const OFFENSE_STAT_SET = new Set(OFFENSE_STAT_KEYS);
-const SECONDARY_STAT_SET = new Set(SECONDARY_STAT_KEYS);
 
 function fmt(value, digits = 2) {
   const number = Number(value || 0);
   return Number.isFinite(number)
     ? number.toLocaleString('fr-FR', { maximumFractionDigits: digits })
     : '0';
+}
+
+function statNumber(stats, key) {
+  const value = Number(stats?.[key] ?? 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function escapeHtml(value) {
@@ -123,7 +121,7 @@ function renderFm(result, items = []) {
     ? changes.map(({ label, item }) => `<li><span>${escapeHtml(itemLabel(item))}</span><strong>${escapeHtml(label)}</strong></li>`).join('')
     : '<li><span>Aucune modification</span><strong>—</strong></li>';
 
-  return `<section class="optimizer-build-extra-card optimizer-build-fm" data-build-modifications>
+  return `<section class="optimizer-column-footer optimizer-build-fm" data-build-modifications>
     <span class="optimizer-kicker">Forgemagie</span>
     <p class="optimizer-build-summary-line">${fm.enabled ? 'FM Oui · Exo PA + PM inclus' : 'FM Non'}</p>
     <ul class="optimizer-change-list">${list}</ul>
@@ -198,40 +196,68 @@ function renderLoadout(items = []) {
   </section>`;
 }
 
-function numericStatEntries(stats = {}) {
-  return Object.entries(stats)
-    .filter(([, value]) => Number.isFinite(Number(value)) && Number(value) !== 0);
-}
+function renderStat(key, value, options = {}) {
+  const combined = options.combined;
+  const combinedHtml = Number.isFinite(combined)
+    ? ` <small class="optimizer-stat-combined">(${fmt(combined, 0)})</small>`
+    : '';
+  const dataCombined = options.combinedWith
+    ? ` data-combined-with="${escapeHtml(options.combinedWith)}"`
+    : '';
 
-function orderedEntries(stats = {}, keys = []) {
-  return keys
-    .filter((key) => Number.isFinite(Number(stats?.[key])) && Number(stats[key]) !== 0)
-    .map((key) => [key, stats[key]]);
-}
-
-function renderStats(entries = [], group) {
-  if (!entries.length) return '<p class="optimizer-build-empty">Aucune statistique dans ce groupe.</p>';
-  return `<div class="optimizer-build-stat-grid" data-stat-group="${escapeHtml(group)}">
-    ${entries.map(([key, value]) => `<div class="optimizer-build-stat" data-stat-key="${escapeHtml(key)}"><span>${escapeHtml(statLabel(key))}</span><strong>${fmt(value, 0)}</strong></div>`).join('')}
+  return `<div class="optimizer-build-stat" data-stat-key="${escapeHtml(key)}"${dataCombined}>
+    <span>${escapeHtml(statLabel(key))}</span>
+    <strong>${fmt(value, 0)}${combinedHtml}</strong>
   </div>`;
 }
 
-function renderOffenseStats(stats = {}) {
+function renderPrimaryStats(stats = {}) {
+  const power = statNumber(stats, 'power');
+  const fixedDamage = statNumber(stats, 'damage');
+  const elementalStats = ['earth', 'fire', 'water', 'air']
+    .map((key) => renderStat(key, statNumber(stats, key), {
+      combined: statNumber(stats, key) + power,
+      combinedWith: 'power'
+    }))
+    .join('');
+  const elementalDamage = ['damageEarth', 'damageFire', 'damageWater', 'damageAir']
+    .map((key) => renderStat(key, statNumber(stats, key), {
+      combined: statNumber(stats, key) + fixedDamage,
+      combinedWith: 'damage'
+    }))
+    .join('');
+
   return `<section class="optimizer-build-stat-panel optimizer-build-offense">
-    <span class="optimizer-kicker">Offense</span>
-    ${renderStats(orderedEntries(stats, OFFENSE_STAT_KEYS), 'offense')}
+    <span class="optimizer-kicker">Stats & dégâts</span>
+    <div class="optimizer-build-stat-grid" data-stat-group="primary-offense">
+      ${renderStat('vit', statNumber(stats, 'vit'))}
+      ${renderStat('initiative', statNumber(stats, 'initiative'))}
+      ${elementalStats}
+      ${renderStat('power', power)}
+      ${renderStat('spellDamagePct', statNumber(stats, 'spellDamagePct'))}
+      ${renderStat('damage', fixedDamage)}
+      ${renderStat('damageNeutral', statNumber(stats, 'damageNeutral'))}
+      ${elementalDamage}
+      ${renderStat('meleeDamagePct', statNumber(stats, 'meleeDamagePct'))}
+      ${renderStat('rangedDamagePct', statNumber(stats, 'rangedDamagePct'))}
+      ${renderStat('crit', statNumber(stats, 'crit'))}
+      ${renderStat('critDamage', statNumber(stats, 'critDamage'))}
+    </div>
   </section>`;
 }
 
 function renderSecondaryStats(stats = {}) {
-  const known = orderedEntries(stats, SECONDARY_STAT_KEYS);
-  const extras = numericStatEntries(stats)
-    .filter(([key]) => !HIDDEN_STAT_KEYS.has(key) && !OFFENSE_STAT_SET.has(key) && !SECONDARY_STAT_SET.has(key));
-
   return `<section class="optimizer-build-stat-panel optimizer-build-secondary">
     <span class="optimizer-kicker">Secondaires & défenses</span>
-    ${renderStats([...known, ...extras], 'secondary')}
+    <div class="optimizer-build-stat-grid" data-stat-group="secondary">
+      ${RIGHT_STAT_KEYS.map((key) => renderStat(key, statNumber(stats, key))).join('')}
+    </div>
   </section>`;
+}
+
+function numericStatEntries(stats = {}) {
+  return Object.entries(stats)
+    .filter(([, value]) => Number.isFinite(Number(value)) && Number(value) !== 0);
 }
 
 function renderSetBonuses(activeSets = []) {
@@ -251,7 +277,7 @@ function renderSetBonuses(activeSets = []) {
 }
 
 function renderSetBonusCard(activeSets = []) {
-  return `<section class="optimizer-build-extra-card optimizer-build-sets">
+  return `<section class="optimizer-column-footer optimizer-build-sets">
     <span class="optimizer-kicker">Bonus de panoplies</span>
     ${renderSetBonuses(activeSets)}
   </section>`;
@@ -282,7 +308,8 @@ export function renderOptimizerResult(result = {}, index = 0) {
 
     <div class="optimizer-build-layout">
       <aside class="optimizer-build-summary">
-        ${renderOffenseStats(stats)}
+        ${renderPrimaryStats(stats)}
+        ${renderFm(result, items)}
       </aside>
 
       <div class="optimizer-build-equipment">
@@ -291,12 +318,8 @@ export function renderOptimizerResult(result = {}, index = 0) {
 
       <aside class="optimizer-build-inspector">
         ${renderSecondaryStats(stats)}
+        ${renderSetBonusCard(activeSets)}
       </aside>
-    </div>
-
-    <div class="optimizer-build-extras">
-      ${renderFm(result, items)}
-      ${renderSetBonusCard(activeSets)}
     </div>
 
     <footer class="optimizer-build-footer">
