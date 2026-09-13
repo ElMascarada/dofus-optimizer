@@ -11,6 +11,7 @@ const APP_SHELL = [
   './styles-damage-truth.css',
   './styles-optimizer-results.css',
   './styles-optimizer-desktop.css',
+  './styles-optimizer-professional.css',
   './manifest.webmanifest',
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
