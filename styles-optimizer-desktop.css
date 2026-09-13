@@ -1,28 +1,92 @@
 /* Desktop-first presentation contract.
-   Current product target: 1920x1080 / 16:9 desktop. */
+   Current product target: 1920x1080 / 16:9 desktop.
+   The 1500px tier must remain overflow-safe so browser chrome / scaling
+   cannot make the inspector eat the equipment canvas. */
 
 @media (min-width: 1500px) {
+  :root {
+    --bg: #fbf6ec;
+    --panel: #fffdf8;
+    --panel-2: #f8f0e4;
+    --line: #d9cabb;
+    --text: #24241f;
+    --muted: #66675f;
+    --accent: #c47a2a;
+    --accent-2: #e2a23a;
+    --dominant: #e2a23a;
+    --tertiary: #a9b48c;
+    --good: #7f8a63;
+    --surface-soft: #fbf6ec;
+    --surface-muted: #f4eadc;
+    --surface-hover: #f6e7cf;
+    --surface-strong: #fffdf8;
+    --focus-ring: rgba(196, 122, 42, .14);
+    --soft-border: #dfd1c1;
+    --card-bg: rgba(255, 253, 248, .97);
+    --card-soft: rgba(255, 253, 248, .84);
+    --workshop-red: #c47a2a;
+    --workshop-paper: #fffdf8;
+    --workshop-muted: #66675f;
+    --workshop-line: #d9cabb;
+  }
+
+  html,
+  body {
+    background-color: var(--bg);
+  }
+
+  body {
+    background:
+      radial-gradient(circle at 12% 5%, rgba(255, 255, 255, .68), transparent 31rem),
+      radial-gradient(circle at 88% 20%, rgba(226, 162, 58, .10), transparent 34rem),
+      radial-gradient(circle at 48% 88%, rgba(169, 180, 140, .06), transparent 36rem),
+      var(--bg);
+  }
+
   .topbar,
   main {
-    width: min(1840px, calc(100% - 40px));
+    width: min(1888px, calc(100% - 24px));
   }
 
   .topbar {
-    padding-inline: 10px;
+    padding-inline: 4px;
+    border-bottom-color: var(--line);
+  }
+
+  .optimizer-v2-output .section-title {
+    border-bottom: 1px solid var(--line);
   }
 
   .optimizer-v2-layout {
-    grid-template-columns: 320px minmax(0, 1fr);
-    gap: 24px;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 16px;
   }
 
   .optimizer-v2-controls {
     position: sticky;
-    top: 18px;
+    top: 14px;
   }
 
   .optimizer-result-card.optimizer-build-card {
-    padding: 24px;
+    min-width: 0;
+    padding: 22px;
+    border-color: #dfd1c1;
+    background: rgba(255, 253, 248, .98);
+  }
+
+  .optimizer-build-header {
+    border-bottom-color: var(--line);
+  }
+
+  .optimizer-build-resources > span {
+    border-color: rgba(196, 122, 42, .25);
+    background: rgba(226, 162, 58, .10);
+  }
+
+  .optimizer-build-resources strong,
+  .optimizer-kicker,
+  .eyebrow {
+    color: #a9631e;
   }
 
   .optimizer-build-score {
@@ -32,12 +96,12 @@
     justify-content: center;
     align-items: flex-start;
     padding: 18px 22px;
-    border: 1px solid rgba(197, 139, 37, .18);
+    border: 1px solid rgba(196, 122, 42, .26);
     border-radius: 16px;
     background:
-      radial-gradient(circle at 8% 35%, rgba(214, 161, 60, .13), transparent 19rem),
-      rgba(255, 252, 247, .74);
-    box-shadow: 0 10px 28px rgba(91, 61, 45, .055);
+      linear-gradient(90deg, rgba(226, 162, 58, .12), rgba(255, 253, 248, .80) 36%, rgba(255, 253, 248, .92)),
+      var(--surface-strong);
+    box-shadow: 0 10px 28px rgba(103, 70, 42, .065);
   }
 
   .optimizer-build-score .optimizer-kicker {
@@ -45,7 +109,7 @@
   }
 
   .optimizer-build-score > strong {
-    color: #a86f12;
+    color: #a95f16;
     font-family: Georgia, "Times New Roman", serif;
     font-size: 3.75rem;
     font-weight: 500;
@@ -54,20 +118,43 @@
     font-variant-numeric: tabular-nums;
   }
 
+  /* The minimums below fit inside the result area even around 1500-1700px.
+     This is the important anti-overlap contract. */
   .optimizer-build-layout {
-    grid-template-columns: 300px minmax(720px, 1fr) 380px;
-    gap: 18px;
+    min-width: 0;
+    grid-template-columns: minmax(245px, .85fr) minmax(540px, 2.1fr) minmax(285px, 1fr);
+    gap: 16px;
+  }
+
+  .optimizer-build-summary,
+  .optimizer-build-equipment,
+  .optimizer-build-inspector {
+    min-width: 0;
   }
 
   .optimizer-build-summary,
   .optimizer-build-inspector {
-    min-width: 0;
     min-height: 590px;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    padding: 18px;
+    gap: 16px;
+    padding: 17px;
     align-content: start;
+    overflow: hidden;
+  }
+
+  .optimizer-build-summary {
+    border-color: rgba(196, 122, 42, .22);
+    background:
+      linear-gradient(180deg, rgba(226, 162, 58, .065), rgba(255, 253, 248, .90) 30%),
+      var(--surface-strong);
+  }
+
+  .optimizer-build-inspector {
+    border-color: rgba(127, 138, 99, .28);
+    background:
+      linear-gradient(180deg, rgba(169, 180, 140, .09), rgba(255, 253, 248, .90) 30%),
+      var(--surface-strong);
   }
 
   .optimizer-build-stat-panel {
@@ -77,35 +164,36 @@
   .optimizer-build-summary .optimizer-build-stat-grid,
   .optimizer-build-inspector .optimizer-build-stat-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px 14px;
+    gap: 4px 12px;
   }
 
   .optimizer-build-stat {
     min-width: 0;
     min-height: 31px;
+    border-bottom-color: rgba(217, 202, 187, .78);
   }
 
   .optimizer-build-stat span {
     white-space: normal;
     overflow: visible;
     text-overflow: clip;
-    color: #73756d;
+    color: #686960;
     font-size: .69rem;
     line-height: 1.15;
   }
 
   .optimizer-build-stat strong {
     flex: 0 0 auto;
-    color: #3f423b;
+    color: #303129;
     font-size: .80rem;
     white-space: nowrap;
   }
 
   .optimizer-stat-combined {
     margin-left: 2px;
-    color: #9c8f7d;
+    color: #887965;
     font-size: .72em;
-    font-weight: 600;
+    font-weight: 650;
   }
 
   .optimizer-build-offense .optimizer-build-stat[data-stat-key="earth"] strong,
@@ -124,19 +212,31 @@
   .optimizer-build-offense .optimizer-build-stat[data-stat-key="rangedDamagePct"] strong,
   .optimizer-build-offense .optimizer-build-stat[data-stat-key="crit"] strong,
   .optimizer-build-offense .optimizer-build-stat[data-stat-key="critDamage"] strong {
-    color: #ad7418;
+    color: #a95f16;
   }
 
   .optimizer-build-secondary .optimizer-build-stat[data-stat-key^="res"] strong,
   .optimizer-build-secondary .optimizer-build-stat[data-stat-key$="Resistance"] strong {
-    color: #68704d;
+    color: #637044;
   }
 
   .optimizer-column-footer {
     min-width: 0;
+    max-width: 100%;
     margin-top: auto;
-    padding-top: 16px;
-    border-top: 1px solid #e8ddd0;
+    padding: 13px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+  }
+
+  .optimizer-build-fm {
+    border-color: rgba(196, 122, 42, .22);
+    background: rgba(226, 162, 58, .055);
+  }
+
+  .optimizer-build-sets {
+    border-color: rgba(127, 138, 99, .24);
+    background: rgba(169, 180, 140, .065);
   }
 
   .optimizer-build-fm .optimizer-change-list {
@@ -147,7 +247,13 @@
 
   .optimizer-change-list li,
   .optimizer-build-summary-line {
-    font-size: .72rem;
+    min-width: 0;
+    font-size: .71rem;
+  }
+
+  .optimizer-change-list li span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .optimizer-build-sets {
@@ -156,54 +262,104 @@
   }
 
   .optimizer-set-bonus {
+    min-width: 0;
     padding: 8px 0;
+  }
+
+  .optimizer-set-bonus header {
+    min-width: 0;
+  }
+
+  .optimizer-set-bonus header strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 
   .optimizer-set-bonus header strong,
   .optimizer-set-bonus header span {
-    font-size: .72rem;
+    font-size: .70rem;
+  }
+
+  .optimizer-set-bonus-stats {
+    max-width: 100%;
+    gap: 4px;
   }
 
   .optimizer-set-bonus-stats > span {
-    padding: 5px 8px;
+    min-width: 0;
+    max-width: 100%;
+    padding: 4px 7px;
+    border-color: rgba(127, 138, 99, .28);
+    background: rgba(169, 180, 140, .11);
   }
 
   .optimizer-set-bonus-stats small,
   .optimizer-set-bonus-stats strong {
-    font-size: .61rem;
+    font-size: .59rem;
+  }
+
+  .optimizer-set-bonus-stats small {
+    color: #6e7758;
+  }
+
+  .optimizer-set-bonus-stats strong {
+    color: #4f5937;
   }
 
   .optimizer-loadout {
+    min-width: 0;
     min-height: 590px;
-    grid-template-columns: 200px minmax(320px, 1fr) 200px;
-    grid-template-rows: repeat(5, minmax(82px, 1fr)) auto;
-    gap: 10px 22px;
-    padding: 22px;
+    grid-template-columns: minmax(145px, .8fr) minmax(190px, 1.35fr) minmax(145px, .8fr);
+    grid-template-rows: repeat(5, minmax(80px, 1fr)) auto;
+    gap: 9px 12px;
+    padding: 18px;
+    border-color: #dfd1c1;
+    background:
+      radial-gradient(circle at 50% 38%, rgba(226, 162, 58, .13), transparent 14rem),
+      rgba(255, 253, 248, .88);
   }
 
   .optimizer-character-portrait {
-    min-height: 410px;
+    min-width: 0;
+    min-height: 400px;
   }
 
   .optimizer-character-portrait svg {
-    width: min(76%, 280px);
+    width: min(76%, 270px);
+  }
+
+  .optimizer-character-portrait svg circle,
+  .optimizer-character-portrait svg path {
+    fill: #f0e4d1;
+    stroke: #c9974a;
   }
 
   .optimizer-loadout-slot {
-    grid-template-columns: 60px minmax(0, 1fr);
-    min-height: 72px;
-    column-gap: 10px;
-    padding: 8px 9px;
+    min-width: 0;
+    grid-template-columns: 58px minmax(0, 1fr);
+    min-height: 70px;
+    column-gap: 9px;
+    padding: 8px;
+    border-color: #dfd1c1;
+    background: #fffdf8;
+  }
+
+  .optimizer-loadout-slot:hover {
+    border-color: #d1a75f;
+    background: #fffaf1;
   }
 
   .optimizer-item-icon,
   .optimizer-item-icon-placeholder {
-    width: 60px;
-    height: 60px;
+    width: 58px;
+    height: 58px;
+    border-color: #e6d6c4;
+    background: #fffaf1;
   }
 
   .optimizer-loadout-slot-label {
-    font-size: .58rem;
+    font-size: .56rem;
+    color: #88887e;
   }
 
   .optimizer-loadout-slot strong {
@@ -214,10 +370,123 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
-    font-size: .72rem;
+    color: #303129;
+    font-size: .69rem;
     line-height: 1.18;
-    min-height: 1.7em;
+    min-height: 1.65em;
     overflow-wrap: anywhere;
+  }
+
+  .optimizer-dofus-row {
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .optimizer-dofus-row .optimizer-loadout-slot {
+    grid-template-columns: 46px minmax(0, 1fr);
+    min-width: 0;
+    min-height: 62px;
+    padding: 6px;
+  }
+
+  .optimizer-dofus-row .optimizer-item-icon,
+  .optimizer-dofus-row .optimizer-item-icon-placeholder {
+    width: 46px;
+    height: 46px;
+  }
+
+  .optimizer-dofus-row .optimizer-loadout-slot strong {
+    font-size: .60rem;
+    line-height: 1.14;
+  }
+
+  /* Remove inherited charcoal fragments from the previous visual system on
+     the optimizer surface. */
+  .ui-state,
+  .empty {
+    border-color: var(--line);
+    background: var(--surface-strong);
+    color: var(--muted);
+  }
+
+  .ui-state strong {
+    color: var(--text);
+  }
+
+  .ui-state-inline,
+  #optimizer-diagnostics {
+    border-left-color: #d8c4a8;
+    background: rgba(255, 253, 248, .86);
+    color: var(--muted);
+  }
+
+  #optimizer-run.is-searching {
+    border: 1px solid rgba(196, 122, 42, .32);
+    background: #f8ead2;
+    color: #945817;
+  }
+
+  .optimizer-build-footer .secondary {
+    border-color: #d8c4a8;
+    background: #fffdf8;
+    color: #86521a;
+  }
+}
+
+/* Full-width 1920px class desktop. Use the extra pixels for the equipment
+   canvas instead of allowing the side inspector to grow over it. */
+@media (min-width: 1800px) {
+  .optimizer-v2-layout {
+    grid-template-columns: 300px minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  .optimizer-result-card.optimizer-build-card {
+    padding: 24px;
+  }
+
+  .optimizer-build-layout {
+    grid-template-columns: 290px minmax(740px, 1fr) 330px;
+    gap: 20px;
+  }
+
+  .optimizer-build-summary,
+  .optimizer-build-inspector {
+    padding: 18px;
+    gap: 18px;
+  }
+
+  .optimizer-loadout {
+    grid-template-columns: minmax(180px, .8fr) minmax(280px, 1.4fr) minmax(180px, .8fr);
+    grid-template-rows: repeat(5, minmax(82px, 1fr)) auto;
+    gap: 10px 20px;
+    padding: 22px;
+  }
+
+  .optimizer-character-portrait {
+    min-height: 410px;
+  }
+
+  .optimizer-character-portrait svg {
+    width: min(76%, 290px);
+  }
+
+  .optimizer-loadout-slot {
+    grid-template-columns: 62px minmax(0, 1fr);
+    min-height: 74px;
+    column-gap: 10px;
+    padding: 8px 10px;
+  }
+
+  .optimizer-item-icon,
+  .optimizer-item-icon-placeholder {
+    width: 62px;
+    height: 62px;
+  }
+
+  .optimizer-loadout-slot strong {
+    font-size: .73rem;
+    line-height: 1.18;
   }
 
   .optimizer-dofus-row {
@@ -238,6 +507,5 @@
 
   .optimizer-dofus-row .optimizer-loadout-slot strong {
     font-size: .64rem;
-    line-height: 1.15;
   }
 }
