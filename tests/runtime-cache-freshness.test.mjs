@@ -14,6 +14,15 @@ test('runtime cache version follows the active app version', async () => {
   assert.match(cache, new RegExp(`v${version.replaceAll('.', '\\.')}`));
 });
 
+test('browser entrypoints share one explicit runtime cache buster', async () => {
+  const html = await read('index.html');
+  const tokens = [...html.matchAll(/(?:runtime-meta|workshop-app|optimizer-app|service-worker)\.js\?v=([^'"`)]+)/g)]
+    .map((match) => match[1]);
+
+  assert.equal(tokens.length, 4);
+  assert.equal(new Set(tokens).size, 1);
+});
+
 test('service worker precaches the active combined optimizer runtime', async () => {
   const source = await read('service-worker.js');
   for (const path of [
