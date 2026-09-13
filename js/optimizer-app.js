@@ -14,6 +14,12 @@ const ELEMENT_LABELS = Object.freeze({
   multi: 'Multi'
 });
 
+const DAMAGE_PROFILE_LABELS = Object.freeze({
+  small: 'Petites lignes',
+  medium: 'Mixte',
+  large: 'Grosses lignes'
+});
+
 const CONSTRAINT_LABELS = Object.freeze({
   range: 'PO minimum',
   vit: 'Vitalité minimum',
@@ -243,6 +249,52 @@ function fmSummary(result) {
   return `FM : Oui · Exo PA + PM · ${Number(fm.spellPctItems || 0)}× +1% Do sorts · ${Number(fm.critItems || 0)}× +8 Do Crit`;
 }
 
+function theoreticalDamageAxes(offense = {}) {
+  const elements = Array.isArray(offense?.elements) ? offense.elements : [];
+  if (elements.length === 1 && elements[0] === 'multi') {
+    return Object.entries(offense?.multiElementScores || {})
+      .filter(([element]) => ELEMENT_LABELS[element] && element !== 'multi')
+      .map(([element, score]) => ({ element, score: Number(score || 0) }));
+  }
+  return elements
+    .filter((element) => ELEMENT_LABELS[element] && element !== 'multi')
+    .map((element) => {
+      const scores = (offense?.requestedProbes || [])
+        .filter((probe) => probe?.element === element)
+        .map((probe) => Number(probe?.totalApBudgetScore || 0));
+      return { element, score: scores.length ? Math.min(...scores) : 0 };
+    });
+}
+
+function renderTheoreticalDamage(result) {
+  const offense = result?.syntheticOffense || {};
+  const probes = Array.isArray(offense?.requestedProbes) ? offense.requestedProbes : [];
+  const profile = offense?.profiles?.[0] || probes?.[0]?.profile || '';
+  const ap = Number(offense?.availableAp ?? result?.syntheticApBudget ?? result?.stats?.ap ?? 0);
+  const critPct = Number(probes?.[0]?.effectiveCritChancePct || 0);
+  const minimum = Number(offense?.minimumScore || 0);
+  const mean = Number(offense?.meanScore || 0);
+  const axes = theoreticalDamageAxes(offense);
+  const multiAxis = axes.length > 1;
+  const axisHtml = multiAxis
+    ? axes.map(({ element, score }) => `<li><span>${ELEMENT_LABELS[element]}</span><strong>${fmt(score, 0)}</strong></li>`).join('')
+    : '';
+  const meanHtml = multiAxis
+    ? `<li><span>Moyenne des axes</span><strong>${fmt(mean, 0)}</strong></li>`
+    : '';
+
+  return `<div data-theoretical-damage="${Math.round(minimum)}" data-theoretical-crit="${Math.round(critPct)}">
+    <ul class="optimizer-result-stats">
+      <li><span>${multiAxis ? 'Dégâts théoriques · axe faible' : 'Dégâts théoriques'}</span><strong>${fmt(minimum, 0)}</strong></li>
+      <li><span>Profil test</span><strong>${DAMAGE_PROFILE_LABELS[profile] || profile || 'Standardisé'}</strong></li>
+      <li><span>Budget test</span><strong>${fmt(ap, 0)} PA</strong></li>
+      <li><span>Crit effectif test</span><strong>${fmt(critPct, 0)} %</strong></li>
+      ${meanHtml}${axisHtml}
+    </ul>
+    <p class="hint">Attaques virtuelles standardisées utilisées par l’optimiseur pour comparer les stuffs.</p>
+  </div>`;
+}
+
 function renderItemList(items = []) {
   return items
     .map((item) => `<li><strong>${itemLabel(item)}</strong>${item?.slot ? ` <span>· ${item.slot}</span>` : ''}</li>`)
@@ -280,6 +332,7 @@ function renderResult(result, index) {
       <div><span class="eyebrow">${index === 0 ? 'MEILLEUR RÉSULTAT' : 'ALTERNATIVE'}</span><h3>${title}</h3></div>
       <span class="pill">${fmt(stats.ap, 0)} PA · ${fmt(stats.mp, 0)} PM</span>
     </div>
+    ${renderTheoreticalDamage(result)}
     <ul class="optimizer-result-stats">${statHtml}</ul>
     <div class="optimizer-result-columns">
       <div><h4>Équipement</h4><ul>${renderItemList(equipment)}</ul></div>
