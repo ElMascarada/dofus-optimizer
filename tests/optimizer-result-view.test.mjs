@@ -12,7 +12,7 @@ function item(id, name, slot) {
   };
 }
 
-test('le résultat visuel place les équipements autour du portrait et garde les données métier', () => {
+function fixtureResult() {
   const items = [
     item('hat-1', 'Coiffe Test', 'hat'),
     item('cape-1', 'Cape Test', 'cape'),
@@ -27,13 +27,14 @@ test('le résultat visuel place les équipements autour du portrait et garde les
     ...Array.from({ length: 6 }, (_, index) => item(`dofus-${index + 1}`, `Dofus ${index + 1}`, 'dofus'))
   ];
 
-  const result = {
+  return {
     items,
     stats: {
       ap: 12,
       mp: 6,
       range: 2,
       vit: 4696,
+      wisdom: 480,
       initiative: 3297,
       earth: 274,
       fire: 274,
@@ -42,14 +43,30 @@ test('le résultat visuel place les équipements autour du portrait et garde les
       power: 360,
       crit: 82,
       critDamage: 291,
-      spellDamagePct: 11,
+      damage: 52,
+      damageNeutral: 10,
       damageEarth: 35,
-      damageFire: 35,
-      damageWater: 35,
-      damageAir: 35,
-      resEarth: 17
+      damageFire: 30,
+      damageWater: 50,
+      damageAir: 30,
+      spellDamagePct: 11,
+      meleeDamagePct: 5,
+      rangedDamagePct: 14,
+      dodge: 85,
+      lock: 45,
+      apParry: 48,
+      mpParry: 63,
+      apReduction: 68,
+      mpReduction: 48,
+      resNeutral: 5,
+      resEarth: 17,
+      resFire: 9,
+      resWater: 26,
+      resAir: 19,
+      critResistance: -30,
+      meleeResistance: -6,
+      rangedResistance: -12
     },
-    characteristics: { earth: 174, fire: 174, water: 174, air: 175 },
     fm: {
       enabled: true,
       assignments: [
@@ -62,19 +79,14 @@ test('le résultat visuel place les équipements autour du portrait et garde les
     activeSets: [
       { name: 'Panoplie Test', count: 3, bonus: { power: 50, crit: 5 } }
     ],
-    syntheticApBudget: 12,
     syntheticOffense: {
-      availableAp: 12,
-      elements: ['multi'],
-      profiles: ['large'],
-      minimumScore: 1391.1075,
-      meanScore: 1410.5,
-      multiElementScores: { earth: 1391.1, fire: 1402.2, water: 1414.3, air: 1434.4 },
-      requestedProbes: [{ profile: 'large', effectiveCritChancePct: 100 }]
+      minimumScore: 1391.1075
     }
   };
+}
 
-  const html = renderOptimizerResult(result, 0);
+test('le résultat visuel place les équipements autour du portrait et garde les données métier', () => {
+  const html = renderOptimizerResult(fixtureResult(), 0);
 
   assert.match(html, /data-character-portrait="neutral"/);
   assert.match(html, /Coiffe Test/);
@@ -83,14 +95,47 @@ test('le résultat visuel place les équipements autour du portrait et garde les
   assert.match(html, /Dofus 6/);
   assert.match(html, /Dégâts théoriques/);
   assert.match(html, /1.?391/);
-  assert.match(html, /Crit effectif/);
-  assert.match(html, /100 %/);
   assert.match(html, /Exo PA/);
   assert.match(html, /\+8 Do Crit/);
   assert.match(html, /Bonus de panoplies/);
   assert.match(html, /Panoplie Test/);
-  assert.match(html, /data-stat-key="crit"/);
   assert.match(html, /Ouvrir dans l’Atelier/);
+});
+
+test('la hiérarchie de stats combine puissance et dommages fixes sans doublons', () => {
+  const html = renderOptimizerResult(fixtureResult(), 0);
+
+  assert.match(html, /Stats & dégâts/);
+  assert.match(html, /data-stat-key="vit"/);
+  assert.match(html, /data-stat-key="initiative"/);
+  assert.match(html, /data-stat-key="earth" data-combined-with="power"[\s\S]*?274[\s\S]*?\(634\)/);
+  assert.match(html, /data-stat-key="air" data-combined-with="power"[\s\S]*?275[\s\S]*?\(635\)/);
+  assert.match(html, />Do fixe<\/span>[\s\S]*?>52</);
+  assert.match(html, /data-stat-key="damageEarth" data-combined-with="damage"[\s\S]*?35[\s\S]*?\(87\)/);
+  assert.match(html, /data-stat-key="damageWater" data-combined-with="damage"[\s\S]*?50[\s\S]*?\(102\)/);
+  assert.match(html, /% Do Mêlée/);
+  assert.match(html, /% Do Distance/);
+
+  assert.equal((html.match(/data-stat-key="vit"/g) || []).length, 1);
+  assert.equal((html.match(/data-stat-key="initiative"/g) || []).length, 1);
+  assert.equal((html.match(/data-stat-key="earth"/g) || []).length, 1);
+  assert.equal((html.match(/data-stat-key="damageEarth"/g) || []).length, 1);
+
+  assert.doesNotMatch(html, /Crit effectif|Budget test|Moyenne des axes|Profil test/);
+  assert.doesNotMatch(html, /optimizer-build-extras/);
+});
+
+test('FM reste dans la colonne gauche et les bonus pano dans la colonne droite', () => {
+  const html = renderOptimizerResult(fixtureResult(), 0);
+  const leftStart = html.indexOf('<aside class="optimizer-build-summary">');
+  const equipmentStart = html.indexOf('<div class="optimizer-build-equipment">');
+  const fm = html.indexOf('optimizer-build-fm');
+  const rightStart = html.indexOf('<aside class="optimizer-build-inspector">');
+  const sets = html.indexOf('optimizer-build-sets');
+  const footer = html.indexOf('<footer class="optimizer-build-footer">');
+
+  assert.ok(leftStart >= 0 && fm > leftStart && fm < equipmentStart);
+  assert.ok(rightStart >= 0 && sets > rightStart && sets < footer);
 });
 
 test('le placement visuel des dix équipements suit le layout produit canonique', async () => {
@@ -114,6 +159,6 @@ test('le placement visuel des dix équipements suit le layout produit canonique'
     assert.match(css, pattern, `${slot} doit être en colonne ${column}, ligne ${row}`);
   }
 
-  assert.match(css, /\.optimizer-character-portrait \{ grid-column:2; grid-row:1 \/ 6;/);
+  assert.match(css, /\.optimizer-character-portrait \{ grid-column:2; grid-row:1\/6;/);
   assert.match(css, /\.optimizer-dofus-row \{ grid-column:1\/-1; grid-row:6;/);
 });
