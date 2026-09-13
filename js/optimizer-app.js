@@ -1,18 +1,11 @@
 import { loadDofusData } from './data-loader.js';
+import { renderOptimizerResult } from './optimizer-result-view.js';
 import { createWorkshopBuildFromOptimizerResult } from './workshop/workshop-build.js';
 import { workshopOptimizationContext } from './workshop/workshop-optimization.js';
 import {
   FIND_BETTER_BUILD_EVENT,
   OPEN_WORKSHOP_BUILD_EVENT
 } from './workshop/workshop-events.js';
-
-const ELEMENT_LABELS = Object.freeze({
-  earth: 'Terre',
-  fire: 'Feu',
-  water: 'Eau',
-  air: 'Air',
-  multi: 'Multi'
-});
 
 const CONSTRAINT_LABELS = Object.freeze({
   range: 'PO minimum',
@@ -37,27 +30,6 @@ const CONSTRAINT_LABELS = Object.freeze({
   resAir: '% Résistance Air',
   fm: 'FM'
 });
-
-const RESULT_STATS = Object.freeze([
-  ['ap', 'PA'],
-  ['mp', 'PM'],
-  ['range', 'PO'],
-  ['vit', 'Vitalité'],
-  ['initiative', 'Initiative'],
-  ['earth', 'Force'],
-  ['fire', 'Intelligence'],
-  ['water', 'Chance'],
-  ['air', 'Agilité'],
-  ['power', 'Puissance'],
-  ['crit', 'Crit'],
-  ['critDamage', 'Do Crit'],
-  ['spellDamagePct', '% Do sorts'],
-  ['damage', 'Dommages'],
-  ['damageEarth', 'Do Terre'],
-  ['damageFire', 'Do Feu'],
-  ['damageWater', 'Do Eau'],
-  ['damageAir', 'Do Air']
-]);
 
 const INTERNAL_RESULT_POOL = 50;
 const DISPLAY_RESULT_LIMIT = 5;
@@ -183,15 +155,6 @@ function setSearching(searching) {
   for (const button of document.querySelectorAll('[data-remove-optimizer-constraint]')) button.disabled = searching;
 }
 
-function fmt(value, digits = 2) {
-  const number = Number(value || 0);
-  return Number.isFinite(number) ? number.toLocaleString('fr-FR', { maximumFractionDigits: digits }) : '0';
-}
-
-function itemLabel(item) {
-  return item?.name || item?.id || 'Item';
-}
-
 function coreItemIds(build) {
   return (build?.items || [])
     .filter((item) => item?.slot !== 'dofus')
@@ -237,61 +200,6 @@ function selectDisplayedResults(results = []) {
   return selected;
 }
 
-function fmSummary(result) {
-  const fm = result?.fm || {};
-  if (!fm.enabled) return 'FM : Non';
-  return `FM : Oui · Exo PA + PM · ${Number(fm.spellPctItems || 0)}× +1% Do sorts · ${Number(fm.critItems || 0)}× +8 Do Crit`;
-}
-
-function renderItemList(items = []) {
-  return items
-    .map((item) => `<li><strong>${itemLabel(item)}</strong>${item?.slot ? ` <span>· ${item.slot}</span>` : ''}</li>`)
-    .join('');
-}
-
-function renderResult(result, index) {
-  const stats = result?.stats || {};
-  const items = result?.items || [];
-  const allocation = result?.characteristics || {};
-  const activeSets = result?.activeSets || [];
-  const equipment = items.filter((item) => item?.slot !== 'dofus');
-  const dofus = items.filter((item) => item?.slot === 'dofus');
-
-  const statHtml = RESULT_STATS
-    .filter(([key]) => Number(stats?.[key] || 0) !== 0 || ['ap', 'mp', 'range', 'vit', 'initiative'].includes(key))
-    .map(([key, label]) => `<li><span>${label}</span><strong>${fmt(stats?.[key], 0)}</strong></li>`)
-    .join('');
-
-  const allocationHtml = Object.entries(allocation)
-    .filter(([, value]) => Number(value || 0) !== 0)
-    .map(([key, value]) => `<li>${ELEMENT_LABELS[key] || key} +${fmt(value, 0)}</li>`)
-    .join('') || '<li>Aucune allocation élémentaire</li>';
-
-  const setsHtml = activeSets.length
-    ? activeSets.map((set) => `<li>${set?.name || set?.setName || set?.id || 'Panoplie'}${set?.count ? ` ×${set.count}` : ''}</li>`).join('')
-    : '<li>Aucune panoplie active</li>';
-
-  const title = index === 0 ? 'Meilleur stuff' : `Alternative ${index + 1}`;
-  return `<article class="panel optimizer-result-card" data-optimizer-result="${index}"
-      data-result-ap="${Number(stats.ap || 0)}"
-      data-result-mp="${Number(stats.mp || 0)}"
-      data-result-items="${items.length}">
-    <div class="section-title">
-      <div><span class="eyebrow">${index === 0 ? 'MEILLEUR RÉSULTAT' : 'ALTERNATIVE'}</span><h3>${title}</h3></div>
-      <span class="pill">${fmt(stats.ap, 0)} PA · ${fmt(stats.mp, 0)} PM</span>
-    </div>
-    <ul class="optimizer-result-stats">${statHtml}</ul>
-    <div class="optimizer-result-columns">
-      <div><h4>Équipement</h4><ul>${renderItemList(equipment)}</ul></div>
-      <div><h4>Dofus / trophées</h4><ul>${renderItemList(dofus)}</ul>
-      <h4>Panoplies actives</h4><ul>${setsHtml}</ul>
-      <h4>Caractéristiques</h4><ul>${allocationHtml}</ul>
-      <h4>Forgemagie</h4><p>${fmSummary(result)}</p></div>
-    </div>
-    <button type="button" class="secondary" data-open-workshop="${index}">Ouvrir dans l’Atelier</button>
-  </article>`;
-}
-
 function renderResults(output) {
   const results = selectDisplayedResults(output?.results || []);
   ui.results.dataset.state = results.length ? 'ready' : 'empty';
@@ -303,7 +211,7 @@ function renderResults(output) {
     return [];
   }
 
-  ui.results.innerHTML = results.map(renderResult).join('');
+  ui.results.innerHTML = results.map((result, index) => renderOptimizerResult(result, index)).join('');
   ui.results.querySelectorAll('[data-open-workshop]').forEach((button) => {
     button.addEventListener('click', () => {
       const result = results[Number(button.dataset.openWorkshop)];
@@ -326,7 +234,7 @@ function renderActiveConstraints() {
   }
   ui.activeConstraints.innerHTML = entries.map(([key, value]) => {
     const label = CONSTRAINT_LABELS[key] || key;
-    const shown = key === 'fm' ? (Number(value) === 1 ? 'Oui' : 'Non') : `≥ ${fmt(value, 0)}`;
+    const shown = key === 'fm' ? (Number(value) === 1 ? 'Oui' : 'Non') : `≥ ${Number(value).toLocaleString('fr-FR', { maximumFractionDigits: 0 })}`;
     return `<span class="optimizer-constraint-chip">${label} ${shown}<button type="button" data-remove-optimizer-constraint="${key}" aria-label="Retirer ${label}">×</button></span>`;
   }).join('');
   ui.activeConstraints.querySelectorAll('[data-remove-optimizer-constraint]').forEach((button) => {
