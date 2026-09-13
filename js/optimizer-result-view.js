@@ -1,17 +1,3 @@
-const ELEMENT_LABELS = Object.freeze({
-  earth: 'Terre',
-  fire: 'Feu',
-  water: 'Eau',
-  air: 'Air',
-  multi: 'Multi'
-});
-
-const DAMAGE_PROFILE_LABELS = Object.freeze({
-  small: 'Petites lignes',
-  medium: 'Mixte',
-  large: 'Grosses lignes'
-});
-
 const STAT_LABELS = Object.freeze({
   ap: 'PA',
   mp: 'PM',
@@ -26,7 +12,7 @@ const STAT_LABELS = Object.freeze({
   power: 'Puissance',
   crit: 'Critique',
   critDamage: 'Do Critique',
-  damage: 'Dommages',
+  damage: 'Dommages fixes',
   damageNeutral: 'Do Neutre',
   damageEarth: 'Do Terre',
   damageFire: 'Do Feu',
@@ -58,29 +44,24 @@ const STAT_LABELS = Object.freeze({
   pods: 'Pods'
 });
 
-const STAT_PRIORITY = Object.freeze([
-  'ap', 'mp', 'range', 'vit', 'initiative', 'wisdom',
+const OFFENSE_STAT_KEYS = Object.freeze([
   'earth', 'fire', 'water', 'air', 'power',
-  'crit', 'critDamage', 'damage', 'damageNeutral', 'damageEarth', 'damageFire', 'damageWater', 'damageAir',
-  'spellDamagePct', 'meleeDamagePct', 'rangedDamagePct', 'weaponDamagePct', 'finalDamagePct',
-  'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir', 'critResistance', 'meleeResistance', 'rangedResistance', 'weaponResistance',
-  'dodge', 'lock', 'apParry', 'mpParry', 'apReduction', 'mpReduction', 'prospecting', 'summons', 'heals', 'pods'
+  'crit', 'critDamage', 'damage',
+  'damageNeutral', 'damageEarth', 'damageFire', 'damageWater', 'damageAir',
+  'spellDamagePct', 'meleeDamagePct', 'rangedDamagePct', 'weaponDamagePct', 'finalDamagePct'
 ]);
 
-const SLOT_LABELS = Object.freeze({
-  hat: 'Coiffe',
-  cape: 'Cape',
-  amulet: 'Amulette',
-  ring: 'Anneau',
-  belt: 'Ceinture',
-  boots: 'Bottes',
-  weapon: 'Arme',
-  shield: 'Bouclier',
-  companion: 'Compagnon',
-  dofus: 'Dofus / trophée'
-});
+const SECONDARY_STAT_KEYS = Object.freeze([
+  'vit', 'wisdom', 'initiative', 'range',
+  'resNeutral', 'resEarth', 'resFire', 'resWater', 'resAir',
+  'critResistance', 'meleeResistance', 'rangedResistance', 'weaponResistance',
+  'dodge', 'lock', 'apParry', 'mpParry', 'apReduction', 'mpReduction',
+  'prospecting', 'summons', 'heals', 'pods'
+]);
 
-const BASELINE_ZERO_STATS = new Set(['ap', 'mp', 'range', 'vit', 'initiative']);
+const HIDDEN_STAT_KEYS = new Set(['ap', 'mp']);
+const OFFENSE_STAT_SET = new Set(OFFENSE_STAT_KEYS);
+const SECONDARY_STAT_SET = new Set(SECONDARY_STAT_KEYS);
 
 function fmt(value, digits = 2) {
   const number = Number(value || 0);
@@ -112,64 +93,11 @@ function statLabel(key) {
   return STAT_LABELS[key] || fallbackStatLabel(key);
 }
 
-function sortStats(entries = []) {
-  const priority = new Map(STAT_PRIORITY.map((key, index) => [key, index]));
-  return [...entries].sort(([left], [right]) => {
-    const leftRank = priority.has(left) ? priority.get(left) : Number.MAX_SAFE_INTEGER;
-    const rightRank = priority.has(right) ? priority.get(right) : Number.MAX_SAFE_INTEGER;
-    if (leftRank !== rightRank) return leftRank - rightRank;
-    return left.localeCompare(right);
-  });
-}
-
-function theoreticalDamageAxes(offense = {}) {
-  const elements = Array.isArray(offense?.elements) ? offense.elements : [];
-  if (elements.length === 1 && elements[0] === 'multi') {
-    return Object.entries(offense?.multiElementScores || {})
-      .filter(([element]) => ELEMENT_LABELS[element] && element !== 'multi')
-      .map(([element, score]) => ({ element, score: Number(score || 0) }));
-  }
-
-  return elements
-    .filter((element) => ELEMENT_LABELS[element] && element !== 'multi')
-    .map((element) => {
-      const scores = (offense?.requestedProbes || [])
-        .filter((probe) => probe?.element === element)
-        .map((probe) => Number(probe?.totalApBudgetScore || 0));
-      return { element, score: scores.length ? Math.min(...scores) : 0 };
-    });
-}
-
 function renderTheoreticalDamage(result) {
-  const offense = result?.syntheticOffense || {};
-  const probes = Array.isArray(offense?.requestedProbes) ? offense.requestedProbes : [];
-  const profile = offense?.profiles?.[0] || probes?.[0]?.profile || '';
-  const ap = Number(offense?.availableAp ?? result?.syntheticApBudget ?? result?.stats?.ap ?? 0);
-  const critPct = Number(probes?.[0]?.effectiveCritChancePct || 0);
-  const minimum = Number(offense?.minimumScore || 0);
-  const mean = Number(offense?.meanScore || 0);
-  const axes = theoreticalDamageAxes(offense);
-  const multiAxis = axes.length > 1;
-  const axisHtml = multiAxis
-    ? `<div class="optimizer-damage-axes">${axes.map(({ element, score }) => `<span><small>${ELEMENT_LABELS[element]}</small><strong>${fmt(score, 0)}</strong></span>`).join('')}</div>`
-    : '';
-
-  return `<section class="optimizer-build-summary-card optimizer-damage-summary"
-      data-theoretical-damage="${Math.round(minimum)}"
-      data-theoretical-crit="${Math.round(critPct)}">
+  const minimum = Number(result?.syntheticOffense?.minimumScore || 0);
+  return `<section class="optimizer-build-score" data-theoretical-damage="${Math.round(minimum)}">
     <span class="optimizer-kicker">Dégâts théoriques</span>
-    <div class="optimizer-damage-main">
-      <strong>${fmt(minimum, 0)}</strong>
-      <span>${multiAxis ? 'axe le plus faible' : 'sur le test standardisé'}</span>
-    </div>
-    <dl class="optimizer-compact-facts">
-      <div><dt>Profil</dt><dd>${escapeHtml(DAMAGE_PROFILE_LABELS[profile] || profile || 'Standardisé')}</dd></div>
-      <div><dt>Budget</dt><dd>${fmt(ap, 0)} PA</dd></div>
-      <div><dt>Crit effectif</dt><dd>${fmt(critPct, 0)} %</dd></div>
-      ${multiAxis ? `<div><dt>Moyenne</dt><dd>${fmt(mean, 0)}</dd></div>` : ''}
-    </dl>
-    ${axisHtml}
-    <p class="optimizer-build-note">Attaques virtuelles standardisées utilisées par l’optimiseur pour comparer les stuffs.</p>
+    <strong>${fmt(minimum, 0)}</strong>
   </section>`;
 }
 
@@ -186,7 +114,6 @@ function renderFm(result, items = []) {
   const itemById = new Map(items.map((item) => [String(item?.id ?? ''), item]));
   const changes = (fm.assignments || [])
     .map((assignment) => ({
-      assignment,
       label: assignmentLabel(assignment),
       item: itemById.get(String(assignment?.itemId ?? ''))
     }))
@@ -196,23 +123,10 @@ function renderFm(result, items = []) {
     ? changes.map(({ label, item }) => `<li><span>${escapeHtml(itemLabel(item))}</span><strong>${escapeHtml(label)}</strong></li>`).join('')
     : '<li><span>Aucune modification</span><strong>—</strong></li>';
 
-  return `<section class="optimizer-build-summary-card" data-build-modifications>
-    <span class="optimizer-kicker">Modifications</span>
+  return `<section class="optimizer-build-extra-card optimizer-build-fm" data-build-modifications>
+    <span class="optimizer-kicker">Forgemagie</span>
     <p class="optimizer-build-summary-line">${fm.enabled ? 'FM Oui · Exo PA + PM inclus' : 'FM Non'}</p>
     <ul class="optimizer-change-list">${list}</ul>
-  </section>`;
-}
-
-function renderCharacteristics(result) {
-  const allocation = result?.characteristics || {};
-  const entries = Object.entries(allocation).filter(([, value]) => Number(value || 0) !== 0);
-  const content = entries.length
-    ? entries.map(([key, value]) => `<li><span>${escapeHtml(ELEMENT_LABELS[key] || key)}</span><strong>+${fmt(value, 0)}</strong></li>`).join('')
-    : '<li><span>Allocation</span><strong>Aucune</strong></li>';
-
-  return `<section class="optimizer-build-summary-card">
-    <span class="optimizer-kicker">Caractéristiques</span>
-    <ul class="optimizer-change-list">${content}</ul>
   </section>`;
 }
 
@@ -256,18 +170,18 @@ function renderLoadout(items = []) {
   const dofus = itemsForSlot(items, 'dofus');
 
   const left = [
-    ['hat', 'Coiffe', itemsForSlot(items, 'hat')[0]],
     ['amulet', 'Amulette', itemsForSlot(items, 'amulet')[0]],
+    ['shield', 'Bouclier', itemsForSlot(items, 'shield')[0]],
     ['ring-1', 'Anneau 1', rings[0]],
     ['belt', 'Ceinture', itemsForSlot(items, 'belt')[0]],
     ['boots', 'Bottes', itemsForSlot(items, 'boots')[0]]
   ];
   const right = [
-    ['cape', 'Cape', itemsForSlot(items, 'cape')[0]],
-    ['ring-2', 'Anneau 2', rings[1]],
+    ['hat', 'Coiffe', itemsForSlot(items, 'hat')[0]],
     ['weapon', 'Arme', itemsForSlot(items, 'weapon')[0]],
-    ['shield', 'Bouclier', itemsForSlot(items, 'shield')[0]],
-    ['companion', 'Compagnon', itemsForSlot(items, 'companion')[0]]
+    ['ring-2', 'Anneau 2', rings[1]],
+    ['cape', 'Cape', itemsForSlot(items, 'cape')[0]],
+    ['companion', 'Familier', itemsForSlot(items, 'companion')[0]]
   ];
 
   return `<section class="optimizer-loadout" aria-label="Équipement du stuff">
@@ -284,13 +198,40 @@ function renderLoadout(items = []) {
   </section>`;
 }
 
-function renderStats(stats = {}) {
-  const entries = sortStats(Object.entries(stats)
-    .filter(([key, value]) => Number.isFinite(Number(value)) && (Number(value) !== 0 || BASELINE_ZERO_STATS.has(key))));
+function numericStatEntries(stats = {}) {
+  return Object.entries(stats)
+    .filter(([, value]) => Number.isFinite(Number(value)) && Number(value) !== 0);
+}
 
-  return `<div class="optimizer-build-stat-grid">
+function orderedEntries(stats = {}, keys = []) {
+  return keys
+    .filter((key) => Number.isFinite(Number(stats?.[key])) && Number(stats[key]) !== 0)
+    .map((key) => [key, stats[key]]);
+}
+
+function renderStats(entries = [], group) {
+  if (!entries.length) return '<p class="optimizer-build-empty">Aucune statistique dans ce groupe.</p>';
+  return `<div class="optimizer-build-stat-grid" data-stat-group="${escapeHtml(group)}">
     ${entries.map(([key, value]) => `<div class="optimizer-build-stat" data-stat-key="${escapeHtml(key)}"><span>${escapeHtml(statLabel(key))}</span><strong>${fmt(value, 0)}</strong></div>`).join('')}
   </div>`;
+}
+
+function renderOffenseStats(stats = {}) {
+  return `<section class="optimizer-build-stat-panel optimizer-build-offense">
+    <span class="optimizer-kicker">Offense</span>
+    ${renderStats(orderedEntries(stats, OFFENSE_STAT_KEYS), 'offense')}
+  </section>`;
+}
+
+function renderSecondaryStats(stats = {}) {
+  const known = orderedEntries(stats, SECONDARY_STAT_KEYS);
+  const extras = numericStatEntries(stats)
+    .filter(([key]) => !HIDDEN_STAT_KEYS.has(key) && !OFFENSE_STAT_SET.has(key) && !SECONDARY_STAT_SET.has(key));
+
+  return `<section class="optimizer-build-stat-panel optimizer-build-secondary">
+    <span class="optimizer-kicker">Secondaires & défenses</span>
+    ${renderStats([...known, ...extras], 'secondary')}
+  </section>`;
 }
 
 function renderSetBonuses(activeSets = []) {
@@ -299,7 +240,7 @@ function renderSetBonuses(activeSets = []) {
   }
 
   return activeSets.map((set) => {
-    const bonusEntries = sortStats(Object.entries(set?.bonus || {}).filter(([, value]) => Number(value || 0) !== 0));
+    const bonusEntries = numericStatEntries(set?.bonus || {});
     return `<article class="optimizer-set-bonus">
       <header><strong>${escapeHtml(set?.name || set?.setName || set?.setId || 'Panoplie')}</strong><span>×${Number(set?.count || 0)}</span></header>
       <div class="optimizer-set-bonus-stats">
@@ -307,6 +248,13 @@ function renderSetBonuses(activeSets = []) {
       </div>
     </article>`;
   }).join('');
+}
+
+function renderSetBonusCard(activeSets = []) {
+  return `<section class="optimizer-build-extra-card optimizer-build-sets">
+    <span class="optimizer-kicker">Bonus de panoplies</span>
+    ${renderSetBonuses(activeSets)}
+  </section>`;
 }
 
 export function renderOptimizerResult(result = {}, index = 0) {
@@ -330,11 +278,11 @@ export function renderOptimizerResult(result = {}, index = 0) {
       </div>
     </header>
 
+    ${renderTheoreticalDamage(result)}
+
     <div class="optimizer-build-layout">
       <aside class="optimizer-build-summary">
-        ${renderTheoreticalDamage(result)}
-        ${renderFm(result, items)}
-        ${renderCharacteristics(result)}
+        ${renderOffenseStats(stats)}
       </aside>
 
       <div class="optimizer-build-equipment">
@@ -342,15 +290,13 @@ export function renderOptimizerResult(result = {}, index = 0) {
       </div>
 
       <aside class="optimizer-build-inspector">
-        <section class="optimizer-build-inspector-section">
-          <span class="optimizer-kicker">Statistiques</span>
-          ${renderStats(stats)}
-        </section>
-        <section class="optimizer-build-inspector-section optimizer-build-sets">
-          <span class="optimizer-kicker">Bonus de panoplies</span>
-          ${renderSetBonuses(activeSets)}
-        </section>
+        ${renderSecondaryStats(stats)}
       </aside>
+    </div>
+
+    <div class="optimizer-build-extras">
+      ${renderFm(result, items)}
+      ${renderSetBonusCard(activeSets)}
     </div>
 
     <footer class="optimizer-build-footer">
