@@ -177,3 +177,25 @@ test('le contrat desktop élargit le résultat sans chevauchement et applique la
   assert.match(css, /\.optimizer-build-inspector \{[\s\S]*?overflow:\s*hidden/);
   assert.doesNotMatch(css, /#1f2120|#000000|background:\s*#000\b/i);
 });
+
+test('le calque professionnel est chargé en dernier et sépare visuellement les zones', async () => {
+  const [css, index, serviceWorker] = await Promise.all([
+    readFile(new URL('../styles-optimizer-professional.css', import.meta.url), 'utf8'),
+    readFile(new URL('../index.html', import.meta.url), 'utf8'),
+    readFile(new URL('../service-worker.js', import.meta.url), 'utf8')
+  ]);
+
+  const desktopLink = index.indexOf('styles-optimizer-desktop.css');
+  const professionalLink = index.indexOf('styles-optimizer-professional.css');
+  assert.ok(desktopLink >= 0 && professionalLink > desktopLink, 'le calque professionnel doit être chargé après le desktop');
+  assert.match(serviceWorker, /\.\/styles-optimizer-professional\.css/);
+
+  assert.match(css, /--pro-surface-warm:\s*#fbf2e5/i);
+  assert.match(css, /--pro-surface-olive:\s*#f1f3e8/i);
+  assert.match(css, /#optimizer-view \.optimizer-build-summary \{[\s\S]*linear-gradient/i);
+  assert.match(css, /#optimizer-view \.optimizer-build-inspector \{[\s\S]*linear-gradient/i);
+  assert.match(css, /#optimizer-view \.optimizer-character-portrait \{[\s\S]*border-radius:/i);
+  assert.match(css, /url\('\.\/assets\/app\/icon-180\.png'\)/);
+  assert.match(css, /#optimizer-view \.optimizer-dofus-row::before[\s\S]*DOFUS & TROPHÉES/);
+  assert.match(css, /@media \(min-width: 1800px\)[\s\S]*grid-template-columns:\s*304px\s*minmax\(760px,\s*1fr\)\s*346px/);
+});
