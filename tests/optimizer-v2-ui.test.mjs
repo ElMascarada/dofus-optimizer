@@ -42,3 +42,18 @@ test('le contrôleur Equipment-Only reste mince et délègue au Worker', async (
   assert.match(source, /DISPLAY_RESULT_LIMIT = 5/);
   assert.doesNotMatch(source, /loadSpellData|\bclassId\b|\bturnMode\b|\bcombatObjective\b/);
 });
+
+test('chaque stuff affiche des dégâts théoriques transparents issus de syntheticOffense', async () => {
+  const source = await readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8');
+  assert.match(source, /result\?\.syntheticOffense/);
+  assert.match(source, /offense\?\.minimumScore/);
+  assert.match(source, /offense\?\.meanScore/);
+  assert.match(source, /offense\?\.multiElementScores/);
+  assert.match(source, /probe\?\.totalApBudgetScore/);
+  assert.match(source, /effectiveCritChancePct/);
+  assert.match(source, /Dégâts théoriques · axe faible/);
+  assert.match(source, /Crit effectif test/);
+  assert.match(source, /Attaques virtuelles standardisées utilisées par l’optimiseur/);
+  assert.match(source, /data-theoretical-damage/);
+  assert.doesNotMatch(source, /renderTheoreticalDamage[\s\S]{0,300}result\?\.score/);
+});
