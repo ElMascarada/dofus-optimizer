@@ -212,7 +212,7 @@ try {
       items: Number(first?.dataset.resultItems || 0),
       count: cards.length,
       hasOpenWorkshop: Boolean(first?.querySelector('[data-open-workshop]')),
-      fmSummary: first?.textContent?.includes('FM : Oui · Exo PA + PM') || false
+      fmSummary: first?.textContent?.includes('FM Oui · Exo PA + PM inclus') || false
     };
   })()`);
 
