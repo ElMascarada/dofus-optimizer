@@ -25,7 +25,9 @@ test('le parcours visible est un Optimiseur de stuff simple', async () => {
   assert.match(html, /<option value="fm">FM<\/option>/);
   assert.match(html, /js\/optimizer-app\.js/);
   assert.match(html, /styles-optimizer-results\.css/);
-  assert.match(html, /theme-color" content="#f4ece3"/);
+  assert.match(html, /styles-optimizer-professional\.css/);
+  assert.match(html, /styles-product-professional\.css/);
+  assert.match(html, /theme-color" content="#f5f0e8"/);
   assert.doesNotMatch(html, /id=["']optimizer-class["']|id=["']optimizer-turn-mode["']/);
   assert.doesNotMatch(html, /js\/optimizer-v2-app\.js|js\/app-experimental\.js/);
   assert.doesNotMatch(html, /id=["']spell-list["']|FM Do Sorts|FM Do Crit/);
@@ -46,20 +48,21 @@ test('le contrôleur Equipment-Only reste mince et délègue au Worker et à la 
   assert.doesNotMatch(source, /loadSpellData|\bclassId\b|\bturnMode\b|\bcombatObjective\b/);
 });
 
-test('la vue résultat conserve le score théorique transparent et la nouvelle hiérarchie visuelle', async () => {
+test('la vue résultat conserve le score théorique transparent et la hiérarchie visuelle canonique', async () => {
   const source = await readFile(new URL('../js/optimizer-result-view.js', import.meta.url), 'utf8');
-  assert.match(source, /result\?\.syntheticOffense/);
-  assert.match(source, /offense\?\.minimumScore/);
-  assert.match(source, /offense\?\.meanScore/);
-  assert.match(source, /offense\?\.multiElementScores/);
-  assert.match(source, /probe\?\.totalApBudgetScore/);
-  assert.match(source, /effectiveCritChancePct/);
+  assert.match(source, /result\?\.syntheticOffense\?\.minimumScore/);
   assert.match(source, /data-theoretical-damage/);
+  assert.match(source, /Dégâts théoriques/);
   assert.match(source, /optimizer-character-portrait/);
   assert.match(source, /item\?\.imageUrl/);
+  assert.match(source, /optimizer-build-summary/);
   assert.match(source, /optimizer-build-inspector/);
+  assert.match(source, /Stats & dégâts/);
+  assert.match(source, /Secondaires & défenses/);
+  assert.match(source, /Forgemagie/);
+  assert.match(source, /data-build-modifications/);
   assert.match(source, /Bonus de panoplies/);
-  assert.match(source, /Modifications/);
-  assert.match(source, /Attaques virtuelles standardisées utilisées par l’optimiseur/);
-  assert.doesNotMatch(source, /minimumScore[\s\S]{0,120}result\?\.score/);
+  assert.match(source, /data-combined-with="\$\{escapeHtml\(options\.combinedWith\)\}"/);
+  assert.doesNotMatch(source, /result\?\.score/);
+  assert.doesNotMatch(source, /Crit effectif|Budget test|Moyenne des axes|Profil test/);
 });
