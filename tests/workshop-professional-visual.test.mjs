@@ -25,6 +25,17 @@ test('l Atelier partage le système visuel professionnel clair', async () => {
   assert.doesNotMatch(css, /background:\s*#000\b|#090a0a|#030303/i);
 });
 
+test('les surfaces résiduelles de l Atelier ne reprennent plus le thème charbon', async () => {
+  const css = await readFile(new URL('../styles-product-professional.css', import.meta.url), 'utf8');
+
+  assert.match(css, /#workshop-view \.workshop-feedback:not\(:empty\) \{[\s\S]*background:\s*linear-gradient/i);
+  assert.match(css, /#workshop-view \.workshop-feedback\[data-kind='ok'\] \{[\s\S]*background:\s*linear-gradient/i);
+  assert.match(css, /#workshop-view \.workshop-stat \{[\s\S]*background:\s*linear-gradient/i);
+  assert.match(css, /#workshop-view \.workshop-stat \{[\s\S]*border-radius:\s*9px;/i);
+  assert.doesNotMatch(css, /#workshop-view \.workshop-feedback:not\(:empty\) \{[\s\S]{0,400}background:\s*#0[0-9a-f]{5}/i);
+  assert.doesNotMatch(css, /#workshop-view \.workshop-stat \{[\s\S]{0,400}background:\s*#0[0-9a-f]{5}/i);
+});
+
 test('le calque produit est chargé en dernier et précaché', async () => {
   const [index, serviceWorker] = await Promise.all([
     readFile(new URL('../index.html', import.meta.url), 'utf8'),
