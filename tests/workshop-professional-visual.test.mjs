@@ -36,3 +36,10 @@ test('le calque produit est chargé en dernier et précaché', async () => {
   assert.ok(optimizerProfessional >= 0 && productProfessional > optimizerProfessional);
   assert.match(serviceWorker, /\.\/styles-product-professional\.css/);
 });
+
+test('le browser smoke suit la copie FM canonique actuelle', async () => {
+  const browserSmoke = await readFile(new URL('../scripts/recipe-v2-browser-smoke.mjs', import.meta.url), 'utf8');
+
+  assert.match(browserSmoke, /FM Oui · Exo PA \+ PM inclus/);
+  assert.doesNotMatch(browserSmoke, /FM : Oui · Exo PA \+ PM/);
+});
