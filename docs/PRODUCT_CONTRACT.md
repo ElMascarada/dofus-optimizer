@@ -178,6 +178,76 @@ Le produit vise **5 stuffs** lorsqu'une diversité réellement utile est disponi
 
 La diversité ne doit jamais dégrader le classement final : l'appartenance/diversité sélectionne les candidats, puis le score final détermine leur ordre.
 
+## Score théorique public
+
+L'interface expose une valeur publique nommée **Dégâts théoriques**.
+
+Cette valeur :
+
+- est dérivée de `result.syntheticOffense` ;
+- représente la sonde offensive standardisée réellement utilisée pour comparer le stuff dans le profil demandé ;
+- utilise le minimum des axes demandés comme valeur principale lorsqu'il y a plusieurs éléments ;
+- ne doit jamais être remplacée par un ancien score heuristique interne opaque ;
+- n'est pas présentée comme le dégât d'un sort réel.
+
+Le renderer peut exposer des détails dérivés supplémentaires pour diagnostic, mais l'interface principale garde une valeur centrale lisible et reproductible.
+
+## Contrat de présentation résultat
+
+La présentation active sépare les responsabilités sans changer le ranking :
+
+- **gauche** : statistiques offensives, dégâts, Crit/Do Crit et Forgemagie ;
+- **centre** : les 10 équipements autour d'un portrait neutre, puis les six Dofus/trophées ;
+- **droite** : secondaires/défenses et bonus de panoplies.
+
+Règles de lecture :
+
+- une information ne doit pas être dupliquée entre gauche et droite ;
+- `stat (stat + puissance)` peut être utilisé pour Force/Intelligence/Chance/Agilité ;
+- `do élémentaire (do élémentaire + do fixe)` peut être utilisé pour les dégâts élémentaires ;
+- les images d'items proviennent du catalogue réel ;
+- la présentation n'a aucune autorité pour modifier légalité, FM ou classement.
+
+## Atelier
+
+L'Atelier est une surface active séparée de l'Optimiseur.
+
+Il permet notamment :
+
+- de construire et sauvegarder un stuff ;
+- d'hydrater un résultat depuis l'Optimiseur ;
+- de verrouiller des items ;
+- de retirer ou rejeter/remplacer un item ;
+- de relancer une complétion via `Trouver mieux` ;
+- d'inspecter les statistiques live ;
+- de conserver des outils combat propres à l'Atelier.
+
+Une classe choisie dans l'Atelier ne doit pas être injectée dans une requête Equipment-Only.
+
+L'Atelier sert aussi de **surface de witness** : si un meilleur build est soupçonné, il peut être construit/verrouillé puis comparé avec l'évaluateur final avant toute modification du moteur.
+
+## Campagne qualité canonique
+
+Après la fermeture visuelle #127, la priorité produit est la qualité des résultats, pas une nouvelle refonte graphique.
+
+La matrice canonique est `docs/QUALITY_SCENARIOS.md`.
+
+Tout défaut doit être classé avant correction :
+
+- perte de faisabilité ;
+- perte de qualité ;
+- incohérence sémantique ;
+- problème de diversité/affichage ;
+- performance seulement.
+
+Pour une perte de qualité, la méthode canonique est :
+
+1. construire un témoin légal ;
+2. comparer son score final autoritatif ;
+3. identifier le premier étage où sa lignée disparaît ;
+4. corriger cet étage seulement ;
+5. exécuter uniquement les scénarios de qualité impactés par le changement.
+
 ## Travail combat PARKED
 
 Sont préservés mais hors du chemin Optimiseur actif :
@@ -190,6 +260,19 @@ Sont préservés mais hors du chemin Optimiseur actif :
 
 Ce travail n'est ni supprimé ni déclaré incorrect. Il reste légitime dans l'Atelier ou dans un futur produit explicitement décidé.
 
+Un futur outil « meilleur tour de dégâts » doit rester un produit/capacité distincte : il consommera un stuff et les vrais sorts, mais ne doit pas réintroduire classe/sorts dans l'entrée de recherche Equipment-Only actuelle.
+
+## Validation et CI
+
+La validation est **proportionnée à la surface modifiée**.
+
+- syntaxe/tests ciblés pour une modification locale ;
+- browser recipe lorsque le runtime navigateur ou le round-trip UI change ;
+- probes catalogue réels lorsque la recherche/ranking/complétude change ;
+- benchmarks uniquement lorsqu'une mission performance le justifie.
+
+Ne pas relancer systématiquement toute la suite pour un changement de présentation isolé.
+
 ## Hiérarchie de vérité
 
 En cas de contradiction :
@@ -198,4 +281,5 @@ En cas de contradiction :
 2. `docs/PRODUCT_CONTRACT.md` pour l'intention produit active ;
 3. code runtime + tests pour savoir ce qui est déjà implémenté ;
 4. `PROJECT_STATE.md` pour l'état de certification et les écarts connus ;
-5. `docs/history/`, historique Git et anciennes PR comme contexte historique.
+5. `docs/QUALITY_SCENARIOS.md` pour la campagne qualité active ;
+6. `docs/history/`, historique Git et anciennes PR comme contexte historique.
