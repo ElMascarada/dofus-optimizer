@@ -9,8 +9,8 @@ const packageJson = JSON.parse(await readFile(new URL('../package.json', import.
 const serviceWorker = await readFile(new URL('../service-worker.js', import.meta.url), 'utf8');
 
 test('runtime metadata is the canonical application version source', () => {
-  assert.equal(globalThis.DofusOptimizerRuntime.appVersion, '0.14.7');
-  assert.equal(APP_VERSION, globalThis.DofusOptimizerRuntime.appVersion);
+  assert.equal(globalThis.DofusOptimizerRuntime.appVersion, APP_VERSION);
+  assert.match(String(APP_VERSION), /^\d+\.\d+\.\d+$/);
   assert.equal(Object.hasOwn(packageJson, 'version'), false);
 });
 
