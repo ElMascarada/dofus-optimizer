@@ -99,6 +99,53 @@ Pour plusieurs éléments, chaque axe est calculé indépendamment. Le classemen
 
 `multi` exige quatre axes réels : Terre, Feu, Eau et Air. Aucun axe mono ne peut porter seul le score Multi.
 
+## Couche résultat publique
+
+Depuis #123, la présentation du résultat est séparée du contrôleur Optimiseur :
+
+```text
+js/optimizer-app.js
+  -> reçoit les résultats Worker
+  -> sélectionne jusqu'à 5 alternatives pertinentes
+  -> délègue le rendu à js/optimizer-result-view.js
+```
+
+`js/optimizer-result-view.js` :
+
+- dérive le score public **Dégâts théoriques** depuis `result.syntheticOffense` ;
+- n'utilise pas `result.score` comme score public ;
+- présente les stats finales déjà calculées ;
+- présente les assignments FM et bonus panoplies ;
+- utilise les `imageUrl` réelles du catalogue pour les items ;
+- conserve le bridge `Ouvrir dans l'Atelier`.
+
+La vue ne doit effectuer aucun ranking métier supplémentaire.
+
+## Structure visuelle active
+
+La migration #123–#127 a ajouté plusieurs couches CSS, toutes purement présentation. Les dernières couches chargées ont autorité visuelle sur les anciens thèmes :
+
+```text
+styles-optimizer-results.css
+styles-optimizer-desktop.css
+styles-optimizer-professional.css
+styles-product-professional.css   <- chargé en dernier
+```
+
+Le produit actuel vise principalement desktop 1920×1080.
+
+La structure du résultat est :
+
+```text
+Dégâts théoriques
+┌──────────────────┬────────────────────────────┬──────────────────────┐
+│ Offense + FM     │ équipement / portrait     │ Défenses + panoplies │
+│                  │ + 6 Dofus/trophées        │                      │
+└──────────────────┴────────────────────────────┴──────────────────────┘
+```
+
+Les couches visuelles n'ont aucune autorité sur légalité, scoring, FM ou recherche.
+
 ## Contraintes et légalité
 
 Les minima utilisateur sont des contraintes dures. Les heuristiques de recherche peuvent ordonner et réserver des états, mais ne doivent jamais :
@@ -120,6 +167,30 @@ L'Atelier peut utiliser classe, sorts, rotations, T1/T2/T3 et modules combat. Ce
 
 L'Atelier et l'Optimiseur partagent les règles communes de build, légalité, statistiques, sets, FM et évaluation finale quand elles concernent l'équipement.
 
+Flux principal :
+
+```text
+js/workshop/workshop-app.js
+  -> BuildRepository / autosave
+  -> equipment-grid / item-browser
+  -> stats-panel
+  -> WorkshopController
+  -> find better / completion bridge
+```
+
+Le round-trip actuel supporte :
+
+```text
+Optimizer result
+  -> Ouvrir dans l'Atelier
+  -> hydrate 16 slots
+  -> lock / remove / reject-replace
+  -> Trouver mieux
+  -> Equipment-Only completion
+```
+
+La classe Atelier reste locale aux outils combat et ne doit pas contaminer la complétion Equipment-Only.
+
 ## Combat historique / partagé
 
 Les modules sous `js/combat/`, `js/spells.js`, `js/turn-optimizer.js` et autres composants combat ne sont pas une dépendance du chemin Optimiseur actif. Ils sont conservés pour Atelier, tests, connaissances certifiées et travail historique.
@@ -128,7 +199,7 @@ Ne pas les supprimer ou les réactiver dans l'Optimiseur sur simple impression d
 
 ## Search Memory
 
-Les primitives sous `js/search-memory/` restent présentes, mais la mémoire ne doit jamais servir un ancien résultat à la place d'une recherche fraîche lorsque la vérité produit/cataloque/règles a changé. Le chemin produit actif est certifié pour recalculer les recherches.
+Les primitives sous `js/search-memory/` restent présentes, mais la mémoire ne doit jamais servir un ancien résultat à la place d'une recherche fraîche lorsque la vérité produit/catalogue/règles a changé. Le chemin produit actif est certifié pour recalculer les recherches.
 
 ## Données
 
@@ -150,13 +221,29 @@ La vérité source des sorts reste séparée du catalogue combat actif et ne fai
 
 `service-worker.js` reste actif. Toute suppression/renommage d'un fichier du shell doit mettre à jour son cache applicatif et être validé par la recette navigateur.
 
-## Validation permanente
+`js/runtime-meta.js` est la source canonique de la version runtime et de l'identité du cache Service Worker.
 
-- `npm run check`
-- `npm test`
-- `npm run smoke:product`
-- `npm run recipe:browser`
-- `git diff --check`
-- probes réels combinés quand la recherche 2/3 éléments ou Multi est modifiée
+## CI et validation ciblée
 
-La recette navigateur nécessite un exécutable Chrome/Chromium détectable dans le `PATH` ou fourni via `CHROME_BIN`.
+Depuis #122, les gates sont choisies selon la surface modifiée.
+
+Principe : **tester ce qui a changé, pas relancer systématiquement tout le produit**.
+
+Exemples :
+
+- CSS / renderer pur → tests UI ciblés + `git diff --check` ;
+- runtime navigateur / bridge → tests ciblés + `recipe:browser` ;
+- moteur Equipment-Only → syntaxe + tests moteur concernés + probes catalogue représentatifs ;
+- combined search → scénarios combinés réels concernés ;
+- données/sync → tests données + idempotence si nécessaire ;
+- performance → benchmark dédié, seulement après verrouillage qualité.
+
+Les benchmarks et probes lourds ne sont pas un gate automatique de chaque petite PR.
+
+## Campagne qualité active
+
+La prochaine phase de développement est définie par `docs/QUALITY_SCENARIOS.md`.
+
+La campagne utilise l'Atelier comme surface de witness et classe chaque défaut avant correction : faisabilité, qualité, sémantique, diversité/affichage ou performance.
+
+La doctrine de diagnostic reste : **trouver la première disparition d'un meilleur témoin avant de modifier le moteur**.
