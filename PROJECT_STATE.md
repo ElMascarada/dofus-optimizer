@@ -1,136 +1,201 @@
 # DOFUS Optimizer — Project State
 
-## Active product
+## État courant
 
-As of the PR #120 combined-search closure candidate (12 September 2026):
+État canonique au **14 septembre 2026**, après merge de la PR **#127**.
 
-- **Equipment-Only is the sole active Optimizer product path.**
-- `js/equipment-search-request.js` is the request orchestrator.
-- `js/complete-equipment-build-evaluator.js` is the authoritative final evaluator.
-- Mono requests use the Equipment-First architecture search.
-- Requests with 2 or 3 explicit elements, and `multi`, use the native combined Set-Core search in `optimizer/combined-set-core-search.js`, followed by exact/contextual Dofus-package refinement.
-- The browser UI is wired through `js/optimizer-app.js` and the thin `js/optimizer-worker.js`.
-- The active Optimizer does not require class, spell data, turn selection, combat planning, T1/T2/T3 or a combat scenario.
-- Workshop remains active as a separate surface and may keep class/spell/combat analysis tooling.
-- Search Memory is intentionally not allowed to replace a fresh product search.
+Main de référence au début de ce slice documentaire :
 
-## Active Optimizer flow
+`edd876980b199fdad96c10d9ebe2ae8b788bd2c8`
+
+Le produit actif est désormais stabilisé autour de deux surfaces distinctes :
+
+- **Optimiseur Equipment-Only** : recherche du meilleur équipement légal sous contraintes, sans dépendance classe/sorts/rotations ;
+- **Atelier** : construction et modification manuelle d'un build, statistiques live, remplacement/verrouillage/rejet d'items et outils combat propres à l'Atelier.
+
+Le travail combat historique n'est pas supprimé, mais il n'est pas une dépendance de l'Optimiseur actif.
+
+## Optimiseur actif
+
+### Chemin runtime
 
 ```text
 Equipment-Only UI
         ↓
-optimizer-worker.js
+js/optimizer-app.js
         ↓
-searchEquipmentRequest()
+js/optimizer-worker.js
+        ↓
+js/equipment-search-request.js
         ↓
 ┌──────────────────────────────┬───────────────────────────────────────┐
-│ mono element                 │ 2/3 elements or Multi                 │
-│ searchEquipmentArchitecturesV2 │ searchCombinedSetCoreEquipment()   │
+│ mono élément                 │ 2/3 éléments ou Multi                 │
+│ equipment-search-v2          │ combined-set-core-search              │
 └──────────────────────────────┴───────────────────────────────────────┘
         ↓                              ↓
 complete build evaluation       exact/contextual Dofus closure
         └───────────────┬──────────────┘
                         ↓
-evaluateCompleteEquipmentBuild()
+js/complete-equipment-build-evaluator.js
                         ↓
 final synthetic-offense ranking
 ```
 
-## Canonical product contract
+### Contrat utilisateur courant
 
-### Damage orientation
+L'Optimiseur expose :
 
-The UI exposes **Type de dégâts**:
+- **Éléments** : Terre, Feu, Eau, Air ; 1 à 3 éléments explicites, ou Multi exclusif ;
+- **Type de dégâts** : Petites lignes / Mixte / Grosses lignes ;
+- **Critiques** : Auto / Crit / Sans crit ;
+- **PA minimum / PM minimum** ;
+- contraintes avancées supportées par le moteur ;
+- **FM Oui / Non**.
 
-- Petites lignes (`small`)
-- Mixte (`medium`)
-- Grosses lignes (`large`)
+Quand `FM Oui` :
 
-Element selection remains independent. Combined requests rank the weakest requested axis first, then mean score. `multi` balances Earth, Fire, Water and Air independently.
+- Exo PA +1 et Exo PM +1 sont présents structurellement dès le début ;
+- la recherche part d'une base personnage 8 PA / 4 PM ;
+- les deux exos consomment deux slots forgeables ;
+- sept assignments offensifs restent à optimiser entre `+1 % dommages sorts` et `+8 dommages critiques` lorsque l'item est éligible et que ce choix améliore le résultat.
 
-### FM
+Le produit vise **5 stuffs réellement utiles et distincts** lorsqu'ils existent. Un seul résultat est acceptable si aucune diversité pertinente supplémentaire n'existe.
 
-`FM = Oui` is a single product choice.
+## Scoring et score public
 
-For active Equipment-Only search it means:
+L'Optimiseur actif n'exécute pas de vrais sorts. Il utilise les profils synthétiques certifiés pour comparer les builds.
 
-- structural Exo PA = +1;
-- structural Exo PM = +1;
-- search starts from the corresponding 8 PA / 4 PM character baseline;
-- those two structural exos consume two forgeable item assignments;
-- seven remaining offensive FM assignments are optimized automatically;
-- each offensive assignment chooses either `+1 % dommages sorts`, or `+8 dommages critiques` when the item has no native critical-damage line and that choice is better.
+Pour plusieurs éléments :
 
-The user does not manually distribute those seven offensive assignments.
+1. chaque axe demandé est évalué indépendamment ;
+2. le score primaire est le **minimum** des axes demandés ;
+3. la moyenne sert de second critère ;
+4. le tie-break final est déterministe.
 
-### Hard constraints
+Depuis **#123**, l'UI expose un **score de dégâts théoriques transparent** dérivé de `result.syntheticOffense`. Le renderer n'affiche pas l'ancien score heuristique opaque `result.score` comme valeur publique.
 
-PA, PM and every enabled advanced constraint are hard minima. Scoring never creates feasibility.
+Le score théorique est une mesure standardisée de la valeur offensive du stuff sous le profil demandé ; il ne prétend pas être le dégât d'un sort réel.
 
-Canonical invariant:
+## Recherche combinée — état certifié
+
+La fermeture qualité **#120** reste le socle du moteur combiné :
+
+```text
+candidate pools
+→ set cores avec bonus activés
+→ architecture retention
+→ equipment completion
+→ companion context
+→ Dofus/trophy closure
+→ authoritative final evaluator
+```
+
+Les protections canoniques restent :
+
+- union sémantique des pools candidats ;
+- bonus de panoplie appliqués avant jugement du core ;
+- préservation des lignées parent→set terminal ;
+- réserve d'architectures quasi complètes ;
+- meilleur descendant + spécialistes sémantiques par architecture ;
+- contexte compagnon avant le dernier trim inter-architectures ;
+- fermeture Dofus/trophées dans le contexte réel du build ;
+- validation finale autoritative.
+
+Invariant permanent :
 
 > **FEASIBLE SET NON-EMPTY ⇒ SEARCH MUST RETURN A RESULT**
 
-Quality invariant added by the combined-search closure work:
+Invariant qualité :
 
-> **A semantically distinct architecture must not disappear only because an intermediate scalar score is weak before its remaining equipment/companion/Dofus context is visible.**
+> **Une architecture sémantiquement distincte ne doit pas disparaître uniquement parce que son score partiel est faible avant que son contexte final soit visible.**
 
-## Combined search retention doctrine
+Ne pas remplacer ces réserves par un élargissement arbitraire du beam.
 
-For 2-element / 3-element / Multi requests:
+## Baselines recherche déjà certifiées
 
-1. candidate pools preserve balanced offense, requested-element/common-stat specialists and resource feasibility;
-2. set cores include activated set bonuses before ranking;
-3. architecture retention preserves parent→terminal set lineages and near-complete architectures before the final architecture trim;
-4. when an architecture reaches complete ordinary equipment, retention keeps its best descendant plus semantic specialists instead of immediately applying a destructive global trim;
-5. companion expansion happens before the final inter-architecture reduction;
-6. companion retention combines primary score with a bounded parent→child marginal-gain reserve;
-7. Dofus/trophy closure preserves resource-compatible packages and is evaluated by the authoritative complete evaluator;
-8. final request ranking maximizes the minimum requested synthetic score, then the mean, then a deterministic identity tie-break.
+Baselines historiques de la fermeture #120, catalogue réel Steam Machine, `FM Oui`, PA >= 12, PM >= 6 :
 
-Do not replace these semantic reserves with arbitrary beam widening.
+- Feu + Eau / Petites lignes / Auto : meilleur score certifié `3895.335` ;
+- Feu + Eau / Grosses lignes / Auto : meilleur score certifié `3008.88` ;
+- Multi / Grosses lignes / Auto : 20 résultats légaux dans la sonde native, quatre axes équilibrés autour de `1391.11 / 1391.11 / 1391.11 / 1391.52` ;
+- runtime Multi isolé observé autour de 100 s sur la machine de certification de cette époque.
 
-## Current certified quality gates for PR #120
+Ces valeurs sont des **témoins de non-régression**, pas des constantes produit à hardcoder.
 
-Real Steam Machine catalog, FM Oui, AP >= 12, PM >= 6:
+## Présentation résultat active
 
-- Fire + Water / Petites lignes / Auto crit: optimizer `3895.335` vs owner witness `3718.785` → **SEARCH_BETTER**.
-- Fire + Water / Grosses lignes / Auto crit: optimizer `3008.88` vs owner witness `2778.3` → **SEARCH_BETTER**.
-- Multi / Grosses lignes / Auto crit: returns 20 legal 12/6 results through `multi-element-native`; best four elemental scores are approximately `1391.11 / 1391.11 / 1391.11 / 1391.52`.
-- Multi isolated runtime on the Steam Machine: approximately `103.5 s` on the certified candidate.
-- Full suite on the product candidate before final documentation cleanup: `623 tests`, `622 pass`, `0 fail`, `1 skip`.
-- Product smoke: **PASS**.
+Les PR **#123 à #127** ont fermé la migration visuelle sans modifier la recherche :
 
-The browser recipe still requires an actual Chrome/Chromium executable (or `CHROME_BIN`) on the certification machine; absence of the executable is an infrastructure blocker, not a product verdict.
+- score `Dégâts théoriques` en tête ;
+- colonne gauche : Vitalité / Initiative, caractéristiques offensives, dégâts, Crit/Do Crit et FM ;
+- centre : équipement réel avec images catalogue, portrait neutre et six Dofus/trophées ;
+- colonne droite : secondaires/défenses et bonus de panoplies ;
+- aucune duplication volontaire d'une même statistique entre gauche et droite ;
+- caractéristiques affichables sous forme `stat (stat + puissance)` ;
+- dégâts élémentaires affichables sous forme `do élémentaire (do élémentaire + do fixe)` ;
+- cible visuelle actuelle : desktop 1920×1080, thème clair crème/ocre/olive inspiré du design system ;
+- Atelier et Optimiseur partagent désormais la même grammaire visuelle professionnelle.
 
-## Workshop boundary
+Le rendu public reste une couche de présentation : il ne doit jamais modifier le ranking ou la légalité.
 
-Workshop remains a separate active product surface.
+## Atelier actif
 
-- Optimizer → Workshop hydrates a complete equipment result without requiring a class.
-- Workshop → Find better / Complete exports equipment locks/requirements and rejected item IDs only.
-- A Workshop class selection may remain stored for Workshop analysis, but it is not part of the Equipment-Only Optimizer request.
+L'Atelier reste une application séparée dans `js/workshop/`.
 
-## Historical combat work
+Contrats importants :
 
-The historical spell-driven Optimizer / Combat Planner is not an active Optimizer runtime or fallback. Combat modules still in the tree remain valid for Workshop/shared/tests and preserved historical work. Do not reactivate or delete them on conversational impression alone; any product reactivation requires an explicit director decision.
+- Optimiseur → Atelier hydrate un build complet sans imposer de classe ;
+- verrouiller un item le transforme en exigence de complétion ;
+- rejeter/remplacer un item permet une recherche suivante sans cet item ;
+- une classe sélectionnée dans l'Atelier peut servir aux analyses combat locales, mais ne remonte pas dans la requête Equipment-Only ;
+- statistiques live et équipement manuel utilisent les primitives métier partagées.
 
-## Validation
+## Runtime, cache et CI
 
-Authoritative local certification is performed on the real Steam Machine:
+Depuis **#121** :
 
-```bash
-npm run check
-npm test
-npm run smoke:product
-npm run recipe:browser
-git diff --check
-```
+- version runtime canonique : `0.14.8` ;
+- cache Service Worker dérivé de cette version ;
+- modules actifs combined-search précachés ;
+- cache-buster navigateur partagé entre les entrypoints.
 
-Combined-search changes additionally require real-catalog quality probes for representative bi-element and Multi requests.
+Depuis **#122**, la doctrine CI est ciblée :
 
-Canonical CI runner labels:
+- `npm run check` toujours ;
+- `test:fast` pour les contrats rapides ;
+- tests moteur uniquement lorsque le moteur/recherche change ;
+- tests données uniquement lorsque données/sync changent ;
+- browser acceptance uniquement pour les surfaces navigateur concernées ;
+- probes catalogue lourds et benchmarks uniquement pour les missions qui le justifient ;
+- les anciens runs d'une même PR sont annulés lorsqu'un nouveau commit les rend obsolètes.
 
-```text
-[self-hosted, linux, x64, steam-machine, dofus]
-```
+Doctrine propriétaire : **ne pas retester tout le produit lorsqu'une petite surface isolée change**.
+
+## Dernières certifications visuelles/runtime
+
+- #123 : vue résultat ciblée certifiée ;
+- #124 : largeur desktop / anti-chevauchement certifiés ;
+- #125 : système visuel professionnel certifié ;
+- #126 : Atelier professionnel + sélection active unifiée, browser recipe réel PASS et CI #1003 SUCCESS ;
+- #127 : suppression des derniers fonds charbon Atelier, 5/5 tests ciblés PASS, `git diff --check` PASS et CI #1011 SUCCESS.
+
+## Prochain milestone actif — campagne qualité produit
+
+La priorité suivante n'est plus la refonte visuelle.
+
+Le prochain chantier est une **campagne de qualité fonctionnelle de l'Optimiseur** :
+
+1. exécuter une matrice stable de scénarios Mono / Bi / Tri / Multi ;
+2. couvrir Petites / Mixte / Grosses lignes et Auto / Crit / Sans crit ;
+3. observer les 5 stuffs, leur légalité, leur diversité et leurs packages Dofus/compagnon ;
+4. utiliser l'Atelier comme outil de contre-exemple : verrouiller/remplacer un item pour démontrer un meilleur build lorsqu'il existe ;
+5. corriger uniquement la **première disparition démontrée** d'une meilleure architecture ;
+6. ne jamais retuner un poids ou élargir un beam sans diagnostic structurel.
+
+La matrice canonique de cette campagne est définie dans `docs/QUALITY_SCENARIOS.md`.
+
+## Travail combat PARKED
+
+Le futur produit « meilleur tour de dégâts avec les vrais sorts » reste séparé du moteur de recherche de stuff.
+
+Les modules et vérités combat existants restent valides pour Atelier/tests/historique. Toute réactivation comme produit principal exigera une décision explicite et une architecture dédiée ; elle ne doit pas contaminer la requête Equipment-Only actuelle.
