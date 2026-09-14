@@ -106,12 +106,31 @@
     color: #6c6d63;
   }
 
+  #workshop-view .workshop-feedback:not(:empty) {
+    width: fit-content;
+    max-width: 100%;
+    min-height: 0;
+    padding: 8px 12px;
+    border: 1px solid rgba(118, 130, 88, .26);
+    border-left: 3px solid #8e9b68;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(241, 244, 231, .98), rgba(255, 253, 248, .98));
+    color: #5f6c46;
+    box-shadow: 0 5px 14px rgba(78, 55, 35, .04);
+  }
+
   #workshop-view .workshop-feedback[data-kind='ok'] {
-    color: #65734b;
+    border-color: rgba(118, 130, 88, .30);
+    border-left-color: #7f8f59;
+    background: linear-gradient(180deg, rgba(238, 242, 224, .98), rgba(255, 253, 248, .98));
+    color: #5f6c46;
   }
 
   #workshop-view .workshop-feedback[data-kind='error'] {
-    color: #a44b35;
+    border-color: rgba(164, 75, 53, .24);
+    border-left-color: #b95d42;
+    background: linear-gradient(180deg, #fff2ec, #fffaf5);
+    color: #874735;
   }
 
   #workshop-view .workshop-layout {
@@ -321,7 +340,10 @@
 
   #workshop-view .workshop-stat {
     min-height: 35px;
-    border-bottom-color: rgba(221, 207, 190, .72);
+    border: 1px solid rgba(118, 130, 88, .17);
+    border-radius: 9px;
+    background: linear-gradient(180deg, rgba(255, 253, 248, .94), rgba(246, 247, 238, .94));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78), 0 2px 6px rgba(78, 55, 35, .025);
   }
 
   #workshop-view .workshop-stat b {
