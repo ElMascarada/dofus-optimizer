@@ -1,7 +1,18 @@
 import { searchEquipmentRequest } from './equipment-search-request.js';
 
+const ALL_ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
+
 function normalizedIds(values = []) {
   return [...new Set((values || []).map((value) => String(value || '').trim()).filter(Boolean))].sort();
+}
+
+function canonicalSyntheticOffense(input = {}) {
+  const raw = [...new Set((Array.isArray(input?.elements) ? input.elements : [input?.elements])
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean))];
+  if (!raw.includes('omni')) return input || {};
+  if (raw.length !== 1) throw new RangeError('Tous éléments est exclusif des autres sélections élémentaires.');
+  return { ...input, elements: [...ALL_ELEMENTS] };
 }
 
 self.addEventListener('message', (event) => {
@@ -23,7 +34,7 @@ self.addEventListener('message', (event) => {
         exoAp: Number(payload.fmPolicy?.exoAp || 0) === 1 ? 1 : 0,
         exoMp: Number(payload.fmPolicy?.exoMp || 0) === 1 ? 1 : 0
       },
-      syntheticOffense: payload.syntheticOffense || {},
+      syntheticOffense: canonicalSyntheticOffense(payload.syntheticOffense || {}),
       requiredItemIds: normalizedIds(payload.requiredItemIds),
       topN: Math.max(1, Number(payload.topN || 10)),
       searchProfile: payload.searchProfile || 'BALANCED',
