@@ -60,6 +60,26 @@ test('tri-element auto mixed profiles linear allocation is identical to legacy',
   });
 });
 
+test('four mono-element axes linear allocation is identical to legacy', () => {
+  assertEquivalent({
+    baseStats: {
+      earth: 390, fire: 420, water: 405, air: 375,
+      power: 260, damage: 38,
+      damageEarth: 58, damageFire: 61, damageWater: 63, damageAir: 55,
+      spellDamagePct: 7, crit: 45, critDamage: 104,
+      vit: 3700, ap: 12, mp: 6
+    },
+    points: 995,
+    scrolled: SCROLLED,
+    constraints: { ap: 12, mp: 6 },
+    minimumStats: {},
+    availableAp: 12,
+    elements: ['earth', 'fire', 'water', 'air'],
+    profiles: ['large'],
+    critMode: 'crit'
+  });
+});
+
 test('multi large no-crit linear allocation is identical to legacy', () => {
   assertEquivalent({
     baseStats: {

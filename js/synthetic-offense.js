@@ -43,7 +43,7 @@ function normalizeElements(value) {
     if (elements.length !== 1) throw new RangeError('multi is exclusive and cannot be combined with mono elements');
     return ['multi'];
   }
-  if (elements.length > 3) throw new RangeError('At most three mono elements may be selected');
+  if (elements.length > 4) throw new RangeError('At most four mono elements may be selected');
   return [...elements].sort((a, b) => ELEMENT_ORDER.indexOf(a) - ELEMENT_ORDER.indexOf(b));
 }
 

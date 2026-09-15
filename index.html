@@ -63,9 +63,10 @@
                 <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="fire"> <span>Feu</span></label>
                 <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="water"> <span>Eau</span></label>
                 <label class="optimizer-choice"><input data-optimizer-element type="checkbox" value="air"> <span>Air</span></label>
-                <label class="optimizer-choice optimizer-choice-wide"><input id="optimizer-element-multi" type="checkbox" value="multi"> <span>Multi</span></label>
+                <label class="optimizer-choice optimizer-choice-wide"><input id="optimizer-element-multi" type="checkbox" value="multi"> <span>Multi-lignes</span></label>
+                <label class="optimizer-choice optimizer-choice-wide"><input id="optimizer-element-omni" data-optimizer-element type="checkbox" value="omni"> <span>Tous éléments</span></label>
               </div>
-              <p class="hint">1 à 3 éléments, ou Multi. Multi est exclusif.</p>
+              <p class="hint">1 à 3 éléments, Multi-lignes ou Tous éléments. Les deux modes multi sont exclusifs.</p>
             </div>
 
             <div class="optimizer-control-group">
@@ -161,10 +162,30 @@
     </section>
   </main>
 
-  <script src="js/runtime-meta.js?v=20260915-1"></script>
+  <script src="js/runtime-meta.js?v=20260915-2"></script>
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
-  <script type="module" src="js/workshop/workshop-app.js?v=20260915-1"></script>
-  <script type="module" src="js/optimizer-app.js?v=20260915-1"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260915-1', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script>
+    (() => {
+      const omni = document.querySelector('#optimizer-element-omni');
+      const multi = document.querySelector('#optimizer-element-multi');
+      const mono = [...document.querySelectorAll('[data-optimizer-element]')].filter((input) => input !== omni);
+      omni?.addEventListener('change', () => {
+        if (!omni.checked) return;
+        mono.forEach((input) => { input.checked = false; });
+        if (multi) multi.checked = false;
+      });
+      for (const input of mono) {
+        input.addEventListener('change', () => {
+          if (input.checked && omni) omni.checked = false;
+        });
+      }
+      multi?.addEventListener('change', () => {
+        if (multi.checked && omni) omni.checked = false;
+      });
+    })();
+  </script>
+  <script type="module" src="js/workshop/workshop-app.js?v=20260915-2"></script>
+  <script type="module" src="js/optimizer-app.js?v=20260915-2"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260915-2', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>

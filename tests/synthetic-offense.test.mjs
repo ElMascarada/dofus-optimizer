@@ -34,6 +34,30 @@ test('neutral multi baseline preserves four continuous lines including 7.5 mediu
   close(probe(evaluated, 'multi', 'medium').normalFullProbeValue, 30, 'medium multi full normal');
 });
 
+test('four independent mono axes model all-elements separately from multi-line', () => {
+  const allElements = result({
+    elements: ['earth', 'fire', 'water', 'air'],
+    profiles: ['large'],
+    critMode: 'no_crit'
+  });
+  assert.deepEqual(allElements.elements, ['earth', 'fire', 'water', 'air']);
+  assert.deepEqual(allElements.requestedProbes.map((entry) => entry.element), ['earth', 'fire', 'water', 'air']);
+  for (const element of ['earth', 'fire', 'water', 'air']) {
+    const entry = probe(allElements, element, 'large');
+    assert.equal(entry.lines.length, 1);
+    assert.equal(entry.lines[0].normalBase, 40);
+    close(entry.totalApBudgetScore, 120, `${element} 12 AP mono budget`);
+  }
+  close(allElements.minimumScore, 120, 'all-elements minimum');
+  close(allElements.meanScore, 120, 'all-elements mean');
+
+  const multiLine = result({ elements: ['multi'], profiles: ['large'], critMode: 'no_crit' });
+  assert.equal(probe(multiLine, 'multi', 'large').lines.length, 4);
+  assert.deepEqual(probe(multiLine, 'multi', 'large').lines.map((line) => line.normalBase), [10, 10, 10, 10]);
+  close(multiLine.minimumScore, 30, 'multi-line minimum scores each elemental line');
+  assert.notEqual(allElements.minimumScore, multiLine.minimumScore);
+});
+
 test('profile base crit chances and +25% critical bases are exact', () => {
   const evaluated = result({ profiles: ['small', 'medium', 'large'] });
   for (const [name, chance] of [['small', 15], ['medium', 20], ['large', 25]]) {
@@ -134,9 +158,13 @@ test('mean score is the secondary ranking key when minimum is tied', () => {
   assert.ok(compareSyntheticOffenseResults(b, a) > 0);
 });
 
-test('one to three mono elements accepted, four rejected, multi is exclusive', () => {
-  for (const elements of [['earth'], ['earth', 'fire'], ['earth', 'fire', 'water']]) assert.doesNotThrow(() => result({ elements }));
-  assert.throws(() => result({ elements: ['earth', 'fire', 'water', 'air'] }), /At most three/);
+test('one to four mono elements are accepted and multi remains exclusive', () => {
+  for (const elements of [
+    ['earth'],
+    ['earth', 'fire'],
+    ['earth', 'fire', 'water'],
+    ['earth', 'fire', 'water', 'air']
+  ]) assert.doesNotThrow(() => result({ elements }));
   assert.doesNotThrow(() => result({ elements: ['multi'] }));
   assert.throws(() => result({ elements: ['multi', 'earth'] }), /exclusive/);
 });
