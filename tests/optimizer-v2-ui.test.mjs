@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { readPendingConstraint } from '../js/optimizer-constraint-state-ux.js';
 
 const htmlUrl = new URL('../index.html', import.meta.url);
 
@@ -80,4 +81,46 @@ test('la vue résultat conserve le score théorique transparent et la hiérarchi
   assert.match(source, /data-combined-with="\$\{escapeHtml\(options\.combinedWith\)\}"/);
   assert.doesNotMatch(source, /result\?\.score/);
   assert.doesNotMatch(source, /Crit effectif|Budget test|Moyenne des axes|Profil test/);
+});
+
+test('les contraintes visibles sont liées au prochain run et invalident les résultats périmés', async () => {
+  const html = await htmlSource();
+  const source = await readFile(new URL('../js/optimizer-constraint-state-ux.js', import.meta.url), 'utf8');
+  const uxIndex = html.indexOf('js/optimizer-constraint-state-ux.js');
+  const appIndex = html.indexOf('js/optimizer-app.js');
+
+  assert.ok(uxIndex >= 0 && appIndex > uxIndex, 'constraint UX must load before optimizer app');
+  assert.match(source, /constraintAdd\.click\(\)/);
+  assert.match(source, /stopImmediatePropagation\(\)/);
+  assert.match(source, /Paramètres modifiés/);
+  assert.match(source, /data-optimizer-result/);
+  assert.match(source, /data-remove-optimizer-constraint/);
+
+  assert.deepEqual(readPendingConstraint({
+    keyElement: { value: 'initiative' },
+    numberElement: { value: '5000' },
+    fmElement: { value: '1' }
+  }), {
+    present: true,
+    valid: true,
+    key: 'initiative',
+    value: 5000
+  });
+
+  assert.equal(readPendingConstraint({
+    keyElement: { value: 'initiative' },
+    numberElement: { value: '0' },
+    fmElement: { value: '1' }
+  }).valid, false);
+
+  assert.deepEqual(readPendingConstraint({
+    keyElement: { value: 'fm' },
+    numberElement: { value: '0' },
+    fmElement: { value: '0' }
+  }), {
+    present: true,
+    valid: true,
+    key: 'fm',
+    value: 0
+  });
 });
