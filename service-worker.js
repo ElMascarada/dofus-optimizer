@@ -28,6 +28,7 @@ const APP_SHELL = [
   './js/synthetic-characteristics.js',
   './js/synthetic-characteristics-two-element-fast.js',
   './js/synthetic-characteristics-two-element-linear.js',
+  './js/synthetic-characteristics-tri-multi-linear.js',
   './js/structural-exos.js',
   './js/config.js',
   './js/data-loader.js',
