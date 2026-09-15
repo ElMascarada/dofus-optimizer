@@ -162,7 +162,7 @@
     </section>
   </main>
 
-  <script src="js/runtime-meta.js?v=20260915-2"></script>
+  <script src="js/runtime-meta.js?v=20260915-3"></script>
   <script>document.querySelector('#version').textContent = `v${globalThis.DofusOptimizerRuntime?.appVersion || '?'}`;</script>
   <script>
     (() => {
@@ -184,8 +184,9 @@
       });
     })();
   </script>
-  <script type="module" src="js/workshop/workshop-app.js?v=20260915-2"></script>
-  <script type="module" src="js/optimizer-app.js?v=20260915-2"></script>
-  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260915-2', { updateViaCache: 'none' }).catch(() => {});</script>
+  <script type="module" src="js/workshop/workshop-app.js?v=20260915-3"></script>
+  <script type="module" src="js/optimizer-constraint-state-ux.js?v=20260915-3"></script>
+  <script type="module" src="js/optimizer-app.js?v=20260915-3"></script>
+  <script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js?v=20260915-3', { updateViaCache: 'none' }).catch(() => {});</script>
 </body>
 </html>
