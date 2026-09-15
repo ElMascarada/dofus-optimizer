@@ -8,14 +8,16 @@ const ELEMENT_DAMAGE = Object.freeze({
   water: 'damageWater',
   air: 'damageAir'
 });
-const COMMON_KEYS = Object.freeze([
+const ALWAYS_OFFENSE_KEYS = Object.freeze([
   'power',
   'damage',
-  'crit',
-  'critDamage',
-  'spellDamagePct',
-  'range'
+  'spellDamagePct'
 ]);
+const CRIT_OFFENSE_KEYS = Object.freeze([
+  'crit',
+  'critDamage'
+]);
+const STATIC_CONDITION_STATS = new Set(['ap', 'mp', 'setBonus', 'level']);
 
 function unique(values = []) {
   return [...new Set((values || []).map((value) => String(value || '').trim().toLowerCase()).filter(Boolean))];
@@ -31,17 +33,36 @@ function itemKey(items = []) {
   return (items || []).map((item) => String(item?.id ?? '')).sort().join('|');
 }
 
-function dominanceKeys(syntheticOffense = {}, constraints = {}) {
+function collectConditionStats(node, output) {
+  if (!node) return;
+  if (node.kind === 'relation') {
+    for (const child of node.children || []) collectConditionStats(child, output);
+    return;
+  }
+  if (node.stat) output.add(String(node.stat));
+}
+
+export function dofusPackageDominanceKeys(syntheticOffense = {}, constraints = {}, pool = []) {
   const axes = requestedAxes(syntheticOffense);
-  return [...new Set([
-    ...COMMON_KEYS,
+  const critMode = String(syntheticOffense?.critMode || 'auto').trim().toLowerCase();
+  const keys = new Set([
+    ...ALWAYS_OFFENSE_KEYS,
     ...axes,
-    ...axes.map((element) => ELEMENT_DAMAGE[element]),
-    ...Object.entries(constraints || {})
-      .filter(([, minimum]) => Number.isFinite(Number(minimum)) && Number(minimum) > 0)
-      .map(([key]) => key)
-      .filter((key) => !['ap', 'mp'].includes(key))
-  ])];
+    ...axes.map((element) => ELEMENT_DAMAGE[element])
+  ]);
+
+  if (critMode !== 'no_crit') {
+    for (const key of CRIT_OFFENSE_KEYS) keys.add(key);
+  }
+
+  for (const [key, minimum] of Object.entries(constraints || {})) {
+    if (Number.isFinite(Number(minimum)) && Number(minimum) > 0) keys.add(key);
+  }
+
+  for (const item of pool || []) collectConditionStats(item?.conditions, keys);
+
+  for (const key of STATIC_CONDITION_STATS) keys.delete(key);
+  return [...keys].sort();
 }
 
 function conditionSignature(items = []) {
@@ -90,7 +111,7 @@ export function buildDofusPackageFrontier(pool = [], {
   syntheticOffense = {},
   constraints = {}
 } = {}) {
-  const keys = dominanceKeys(syntheticOffense, constraints);
+  const keys = dofusPackageDominanceKeys(syntheticOffense, constraints, pool);
   const buckets = new Map();
   let combinations = 0;
   let legalCombinations = 0;
