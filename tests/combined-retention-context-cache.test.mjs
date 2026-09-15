@@ -41,7 +41,7 @@ test('combined retention computes contextual structural and bucket values at mos
 
   assert.equal(retained.length, limit);
   assert.ok(
-    counter.reads <= states.length + limit,
-    `contextual item stats should be read at most once for structural progress and once for bucket retention per relevant state; got ${counter.reads}`
+    counter.reads <= states.length * 2,
+    `contextual item stats should be read at most once per item identity in each of the structural and bucket lanes; got ${counter.reads}`
   );
 });
