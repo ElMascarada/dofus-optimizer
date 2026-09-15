@@ -94,18 +94,28 @@ if (!['tri', 'multi'].includes(selectedCase)) {
       'stateScore',
       'resourceBucket',
       'contextualStats',
-      'searchCombinedSetCoreEquipment'
+      'searchCombinedSetCoreEquipment',
+      'evaluateCompleteEquipmentBuild',
+      'optimizeSyntheticCharacteristicsTriMultiLinear',
+      'optimizeSyntheticCharacteristics',
+      'optimizeSecondary',
+      'pairOptions',
+      'optimizeSyntheticFm',
+      'evaluateSyntheticOffense',
+      'refineDofusPackagesForResults',
+      'scoreResultForRequest',
+      'finalizeResults'
     ];
 
     const stageLines = lines
       .filter((line) => stageNames.some((name) => line.includes(name)))
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 120);
+      .slice(0, 180);
     const hotLines = lines
       .filter((line) => /^\s*\d+\s+\d+(?:\.\d+)?%/.test(line))
       .map((line) => line.trim())
-      .slice(0, 80);
+      .slice(0, 100);
 
     console.log('PROFILE_AVAILABLE=YES');
     console.log(`PROFILE_PROCESS_CODE=${processed.status ?? 'NA'}`);

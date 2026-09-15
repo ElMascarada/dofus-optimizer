@@ -2,6 +2,7 @@ import { ELEMENT_SOFT_CAPS } from './config.js';
 import { evaluateSyntheticOffense } from './synthetic-offense.js';
 import { stat } from './stats.js';
 import { characteristicInvestmentCost } from './synthetic-characteristics.js';
+import { optimizeSyntheticCharacteristicsTriMultiLinear } from './synthetic-characteristics-tri-multi-linear.js';
 import { optimizeSyntheticCharacteristicsTwoElementFast } from './synthetic-characteristics-two-element-fast.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
@@ -134,7 +135,7 @@ export function optimizeSyntheticCharacteristicsTwoElementLinear(options = {}) {
   const baseWithScroll = statsWithInvestment(baseStats, scrolled, {});
   const requestProbe = evaluateSyntheticOffense({ stats: baseWithScroll, availableAp, elements, profiles, critMode });
   if (requestProbe.elements.length !== 2 || requestProbe.elements.includes('multi')) {
-    return optimizeSyntheticCharacteristicsTwoElementFast(options);
+    return optimizeSyntheticCharacteristicsTriMultiLinear(options);
   }
 
   const requested = [...requestProbe.elements];
