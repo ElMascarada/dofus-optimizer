@@ -17,6 +17,7 @@ const APP_SHELL = [
   './data/normalized/dofus-data.json',
   './data/normalized/spell-data.json',
   './js/runtime-meta.js',
+  './js/optimizer-constraint-state-ux.js',
   './js/optimizer-app.js',
   './js/optimizer-result-view.js',
   './js/optimizer-worker.js',
