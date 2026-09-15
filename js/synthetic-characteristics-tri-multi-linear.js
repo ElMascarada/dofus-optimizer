@@ -238,7 +238,7 @@ export function optimizeSyntheticCharacteristicsTriMultiLinear(options = {}) {
   const requestProbe = evaluateSyntheticOffense({ stats: baseWithScroll, availableAp, elements, profiles, critMode });
   const isMulti = requestProbe.elements.length === 1 && requestProbe.elements[0] === 'multi';
   const requested = isMulti ? [...ELEMENTS] : requestProbe.elements.filter((element) => ELEMENTS.includes(element));
-  if (!isMulti && requested.length !== 3) return optimizeSyntheticCharacteristicsLegacy(options);
+  if (!isMulti && ![3, 4].includes(requested.length)) return optimizeSyntheticCharacteristicsLegacy(options);
 
   const minimums = hardElementLowerBounds(baseWithScroll, constraints, minimumStats);
   const minimumVitality = Math.max(0, Math.ceil(Number(constraints?.vit || 0) - stat(baseWithScroll, 'vit')));
