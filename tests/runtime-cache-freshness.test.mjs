@@ -33,7 +33,8 @@ test('service worker precaches the active combined optimizer runtime', async () 
     './js/structural-exos.js',
     './js/synthetic-characteristics.js',
     './js/synthetic-characteristics-two-element-fast.js',
-    './js/synthetic-characteristics-two-element-linear.js'
+    './js/synthetic-characteristics-two-element-linear.js',
+    './js/synthetic-characteristics-tri-multi-linear.js'
   ]) {
     assert.match(source, new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
