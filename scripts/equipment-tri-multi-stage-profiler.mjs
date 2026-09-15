@@ -1,5 +1,5 @@
 import { spawn, spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,14 +12,14 @@ if (!['tri', 'multi'].includes(selectedCase)) {
 } else {
   const probePath = fileURLToPath(new URL('./equipment-tri-multi-stall-probe.mjs', import.meta.url));
   const profileDir = join(tmpdir(), `dofus-${selectedCase}-stage-profile-${process.pid}`);
-  const profilePath = join(profileDir, `${selectedCase}.v8.log`);
+  const requestedProfilePath = join(profileDir, `${selectedCase}.v8.log`);
   rmSync(profileDir, { recursive: true, force: true });
   mkdirSync(profileDir, { recursive: true });
 
   console.log(`PROFILE_CASE=${selectedCase}`);
   console.log(`PROFILE_SECONDS=${seconds}`);
   console.log('PROFILE_ENGINE=v8-tick-prof');
-  console.log(`PROFILE_PATH=${profilePath}`);
+  console.log(`PROFILE_REQUESTED_PATH=${requestedProfilePath}`);
   console.log('PROFILE_CHILD_BEGIN=1');
 
   // --cpu-prof serializes the .cpuprofile when the process exits cleanly. The
@@ -29,7 +29,7 @@ if (!['tri', 'multi'].includes(selectedCase)) {
   // deliberately stalled diagnostic child.
   const child = spawn(process.execPath, [
     '--prof',
-    `--logfile=${profilePath}`,
+    `--logfile=${requestedProfilePath}`,
     probePath,
     selectedCase
   ], {
@@ -57,10 +57,19 @@ if (!['tri', 'multi'].includes(selectedCase)) {
   console.log(`PROFILE_TIMED_OUT=${timedOut ? 'YES' : 'NO'}`);
   if (childResult.error) console.log(`PROFILE_CHILD_ERROR=${childResult.error.message}`);
 
-  if (!existsSync(profilePath)) {
+  // V8 may prepend an isolate identifier even when --logfile is supplied.
+  // Resolve either form rather than depending on a particular Node/V8 build.
+  const logNames = readdirSync(profileDir).filter((name) => name.endsWith('.log')).sort();
+  const profilePath = existsSync(requestedProfilePath)
+    ? requestedProfilePath
+    : (logNames.length ? join(profileDir, logNames[0]) : null);
+
+  if (!profilePath || !existsSync(profilePath)) {
+    console.log(`PROFILE_DIR_FILES=${JSON.stringify(logNames)}`);
     console.log('PROFILE_AVAILABLE=NO');
     process.exitCode = 3;
   } else {
+    console.log(`PROFILE_PATH=${profilePath}`);
     const rawBytes = readFileSync(profilePath).byteLength;
     console.log(`PROFILE_RAW_BYTES=${rawBytes}`);
 
