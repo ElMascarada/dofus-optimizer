@@ -19,6 +19,9 @@ test('le parcours visible est un Optimiseur de stuff simple', async () => {
   assert.match(html, /data-optimizer-element/);
   assert.match(html, /data-optimizer-profile/);
   assert.match(html, /id="optimizer-element-multi"/);
+  assert.match(html, /id="optimizer-element-omni"/);
+  assert.match(html, /Multi-lignes/);
+  assert.match(html, /Tous éléments/);
   assert.match(html, /Petites lignes/);
   assert.match(html, /Mixte/);
   assert.match(html, /Grosses lignes/);
@@ -32,6 +35,18 @@ test('le parcours visible est un Optimiseur de stuff simple', async () => {
   assert.doesNotMatch(html, /js\/optimizer-v2-app\.js|js\/app-experimental\.js/);
   assert.doesNotMatch(html, /id=["']spell-list["']|FM Do Sorts|FM Do Crit/);
   assert.doesNotMatch(html, /SMALL|MEDIUM|LARGE|Top résultats|Exos structurels|Equipment-First|Set-Core-First/);
+});
+
+test('Tous éléments est exclusif dans l UI et canonisé en quatre axes mono dans le Worker', async () => {
+  const html = await htmlSource();
+  const worker = await readFile(new URL('../js/optimizer-worker.js', import.meta.url), 'utf8');
+  assert.match(html, /optimizer-element-omni/);
+  assert.match(html, /omni\?\.addEventListener\('change'/);
+  assert.match(html, /multi\?\.addEventListener\('change'/);
+  assert.match(worker, /ALL_ELEMENTS = Object\.freeze\(\['earth', 'fire', 'water', 'air'\]\)/);
+  assert.match(worker, /raw\.includes\('omni'\)/);
+  assert.match(worker, /elements: \[\.\.\.ALL_ELEMENTS\]/);
+  assert.match(worker, /Tous éléments est exclusif/);
 });
 
 test('le contrôleur Equipment-Only reste mince et délègue au Worker et à la vue résultat', async () => {
