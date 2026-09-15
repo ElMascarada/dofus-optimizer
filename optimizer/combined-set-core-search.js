@@ -129,11 +129,16 @@ function retainStates(states, limit, context) {
   const output = [];
   const seen = new Set();
   const perBucket = new Map();
+  const bucketByItemKey = new Map();
   const add = (state, enforceBucket = false) => {
     if (!state || output.length >= limit) return;
     const key = itemKey(state.items);
     if (seen.has(key)) return;
-    const bucket = resourceBucket(state.items, context.setsById, context.fmPolicy, context.constraints);
+    let bucket = bucketByItemKey.get(key);
+    if (!bucketByItemKey.has(key)) {
+      bucket = resourceBucket(state.items, context.setsById, context.fmPolicy, context.constraints);
+      bucketByItemKey.set(key, bucket);
+    }
     const used = Number(perBucket.get(bucket) || 0);
     if (enforceBucket && used >= 4) return;
     seen.add(key);
@@ -211,9 +216,17 @@ export function retainCombinedArchitectureStates(states, limit, context) {
       if (output.length > before) added++;
     }
   };
+  const structuralProgressByItemKey = new Map();
+  const cachedStructuralProgress = (state) => {
+    const key = itemKey(state?.items || []);
+    if (!structuralProgressByItemKey.has(key)) {
+      structuralProgressByItemKey.set(key, structuralProgress(state, context));
+    }
+    return structuralProgressByItemKey.get(key);
+  };
 
   take(ranked, Math.max(12, Math.floor(limit * 0.18)));
-  take([...ranked].sort((a, b) => structuralProgress(b, context) - structuralProgress(a, context)
+  take([...ranked].sort((a, b) => cachedStructuralProgress(b) - cachedStructuralProgress(a)
     || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
   take([...ranked].sort((a, b) => Number(b?.completionScore || 0) - Number(a?.completionScore || 0)
     || compareStatePriority(a, b)), Math.max(10, Math.floor(limit * 0.10)));
