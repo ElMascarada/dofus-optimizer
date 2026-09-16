@@ -5,10 +5,26 @@ import {
   workshopSlot
 } from './workshop-build.js';
 
-export const WORKSHOP_BUILD_SCHEMA_VERSION = 2;
+export const WORKSHOP_BUILD_SCHEMA_VERSION = 3;
 
 function cloneFmPolicy(value = {}) {
   return { ...WORKSHOP_FM_POLICY, ...(value || {}) };
+}
+
+function cloneWorkspaceContext(value = null) {
+  if (!value || typeof value !== 'object') return null;
+  const syntheticOffense = value.syntheticOffense || {};
+  const referenceScore = value.referenceScore == null ? null : Number(value.referenceScore);
+  return {
+    constraints: { ...(value.constraints || {}) },
+    fmPolicy: { ...(value.fmPolicy || {}) },
+    syntheticOffense: {
+      ...syntheticOffense,
+      elements: [...(syntheticOffense.elements || [])],
+      profiles: [...(syntheticOffense.profiles || [])]
+    },
+    referenceScore: Number.isFinite(referenceScore) ? referenceScore : null
+  };
 }
 
 function canonicalItemId(value) {
@@ -34,7 +50,8 @@ function canonicalSnapshot(snapshot = {}) {
     fmPolicy: cloneFmPolicy(snapshot.fmPolicy),
     selectedSpells: normalizedStringList(snapshot.selectedSpells),
     lockedSlots: normalizedStringList(snapshot.lockedSlots),
-    rejectedItemIds: normalizedStringList(snapshot.rejectedItemIds)
+    rejectedItemIds: normalizedStringList(snapshot.rejectedItemIds),
+    workspaceContext: cloneWorkspaceContext(snapshot.workspaceContext)
   };
 }
 
@@ -73,7 +90,8 @@ export function serializeWorkshopBuild(build = {}, { dataVersion = null } = {}) 
     fmPolicy: build.fmPolicy,
     selectedSpells: build.selectedSpells,
     lockedSlots: build.lockedSlots,
-    rejectedItemIds: build.rejectedItemIds
+    rejectedItemIds: build.rejectedItemIds,
+    workspaceContext: build.workspaceContext
   });
 }
 
@@ -86,7 +104,8 @@ export function rehydrateWorkshopBuild(snapshot = {}, { items = [] } = {}) {
     classId: migrated.classId,
     fmPolicy: migrated.fmPolicy,
     selectedSpells: migrated.selectedSpells,
-    rejectedItemIds: migrated.rejectedItemIds
+    rejectedItemIds: migrated.rejectedItemIds,
+    workspaceContext: migrated.workspaceContext
   });
 
   for (const [slotKey, itemId] of Object.entries(migrated.equipmentBySlot || {})) {

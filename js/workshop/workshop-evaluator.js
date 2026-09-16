@@ -1,5 +1,6 @@
 import { BASE_CHARACTER } from '../config.js';
 import { evaluateCompleteBuild } from '../complete-build-evaluator.js';
+import { evaluateCompleteEquipmentBuild } from '../complete-equipment-build-evaluator.js';
 import { evaluateSpell } from '../spell-evaluator.js';
 import { spellsForBreed } from '../spell-selection.js';
 import { statsForTurnDetailed } from '../spells.js';
@@ -57,6 +58,22 @@ function t1DamageSources(items = [], staticStats = {}, scenario = {}) {
     .filter((entry) => Object.keys(entry.stats).length > 0);
 }
 
+function invalidResult({ startedAt, items, build, reason, workspaceContext = null, diagnostics = null } = {}) {
+  return {
+    valid: false,
+    reason: reason || 'evaluation-failed',
+    items,
+    stats: null,
+    activeSets: [],
+    spells: [],
+    combatSpells: [],
+    complete: workshopBuildIsComplete(build),
+    workspaceContext,
+    workspaceDiagnostics: diagnostics,
+    recalculationMs: Math.max(0, clock() - startedAt)
+  };
+}
+
 export function evaluateWorkshopBuild({
   build,
   dataset,
@@ -66,55 +83,94 @@ export function evaluateWorkshopBuild({
 } = {}) {
   const startedAt = clock();
   const items = workshopItems(build);
-  const canonical = currentCanonicalT1Context(build, spellData);
-  if (canonical?.invalid) {
-    return {
-      valid: false,
-      reason: 'canonical-combat-context-unresolved',
-      items,
-      stats: null,
-      activeSets: [],
-      spells: [],
-      combatSpells: [],
-      complete: workshopBuildIsComplete(build),
-      recalculationMs: Math.max(0, clock() - startedAt)
-    };
-  }
+  const workspaceContext = build?.workspaceContext || null;
+  const complete = workshopBuildIsComplete(build);
 
-  const selections = canonical ? [] : selectedSpellInputs(build, spellData);
-  const effectiveScenario = canonical?.context?.scenario || scenario;
-  const evaluation = evaluateCompleteBuild({
-    items,
-    sets: dataset?.sets || [],
-    selections,
-    constraints: {},
-    fmPolicy: build?.fmPolicy || {},
-    turnMode: 't1',
-    character,
-    // Workshop selections describe spells to evaluate, not a mandatory cast plan.
-    // Executable rotations are solved later by analyzeWorkshopTurns().
-    scenario: {
-      ...effectiveScenario,
-      requiredApByTurn: {}
+  let resolvedStats;
+  let resolvedStatsByTurn = {};
+  let activeSets = [];
+  let characteristics = null;
+  let fm = null;
+  let syntheticOffense = null;
+  let evaluationSource = 'workshop';
+  let canonical = null;
+  let effectiveScenario = scenario;
+
+  if (workspaceContext && complete) {
+    const canonicalEquipment = evaluateCompleteEquipmentBuild({
+      items,
+      sets: dataset?.sets || [],
+      constraints: workspaceContext.constraints || {},
+      fmPolicy: workspaceContext.fmPolicy || build?.fmPolicy || {},
+      syntheticOffense: workspaceContext.syntheticOffense || {},
+      character
+    });
+    if (!canonicalEquipment.result) {
+      return invalidResult({
+        startedAt,
+        items,
+        build,
+        reason: canonicalEquipment.reason || 'evaluation-failed',
+        workspaceContext,
+        diagnostics: canonicalEquipment.constraintDiagnostics
+          || canonicalEquipment.legalityDiagnostics
+          || canonicalEquipment.evaluationDiagnostics
+          || null
+      });
     }
-  });
+    const result = canonicalEquipment.result;
+    resolvedStats = result.stats;
+    activeSets = result.activeSets || [];
+    characteristics = result.characteristics || null;
+    fm = result.fm || null;
+    syntheticOffense = result.syntheticOffense || null;
+    evaluationSource = 'optimizer-canonical-equipment';
+  } else {
+    canonical = currentCanonicalT1Context(build, spellData);
+    if (canonical?.invalid) {
+      return invalidResult({
+        startedAt,
+        items,
+        build,
+        reason: 'canonical-combat-context-unresolved'
+      });
+    }
 
-  if (!evaluation.result) {
-    return {
-      valid: false,
-      reason: evaluation.reason || 'evaluation-failed',
+    const selections = canonical ? [] : selectedSpellInputs(build, spellData);
+    effectiveScenario = canonical?.context?.scenario || scenario;
+    const evaluation = evaluateCompleteBuild({
       items,
-      stats: null,
-      activeSets: [],
-      spells: [],
-      combatSpells: [],
-      complete: workshopBuildIsComplete(build),
-      recalculationMs: Math.max(0, clock() - startedAt)
-    };
+      sets: dataset?.sets || [],
+      selections,
+      constraints: {},
+      fmPolicy: build?.fmPolicy || {},
+      turnMode: 't1',
+      character,
+      // Workshop selections describe spells to evaluate, not a mandatory cast plan.
+      // Executable rotations are solved later by analyzeWorkshopTurns().
+      scenario: {
+        ...effectiveScenario,
+        requiredApByTurn: {}
+      }
+    });
+
+    if (!evaluation.result) {
+      return invalidResult({
+        startedAt,
+        items,
+        build,
+        reason: evaluation.reason || 'evaluation-failed'
+      });
+    }
+
+    resolvedStats = canonical?.context?.stats || evaluation.result.stats;
+    resolvedStatsByTurn = canonical?.context?.effectiveStatsByTurn || evaluation.result.effectiveStatsByTurn || {};
+    activeSets = evaluation.result.activeSets || [];
+    characteristics = evaluation.result.characteristics;
+    fm = canonical?.context?.fm || evaluation.result.fm;
+    evaluationSource = canonical ? 'optimizer-canonical-t1' : 'workshop';
   }
 
-  const resolvedStats = canonical?.context?.stats || evaluation.result.stats;
-  const resolvedStatsByTurn = canonical?.context?.effectiveStatsByTurn || evaluation.result.effectiveStatsByTurn || {};
   const effectiveT1Stats = resolvedStatsByTurn?.[1] || resolvedStats;
   const classSpells = build?.classId ? spellsForBreed(spellData, build.classId) : [];
   const spells = classSpells
@@ -133,15 +189,23 @@ export function evaluateWorkshopBuild({
     stats: resolvedStats,
     effectiveStats: effectiveT1Stats,
     effectiveStatsByTurn: resolvedStatsByTurn,
-    activeSets: evaluation.result.activeSets || [],
-    characteristics: evaluation.result.characteristics,
-    fm: canonical?.context?.fm || evaluation.result.fm,
+    activeSets,
+    characteristics,
+    fm,
+    syntheticOffense,
+    theoreticalDamage: Number.isFinite(Number(syntheticOffense?.minimumScore))
+      ? Number(syntheticOffense.minimumScore)
+      : null,
+    workspaceContext,
+    referenceScore: Number.isFinite(Number(workspaceContext?.referenceScore))
+      ? Number(workspaceContext.referenceScore)
+      : null,
     spells,
     t1DamageSources: t1DamageSources(items, resolvedStats, effectiveScenario),
     combatSpells: canonical?.spells || classSpells.filter((spell) => spell?.combatRelevant !== false),
     canonicalCombatContext: canonical?.context || null,
-    combatEvaluationSource: canonical ? 'optimizer-canonical-t1' : 'workshop',
-    complete: workshopBuildIsComplete(build),
+    combatEvaluationSource: evaluationSource,
+    complete,
     recalculationMs: Math.max(0, clock() - startedAt)
   };
 }

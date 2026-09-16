@@ -54,6 +54,22 @@ function cloneCanonicalCombatContext(context = null) {
   };
 }
 
+function cloneWorkspaceContext(context = null) {
+  if (!context || typeof context !== 'object') return null;
+  const syntheticOffense = context.syntheticOffense || {};
+  const referenceScore = context.referenceScore == null ? null : Number(context.referenceScore);
+  return {
+    constraints: { ...(context.constraints || {}) },
+    fmPolicy: { ...(context.fmPolicy || {}) },
+    syntheticOffense: {
+      ...syntheticOffense,
+      elements: [...(syntheticOffense.elements || [])],
+      profiles: [...(syntheticOffense.profiles || [])]
+    },
+    referenceScore: Number.isFinite(referenceScore) ? referenceScore : null
+  };
+}
+
 function normalizeRejectedItemIds(ids = []) {
   return [...new Set((ids || []).map(String).filter(Boolean))].sort();
 }
@@ -86,7 +102,8 @@ export function createWorkshopBuild({
   lockedSlots = [],
   rejectedItemIds = [],
   canonicalCombatContext = null,
-  canonicalCombatSignature = null
+  canonicalCombatSignature = null,
+  workspaceContext = null
 } = {}) {
   const equipment = cloneEquipment(equipmentBySlot);
   return {
@@ -97,7 +114,8 @@ export function createWorkshopBuild({
     lockedSlots: normalizeLockedSlots(lockedSlots, equipment),
     rejectedItemIds: normalizeRejectedItemIds(rejectedItemIds),
     canonicalCombatContext: cloneCanonicalCombatContext(canonicalCombatContext),
-    canonicalCombatSignature: canonicalCombatSignature ? String(canonicalCombatSignature) : null
+    canonicalCombatSignature: canonicalCombatSignature ? String(canonicalCombatSignature) : null,
+    workspaceContext: cloneWorkspaceContext(workspaceContext)
   };
 }
 
@@ -161,13 +179,15 @@ export function createWorkshopBuildFromOptimizerResult({
       .filter(Boolean)
       .map(String)
   )];
+  const workspaceContext = cloneWorkspaceContext(result?.workspaceContext);
   let build = createWorkshopBuild({
     classId,
     equipmentBySlot,
-    fmPolicy,
+    fmPolicy: workspaceContext?.fmPolicy || fmPolicy,
     selectedSpells,
     lockedSlots,
-    rejectedItemIds
+    rejectedItemIds,
+    workspaceContext
   });
   if (!specialSlotRulesAreValid(workshopItems(build))) {
     throw new Error('Résultat incompatible avec les règles de slots de l’Atelier.');

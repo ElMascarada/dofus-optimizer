@@ -205,12 +205,14 @@ try {
     const root = document.querySelector('#optimizer-results');
     const first = root.querySelector('[data-optimizer-result="0"]');
     const cards = [...root.querySelectorAll('[data-optimizer-result]')];
+    const score = first?.querySelector('[data-theoretical-damage]');
     return {
       state: root.dataset.state,
       ap: Number(first?.dataset.resultAp || 0),
       mp: Number(first?.dataset.resultMp || 0),
       items: Number(first?.dataset.resultItems || 0),
       count: cards.length,
+      theoreticalDamage: Number(score?.dataset.theoreticalDamage || 0),
       hasOpenWorkshop: Boolean(first?.querySelector('[data-open-workshop]')),
       fmSummary: first?.textContent?.includes('FM Oui · Exo PA + PM inclus') || false
     };
@@ -223,6 +225,7 @@ try {
     || result.items !== 16
     || result.count < 1
     || result.count > 5
+    || result.theoreticalDamage <= 0
     || !result.hasOpenWorkshop
     || !result.fmSummary
   ) {
@@ -233,14 +236,30 @@ try {
   await waitFor(() => client.evaluate(`document.querySelector('#workshop-slot-progress')?.textContent?.trim() === '16 / 16'`), {
     timeout: 10_000, label: 'round-trip Optimizer → Workshop'
   });
+  await waitFor(() => client.evaluate(`Number(document.querySelector('[data-workshop-theoretical-damage]')?.dataset.workshopTheoreticalDamage || 0) > 0`), {
+    timeout: 10_000, label: 'score théorique canonique dans Workshop'
+  });
 
-  const workshop = await client.evaluate(`(() => ({
-    visible: !document.querySelector('#workshop-view').hidden,
-    progress: document.querySelector('#workshop-slot-progress')?.textContent,
-    findBetterEnabled: !document.querySelector('#workshop-find-better')?.disabled
-  }))()`);
-  if (!workshop.visible || workshop.progress?.trim() !== '16 / 16' || !workshop.findBetterEnabled) {
-    throw new Error(`Round-trip Workshop invalide: ${JSON.stringify(workshop)}`);
+  const workshop = await client.evaluate(`(() => {
+    const score = document.querySelector('[data-workshop-theoretical-damage]');
+    return {
+      visible: !document.querySelector('#workshop-view').hidden,
+      progress: document.querySelector('#workshop-slot-progress')?.textContent,
+      findBetterEnabled: !document.querySelector('#workshop-find-better')?.disabled,
+      theoreticalDamage: Number(score?.dataset.workshopTheoreticalDamage || 0),
+      referenceDamage: Number(score?.dataset.workshopReferenceDamage || 0),
+      context: document.querySelector('[data-workshop-synthetic-context]')?.textContent || ''
+    };
+  })()`);
+  if (
+    !workshop.visible
+    || workshop.progress?.trim() !== '16 / 16'
+    || !workshop.findBetterEnabled
+    || workshop.theoreticalDamage !== result.theoreticalDamage
+    || workshop.referenceDamage !== result.theoreticalDamage
+    || !/même évaluateur canonique/i.test(workshop.context)
+  ) {
+    throw new Error(`Round-trip Workshop invalide: ${JSON.stringify({ result, workshop })}`);
   }
 
   console.log('EQUIPMENT_ONLY_UI=PASS');
@@ -251,6 +270,7 @@ try {
   console.log('REAL_BROWSER_FM_12_6_FOUND=YES');
   console.log(`REAL_BROWSER_DISPLAYED_RESULTS=${result.count}`);
   console.log('WORKSHOP_ROUNDTRIP=PASS');
+  console.log(`WORKSHOP_SCORE_PARITY=PASS:${workshop.theoreticalDamage}`);
 } finally {
   client?.close();
   await Promise.all([stopProcess(browser), stopProcess(server)]);
