@@ -2,6 +2,16 @@ import { WORKSHOP_STAT_SECTIONS, statDisplayValue } from '../stat-catalog.js';
 import { escapeHtml, formatNumber, statLabel, statSuffix } from './ui-format.js';
 import { analyzeWorkshopTurns } from './workshop-turn-analysis.js';
 
+const ELEMENT_LABELS = Object.freeze({
+  earth: 'Terre',
+  fire: 'Feu',
+  water: 'Eau',
+  air: 'Air',
+  multi: 'Multi-lignes'
+});
+const PROFILE_LABELS = Object.freeze({ small: 'Petites lignes', medium: 'Mixte', large: 'Grosses lignes' });
+const CRIT_LABELS = Object.freeze({ auto: 'Auto', crit: 'Crit', no_crit: 'Sans crit' });
+
 function tiles(stats, definitions) {
   return definitions.map((definition) => `
     <div class="workshop-stat" data-stat-key="${escapeHtml(definition.key)}">
@@ -42,13 +52,45 @@ function statSections(stats) {
     <div class="workshop-stat-grid${section.id === 'resistances' ? ' workshop-res-grid' : ''}" data-stat-section="${escapeHtml(section.id)}">${tiles(stats, section.stats)}</div>`).join('');
 }
 
+function syntheticContextLabel(evaluation) {
+  const offense = evaluation?.workspaceContext?.syntheticOffense || evaluation?.syntheticOffense;
+  if (!offense) return '';
+  const elements = (offense.elements || []).map((element) => ELEMENT_LABELS[element] || element).join(' + ');
+  const profiles = (offense.profiles || []).map((profile) => PROFILE_LABELS[profile] || profile).join(' + ');
+  const crit = CRIT_LABELS[offense.critMode] || offense.critMode || 'Auto';
+  return [elements, profiles, crit].filter(Boolean).join(' · ');
+}
+
+function theoreticalScore(evaluation) {
+  const score = Number(evaluation?.theoreticalDamage);
+  if (!Number.isFinite(score)) return '';
+  const reference = Number(evaluation?.referenceScore);
+  const hasReference = Number.isFinite(reference);
+  const delta = hasReference ? score - reference : null;
+  const deltaText = delta == null
+    ? '—'
+    : `${delta >= 0 ? '+' : ''}${formatNumber(delta, 0)}`;
+  return `
+    <h4>Mesure Optimiseur</h4>
+    <div class="workshop-stat-grid workshop-theoretical-score"
+      data-workshop-theoretical-damage="${Math.round(score)}"
+      ${hasReference ? `data-workshop-reference-damage="${Math.round(reference)}"` : ''}>
+      <div class="workshop-stat"><span>Dégâts théoriques</span><b>${formatNumber(score, 0)}</b></div>
+      ${hasReference ? `<div class="workshop-stat"><span>Référence Optimiseur</span><b>${formatNumber(reference, 0)}</b></div>` : ''}
+      ${hasReference ? `<div class="workshop-stat"><span>Écart</span><b>${deltaText}</b></div>` : ''}
+    </div>
+    <p class="hint" data-workshop-synthetic-context>${escapeHtml(syntheticContextLabel(evaluation))} · même évaluateur canonique que l’Optimiseur.</p>`;
+}
+
 export function renderStatsPanel(root, evaluation) {
   if (!evaluation?.valid) {
     const message = evaluation?.reason === 'item-condition'
       ? 'Une condition d’équipement n’est pas satisfaite.'
       : evaluation?.reason === 'structural-invalid'
         ? 'La combinaison d’équipements est structurellement invalide.'
-        : 'Le build ne peut pas être évalué exactement.';
+        : evaluation?.reason === 'constraint'
+          ? 'Le stuff modifié ne respecte plus les contraintes de la recherche d’origine.'
+          : 'Le build ne peut pas être évalué exactement.';
     root.innerHTML = `<div class="ui-state" data-state="error" role="alert"><strong>Build invalide</strong><span>${message} Modifie les équipements concernés pour reprendre le calcul.</span></div>`;
     return;
   }
@@ -62,6 +104,7 @@ export function renderStatsPanel(root, evaluation) {
 
   root.innerHTML = `
     <div class="workshop-panel-heading"><div><span class="eyebrow">STATS LIVE</span><h3>Statistiques</h3></div><span class="workshop-speed" title="Temps de recalcul du build">${formatNumber(evaluation.recalculationMs, 2)} ms</span></div>
+    ${theoreticalScore(evaluation)}
     ${turnIndicators(evaluation)}
     <p class="hint">Les statistiques ci-dessous décrivent le build statique. Les bonus temporels sont exposés séparément dans le panneau Sorts.</p>
     ${statSections(evaluation.stats)}
