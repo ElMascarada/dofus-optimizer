@@ -60,10 +60,12 @@ test('la lecture de vérité PA/PM ne modifie ni résultats, ni ordre, ni scores
 });
 
 test('le renderer Equipment-Only expose directement les PA/PM permanents', async () => {
-  const source = await readFile(new URL('../js/optimizer-app.js', import.meta.url), 'utf8');
-  assert.match(source, /\['ap', 'PA'\]/);
-  assert.match(source, /\['mp', 'PM'\]/);
-  assert.match(source, /data-result-ap/);
-  assert.match(source, /data-result-mp/);
+  const source = await readFile(new URL('../js/optimizer-result-view.js', import.meta.url), 'utf8');
+  assert.match(source, /data-result-ap=/);
+  assert.match(source, /data-result-mp=/);
+  assert.match(source, /fmt\(stats\.ap, 0\)/);
+  assert.match(source, /fmt\(stats\.mp, 0\)/);
+  assert.match(source, /<small>PA<\/small>/);
+  assert.match(source, /<small>PM<\/small>/);
   assert.doesNotMatch(source, /optimizerApMpTruth|Bonus T1|PA\/PM au T1|disponibles avant actions/);
 });
