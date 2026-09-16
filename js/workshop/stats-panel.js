@@ -62,10 +62,11 @@ function syntheticContextLabel(evaluation) {
 }
 
 function theoreticalScore(evaluation) {
-  const score = Number(evaluation?.theoreticalDamage);
+  if (evaluation?.theoreticalDamage == null) return '';
+  const score = Number(evaluation.theoreticalDamage);
   if (!Number.isFinite(score)) return '';
-  const reference = Number(evaluation?.referenceScore);
-  const hasReference = Number.isFinite(reference);
+  const hasReference = evaluation?.referenceScore != null && Number.isFinite(Number(evaluation.referenceScore));
+  const reference = hasReference ? Number(evaluation.referenceScore) : null;
   const delta = hasReference ? score - reference : null;
   const deltaText = delta == null
     ? '—'
