@@ -57,6 +57,7 @@ function cloneCanonicalCombatContext(context = null) {
 function cloneWorkspaceContext(context = null) {
   if (!context || typeof context !== 'object') return null;
   const syntheticOffense = context.syntheticOffense || {};
+  const referenceScore = context.referenceScore == null ? null : Number(context.referenceScore);
   return {
     constraints: { ...(context.constraints || {}) },
     fmPolicy: { ...(context.fmPolicy || {}) },
@@ -65,7 +66,7 @@ function cloneWorkspaceContext(context = null) {
       elements: [...(syntheticOffense.elements || [])],
       profiles: [...(syntheticOffense.profiles || [])]
     },
-    referenceScore: Number.isFinite(Number(context.referenceScore)) ? Number(context.referenceScore) : null
+    referenceScore: Number.isFinite(referenceScore) ? referenceScore : null
   };
 }
 
