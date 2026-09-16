@@ -1,6 +1,6 @@
 const RUNTIME_META = Object.freeze({
-  appVersion: '0.14.11',
-  serviceWorkerCache: 'dofus-optimizer-v0.14.11-constraint-ux-1'
+  appVersion: '0.14.12',
+  serviceWorkerCache: 'dofus-optimizer-v0.14.12-unified-workspace-1'
 });
 
 Object.defineProperty(globalThis, 'DofusOptimizerRuntime', {
