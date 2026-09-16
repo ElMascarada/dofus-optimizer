@@ -7,8 +7,8 @@
   },
   "elements": 273,
   "items": {
-    "total": 1109,
-    "certified": 1053,
+    "total": 1110,
+    "certified": 1054,
     "unknownSlot": 0,
     "unmappedEffects": 1,
     "activeEffects": 346,
@@ -16,7 +16,7 @@
     "unmappedConditions": 0,
     "bySlot": {
       "dofus": 320,
-      "cape": 72,
+      "cape": 73,
       "companion": 145,
       "weapon": 130,
       "boots": 83,
@@ -32,7 +32,7 @@
     "unknownConditionNames": {},
     "certifiedPct": 94.95,
     "unknownSlotTypes": {},
-    "snapshotCertified": 1093,
+    "snapshotCertified": 1094,
     "snapshotStaticOnly": 46,
     "excludedByUncertifiedSet": 6,
     "ignoredEffects": 83,
@@ -1941,7 +1941,7 @@
     ],
     "snapshotBySlot": {
       "dofus": 319,
-      "cape": 71,
+      "cape": 72,
       "companion": 145,
       "weapon": 120,
       "boots": 82,
