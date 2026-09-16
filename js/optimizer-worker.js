@@ -15,6 +15,19 @@ function canonicalSyntheticOffense(input = {}) {
   return { ...input, elements: [...ALL_ELEMENTS] };
 }
 
+function cloneWorkspaceContext({ constraints = {}, fmPolicy = {}, syntheticOffense = {}, referenceScore = null } = {}) {
+  return {
+    constraints: { ...(constraints || {}) },
+    fmPolicy: { ...(fmPolicy || {}) },
+    syntheticOffense: {
+      ...(syntheticOffense || {}),
+      elements: [...(syntheticOffense?.elements || [])],
+      profiles: [...(syntheticOffense?.profiles || [])]
+    },
+    referenceScore: Number.isFinite(Number(referenceScore)) ? Number(referenceScore) : null
+  };
+}
+
 self.addEventListener('message', (event) => {
   if (event.data?.type !== 'optimize') return;
 
@@ -23,23 +36,36 @@ self.addEventListener('message', (event) => {
     const rejected = new Set(normalizedIds(payload.rejectedItemIds));
     const items = (payload.items || []).filter((item) => !rejected.has(String(item?.id)));
     const fmEnabled = payload.fmPolicy?.enabled === true || payload.fmPolicy?.fmEnabled === true;
+    const constraints = { ...(payload.constraints || {}) };
+    const fmPolicy = {
+      enabled: fmEnabled,
+      fmEnabled,
+      exoAp: Number(payload.fmPolicy?.exoAp || 0) === 1 ? 1 : 0,
+      exoMp: Number(payload.fmPolicy?.exoMp || 0) === 1 ? 1 : 0
+    };
+    const syntheticOffense = canonicalSyntheticOffense(payload.syntheticOffense || {});
 
     const output = searchEquipmentRequest({
       items,
       sets: payload.sets || [],
-      constraints: payload.constraints || {},
-      fmPolicy: {
-        enabled: fmEnabled,
-        fmEnabled,
-        exoAp: Number(payload.fmPolicy?.exoAp || 0) === 1 ? 1 : 0,
-        exoMp: Number(payload.fmPolicy?.exoMp || 0) === 1 ? 1 : 0
-      },
-      syntheticOffense: canonicalSyntheticOffense(payload.syntheticOffense || {}),
+      constraints,
+      fmPolicy,
+      syntheticOffense,
       requiredItemIds: normalizedIds(payload.requiredItemIds),
       topN: Math.max(1, Number(payload.topN || 10)),
       searchProfile: payload.searchProfile || 'BALANCED',
       onProgress: (progress) => self.postMessage({ type: 'progress', requestId, progress })
     });
+
+    output.results = (output.results || []).map((result) => ({
+      ...result,
+      workspaceContext: cloneWorkspaceContext({
+        constraints,
+        fmPolicy,
+        syntheticOffense,
+        referenceScore: result?.syntheticOffense?.minimumScore
+      })
+    }));
 
     self.postMessage({ type: 'result', requestId, output });
   } catch (error) {
