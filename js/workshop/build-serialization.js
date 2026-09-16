@@ -14,6 +14,7 @@ function cloneFmPolicy(value = {}) {
 function cloneWorkspaceContext(value = null) {
   if (!value || typeof value !== 'object') return null;
   const syntheticOffense = value.syntheticOffense || {};
+  const referenceScore = value.referenceScore == null ? null : Number(value.referenceScore);
   return {
     constraints: { ...(value.constraints || {}) },
     fmPolicy: { ...(value.fmPolicy || {}) },
@@ -22,7 +23,7 @@ function cloneWorkspaceContext(value = null) {
       elements: [...(syntheticOffense.elements || [])],
       profiles: [...(syntheticOffense.profiles || [])]
     },
-    referenceScore: Number.isFinite(Number(value.referenceScore)) ? Number(value.referenceScore) : null
+    referenceScore: Number.isFinite(referenceScore) ? referenceScore : null
   };
 }
 
