@@ -2,9 +2,9 @@
 
 - Generated: 2026-09-10T17:27:05.370348462+02:00
 - Game version: 3.6.11.15 (main)
-- Included items: 1109
-- Self-certified items in coverage scope: 1053 (94.95%)
-- Snapshot items: 1093
+- Included items: 1110
+- Self-certified items in coverage scope: 1054 (94.95%)
+- Snapshot items: 1094
 - Snapshot static-only dynamic items: 46
 - Excluded because linked set is not certified: 6
 - Unknown slots: 0
@@ -21,7 +21,7 @@
 - amulet: 73
 - belt: 65
 - boots: 83
-- cape: 72
+- cape: 73
 - companion: 145
 - dofus: 320
 - hat: 93

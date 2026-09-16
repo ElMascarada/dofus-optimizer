@@ -1,4 +1,5 @@
 import { isOptimizerAvailableItem } from './item-availability.js';
+import { isCuratedLowLevelEquipment } from './curated-equipment-inclusions.js';
 
 export function isSolverSafeSet(set) {
   if (!set?.certification?.certified) return false;
@@ -21,7 +22,7 @@ export function isInternalOrNonPlayerItem(item) {
 export function isPlayerEquipmentScope(item) {
   if (isInternalOrNonPlayerItem(item)) return false;
   if (item?.slot === 'dofus' || item?.slot === 'companion') return true;
-  return Number(item?.level) >= 190;
+  return Number(item?.level) >= 190 || isCuratedLowLevelEquipment(item);
 }
 
 export function equipmentForCoverage(items = []) {

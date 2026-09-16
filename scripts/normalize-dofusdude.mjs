@@ -3,6 +3,7 @@ import {
   buildCoverageReport,
   shouldIncludeEquipment
 } from '../js/dofusdude-normalizer.js';
+import { isCuratedLowLevelEquipment } from '../js/curated-equipment-inclusions.js';
 import { normalizeSourceEquipment, normalizeSourceMount, normalizeSourceSet } from '../js/dofus-source-rules.js';
 import {
   collectUnknownSlotTypes,
@@ -76,7 +77,7 @@ const [equipmentRaw, setsRaw, mountsRaw, elements, version] = await Promise.all(
 ]);
 
 const allEquipment = listFrom(equipmentRaw).map((item) => normalizeSourceEquipment(item, elements));
-const equipment = allEquipment.filter(shouldIncludeEquipment);
+const equipment = allEquipment.filter((item) => shouldIncludeEquipment(item) || isCuratedLowLevelEquipment(item));
 const coverageEquipment = equipmentForCoverage(allEquipment);
 const mounts = listFrom(mountsRaw).map((mount) => normalizeSourceMount(mount, elements));
 
