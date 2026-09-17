@@ -333,6 +333,60 @@ export function boundedCorePools(policy, axes) {
   return byCount;
 }
 
+function fullCoreVariantsByCountAndSet(policy) {
+  const byCount = new Map([2, 3, 4].map((count) => [count, new Map()]));
+  const rows = (policy.setCoreCatalog?.cores || [])
+    .filter((core) => core?.legality?.valid)
+    .map((core) => ({
+      core,
+      score: Number(policy.rankStats(core.searchStats || core.aggregateStats || {}).rankScore || 0)
+    }))
+    .sort((a, b) => b.score - a.score || String(a.core.id).localeCompare(String(b.core.id)));
+
+  for (const row of rows) {
+    const count = Number(row.core.pieceCount);
+    const sets = byCount.get(count);
+    if (!sets) continue;
+    const setId = String(row.core.setId);
+    if (!sets.has(setId)) sets.set(setId, []);
+    sets.get(setId).push(row.core);
+  }
+  return byCount;
+}
+
+export function contextualArchitectureCoreCandidates(state, pieceCount, corePools, context, fullCoreCatalog = null) {
+  const primary = corePools.get(pieceCount) || [];
+  if (!primary.length) return [];
+
+  const existingSetIds = new Set((state?.cores || []).map((core) => String(core?.setId)));
+  const representedSetIds = new Set();
+  const compatibleSetIds = new Set();
+  const compatible = [];
+
+  for (const core of primary) {
+    const setId = String(core.setId);
+    if (existingSetIds.has(setId)) continue;
+    representedSetIds.add(setId);
+    if (!coresCompatible([...(state?.cores || []), core])) continue;
+    compatibleSetIds.add(setId);
+    compatible.push(core);
+  }
+
+  const needsFallback = [...representedSetIds].filter((setId) => !compatibleSetIds.has(setId));
+  if (!needsFallback.length) return compatible;
+
+  const catalog = fullCoreCatalog || fullCoreVariantsByCountAndSet(context.policy);
+  const fullBySet = catalog.get(pieceCount) || new Map();
+  for (const setId of needsFallback) {
+    for (const core of fullBySet.get(setId) || []) {
+      if (!coresCompatible([...(state?.cores || []), core])) continue;
+      compatible.push(core);
+      break;
+    }
+  }
+  return compatible;
+}
+
 export function retainFinalArchitectureCandidates(states, limit, context) {
   const primary = retainCombinedArchitectureStates(states, limit, context);
   const selected = new Map(primary.map((state) => [itemKey(state.items), state]));
@@ -346,14 +400,14 @@ export function retainFinalArchitectureCandidates(states, limit, context) {
 
 function enumerateArchitectures(corePools, context) {
   const all = [];
+  const fullCoreCatalog = fullCoreVariantsByCountAndSet(context.policy);
   for (const pattern of CORE_PATTERNS) {
     let states = [{ cores: [], items: [], stats: {}, score: 0, meanScore: 0, completionScore: 0, pattern: pattern.join('+') }];
     for (const pieceCount of pattern) {
       const expanded = [];
       for (const state of states) {
-        for (const core of corePools.get(pieceCount) || []) {
+        for (const core of contextualArchitectureCoreCandidates(state, pieceCount, corePools, context, fullCoreCatalog)) {
           const cores = [...state.cores, core];
-          if (!coresCompatible(cores)) continue;
           const items = cores.flatMap((entry) => entry.items);
           const ranked = stateScore(items, context.policy, context.setsById);
           expanded.push({ cores, items, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
@@ -507,16 +561,22 @@ export function retainCompanionParentMarginals(equipmentStates, rows, limit, con
   if (!equipmentStates?.length || !rows?.length || limit <= 1) return primary;
 
   const parents = new Map(equipmentStates.map((state) => [itemKey(state.items), state]));
-  const bestChildByParent = new Map();
+  const childrenByParent = new Map();
+  const childKeys = new Set();
   for (const child of [...rows].sort(compareStatePriority)) {
     const key = equipmentParentKey(child.items);
-    if (key && !bestChildByParent.has(key)) bestChildByParent.set(key, child);
+    const childKey = itemKey(child.items);
+    if (!key || !childKey || childKeys.has(`${key}\u0000${childKey}`)) continue;
+    childKeys.add(`${key}\u0000${childKey}`);
+    if (!childrenByParent.has(key)) childrenByParent.set(key, []);
+    childrenByParent.get(key).push(child);
   }
 
-  const marginal = [...bestChildByParent.entries()]
-    .map(([parentKey, child]) => {
+  const marginal = [...childrenByParent.entries()]
+    .map(([parentKey, children]) => {
+      const child = children[0];
       const parent = parents.get(parentKey);
-      return parent ? { child, marginal: Number(child.score || 0) - Number(parent.score || 0) } : null;
+      return parent ? { parentKey, child, marginal: Number(child.score || 0) - Number(parent.score || 0) } : null;
     })
     .filter(Boolean)
     .sort((a, b) => b.marginal - a.marginal || compareStatePriority(a.child, b.child));
@@ -525,7 +585,25 @@ export function retainCompanionParentMarginals(equipmentStates, rows, limit, con
     limit - 1,
     Math.max(12, Number(context.specialistKeys?.length || 0) * 3)
   );
-  const reserved = marginal.slice(0, reserveLimit).map((entry) => entry.child);
+  const selectedParents = marginal.slice(0, reserveLimit);
+  const reserved = selectedParents.map((entry) => entry.child);
+  const reservedKeys = new Set(reserved.map((state) => itemKey(state.items)));
+  const siblingCandidates = new Map();
+  for (const entry of selectedParents) {
+    for (const child of (childrenByParent.get(entry.parentKey) || []).slice(0, 8)) {
+      const key = itemKey(child.items);
+      if (!key || reservedKeys.has(key)) continue;
+      siblingCandidates.set(key, child);
+    }
+  }
+
+  const available = Math.max(0, limit - reserved.length);
+  const siblingBudget = Math.min(siblingCandidates.size, Math.ceil(available / 2));
+  const retainedSiblings = siblingBudget > 0
+    ? retainStates([...siblingCandidates.values()], siblingBudget, context)
+    : [];
+  const primaryBudget = Math.max(0, available - retainedSiblings.length);
+  const competitiveFill = retainStates([...primary, ...siblingCandidates.values()], limit, context);
   const output = [];
   const seen = new Set();
   const add = (state) => {
@@ -536,10 +614,10 @@ export function retainCompanionParentMarginals(equipmentStates, rows, limit, con
     output.push(state);
   };
 
-  const primaryCount = Math.max(0, limit - reserved.length);
-  for (const state of primary.slice(0, primaryCount)) add(state);
+  for (const state of primary.slice(0, primaryBudget)) add(state);
+  for (const state of retainedSiblings) add(state);
   for (const state of reserved) add(state);
-  for (const state of primary) add(state);
+  for (const state of competitiveFill) add(state);
   return output;
 }
 
@@ -611,7 +689,7 @@ function resourcesWithinPermanentCaps(items, context) {
     && effectiveStat(stats, 'mp') <= MAX_PERMANENT_MP;
 }
 
-function dofusPackages(baseItems, pool, context) {
+export function dofusPackages(baseItems, pool, context) {
   let states = [{ items: [], next: 0, stats: {}, score: 0, meanScore: 0 }];
   for (let pick = 0; pick < 6; pick++) {
     const expanded = [];
@@ -638,8 +716,7 @@ function dofusPackages(baseItems, pool, context) {
     .filter((state) => state.items.length === 6
       && resourcesMeet([...baseItems, ...state.items], context)
       && resourcesWithinPermanentCaps([...baseItems, ...state.items], context))
-    .sort(compareStatePriority)
-    .slice(0, 14);
+    .sort(compareStatePriority);
 }
 
 function insertResult(results, candidate, topN) {
@@ -668,7 +745,7 @@ export function searchCombinedSetCoreEquipment({
   const slotPools = Object.fromEntries(EQUIPMENT_RULES.map((rule) => [rule.id, slotPool(rule.id, eligibleItems, prefilter, context)]));
   const equipmentStates = completeEquipment(architectures, slotPools, context);
 
-  const companionCandidates = slotPool('companion', eligibleItems, prefilter, context).slice(0, 20);
+  const companionCandidates = slotPool('companion', eligibleItems, prefilter, context);
   const companionStates = completeCompanion(equipmentStates, companionCandidates, context);
   const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
   const dofusCandidates = dofusPool(eligibleItems, prefilter, context, critMode);
@@ -702,8 +779,10 @@ export function searchCombinedSetCoreEquipment({
     corePoolRetention: 'semantic-lane-union-no-post-truncation',
     architectureRetention: 'balanced+structural+parent-terminal-lineage+near-complete-before-final-trim+specialist+completion',
     equipmentRetention: 'architecture-best+specialists-until-companion-context',
-    companionRetention: 'primary+parent-marginal-reserve',
+    coreCompatibilityFallback: 'contextual-per-set-single-compatible-variant',
+    companionRetention: 'primary+parent-marginal-reserve+bounded-sibling-diversity',
     dofusPoolPolicy: 'canonical-offense-resource-reserve',
+    dofusFinalRetention: 'legal-beam-survivors-before-canonical-evaluation',
     finalResourceCapsAppliedBeforeDofusBeamRetention: true,
     requestedAxes: axes,
     core2Pool: (corePools.get(2) || []).length,

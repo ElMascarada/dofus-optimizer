@@ -80,3 +80,48 @@ test('companion retention reserves strong parent-child marginal gains', () => {
   assert.equal(retained.length, 3);
   assert.ok(retainedIds.has('arch-a-companion'), 'largest marginal gain must survive despite low absolute score');
 });
+
+test('companion marginal reserve gives a useful seventh sibling bounded semantic competition', () => {
+  const parents = [
+    equipmentState({ coreId: 'arch-a', shieldId: 'a', score: 100 }),
+    equipmentState({ coreId: 'arch-b', shieldId: 'b', score: 200 }),
+    equipmentState({ coreId: 'arch-c', shieldId: 'c', score: 1000 })
+  ];
+  const [a, b, c] = parents;
+  const child = (parent, id, score, crit = 0) => ({
+    ...parent,
+    items: [...parent.items, item(id, 'companion')],
+    stats: { crit },
+    score,
+    meanScore: score,
+    completionScore: score
+  });
+
+  const rows = [
+    child(a, 'a-best', 150),
+    child(a, 'a-sibling-2', 149),
+    child(a, 'a-sibling-3', 148),
+    child(a, 'a-sibling-4', 147),
+    child(a, 'a-sibling-5', 146),
+    child(a, 'a-sibling-6', 145),
+    child(a, 'a-sibling-7-useful', 144, 100),
+    child(a, 'a-sibling-8', 143),
+    child(b, 'b-best', 230),
+    child(c, 'c-absolute-specialist', 1001, 200)
+  ];
+
+  const retained = retainCompanionParentMarginals(parents, rows, 3, {
+    ...context,
+    specialistKeys: ['crit']
+  });
+  const companionIds = retained
+    .flatMap((state) => state.items)
+    .filter((entry) => entry.slot === 'companion')
+    .map((entry) => entry.id);
+
+  assert.ok(companionIds.includes('a-best'), 'strongest parent marginal anchor survives');
+  assert.ok(companionIds.includes('a-sibling-7-useful'), 'seventh sibling can win bounded semantic competition');
+  assert.ok(retained.length <= 3, 'total companion retention remains bounded');
+  assert.equal(new Set(retained.map((state) => state.items.map((entry) => entry.id).sort().join('|'))).size, retained.length,
+    'retained companion states contain no duplicates');
+});
