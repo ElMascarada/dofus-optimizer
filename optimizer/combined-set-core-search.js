@@ -691,15 +691,28 @@ function resourcesWithinPermanentCaps(items, context) {
 }
 
 export function dofusPackages(baseItems, pool, context) {
-  let states = [{ items: [], next: 0, stats: {}, score: 0, meanScore: 0 }];
-  for (let pick = 0; pick < 6; pick++) {
+  const critMode = String(context?.critMode || 'auto').toLowerCase();
+  const requiredTurquoise = critMode === 'crit'
+    ? (pool || []).find((item) => /^Dofus Turquoise$/i.test(String(item?.name || '')))
+    : null;
+  if (critMode === 'crit' && !requiredTurquoise) return [];
+
+  const selectablePool = requiredTurquoise
+    ? (pool || []).filter((item) => String(item?.id) !== String(requiredTurquoise.id))
+    : (pool || []);
+  const requiredItems = requiredTurquoise ? [requiredTurquoise] : [];
+  const remainingPicks = 6 - requiredItems.length;
+
+  let states = [{ items: requiredItems, next: 0, stats: {}, score: 0, meanScore: 0 }];
+  for (let pick = 0; pick < remainingPicks; pick++) {
     const expanded = [];
     for (const state of states) {
-      for (let index = state.next; index < pool.length; index++) {
-        const selected = [...state.items, pool[index]];
+      for (let index = state.next; index < selectablePool.length; index++) {
+        const selected = [...state.items, selectablePool[index]];
         if (!specialSlotRulesAreValid(selected)) continue;
         const complete = [...baseItems, ...selected];
-        if (pick === 5 && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
+        if (pick === remainingPicks - 1
+          && (!resourcesMeet(complete, context) || !resourcesWithinPermanentCaps(complete, context))) continue;
         const ranked = stateScore(complete, context.policy, context.setsById);
         expanded.push({ items: selected, next: index + 1, stats: ranked.stats, score: ranked.score, meanScore: ranked.meanScore,
           completionScore: ranked.completionScore, constraintSignal: ranked.constraintSignal });

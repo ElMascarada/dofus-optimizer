@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import { createEquipmentCandidatePolicy } from '../optimizer/equipment-candidate-policy.js';
-import { combinedOffenseSearchScore } from '../optimizer/combined-set-core-search.js';
+import { combinedOffenseSearchScore, dofusPackages } from '../optimizer/combined-set-core-search.js';
 
 function policyFor(elements, critMode = 'auto') {
   return createEquipmentCandidatePolicy({
@@ -164,6 +164,61 @@ test('multi-element request orchestration no longer seeds frozen mono winners', 
 test('native combined Dofus closure filters permanent AP/MP overshoot before the final beam', () => {
   const source = readFileSync(new URL('../optimizer/combined-set-core-search.js', import.meta.url), 'utf8');
   assert.match(source, /resourcesWithinPermanentCaps/);
-  assert.match(source, /pick === 5 && \(!resourcesMeet\(complete, context\) \|\| !resourcesWithinPermanentCaps\(complete, context\)\)/);
+  assert.match(source, /pick === remainingPicks - 1/);
+  assert.match(source, /!resourcesMeet\(complete, context\) \|\| !resourcesWithinPermanentCaps\(complete, context\)/);
   assert.match(source, /finalResourceCapsAppliedBeforeDofusBeamRetention: true/);
+});
+
+
+test('explicit Crit pins Turquoise before combined Dofus beam pruning', () => {
+  const turquoise = {
+    id: 'turquoise-required',
+    name: 'Dofus Turquoise',
+    level: 200,
+    slot: 'dofus',
+    typeName: 'Dofus',
+    slotSubtype: null,
+    setId: null,
+    stats: { crit: 20 },
+    passives: [],
+    conditions: null
+  };
+  const stronger = Array.from({ length: 19 }, (_, index) => ({
+    id: `power-${index}`,
+    name: `Power ${index}`,
+    level: 200,
+    slot: 'dofus',
+    typeName: 'Dofus',
+    slotSubtype: null,
+    setId: null,
+    stats: { power: 500 + index },
+    passives: [],
+    conditions: null
+  }));
+  const pool = [turquoise, ...stronger];
+  const policy = createEquipmentCandidatePolicy({
+    items: pool,
+    sets: [],
+    constraints: {},
+    fmPolicy: {},
+    syntheticOffense: {
+      elements: ['fire', 'water'],
+      profiles: ['medium'],
+      critMode: 'crit'
+    },
+    searchProfile: 'BALANCED'
+  });
+  const packages = dofusPackages([], pool, {
+    policy,
+    setsById: {},
+    fmPolicy: {},
+    constraints: {},
+    specialistKeys: ['fire', 'water', 'power', 'crit'],
+    critMode: 'crit'
+  });
+
+  assert.ok(packages.length > 0, 'Crit beam must retain legal packages even when Turquoise is not top offense by itself');
+  assert.ok(packages.every((pack) =>
+    pack.items.some((item) => item.name === 'Dofus Turquoise')
+  ));
 });
