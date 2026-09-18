@@ -1,5 +1,6 @@
 import { specialSlotRulesAreValid } from '../build-legality.js';
 import { canonicalT1ContextIsUsable } from '../combat-evaluation-context.js';
+import { orderDofusItems } from '../dofus-order.js';
 
 export const WORKSHOP_FM_POLICY = Object.freeze({
   spellDamagePct: 0,
@@ -168,8 +169,19 @@ export function createWorkshopBuildFromOptimizerResult({
   for (let index = 0; index < resultItems.length; index++) {
     if (usedIndexes.has(index)) continue;
     const item = resultItems[index];
+    if (item?.slot === 'dofus') continue;
     const slotKey = (SLOT_KEYS_BY_SLOT.get(item?.slot) || []).find((key) => !equipmentBySlot[key]);
     if (!slotKey) throw new Error(`Résultat incompatible avec l’Atelier : slot ${item?.slot || 'inconnu'} en surnombre.`);
+    equipmentBySlot[slotKey] = item;
+  }
+
+  const remainingDofus = orderDofusItems(
+    resultItems.filter((item, index) => !usedIndexes.has(index) && item?.slot === 'dofus'),
+    result
+  );
+  for (const item of remainingDofus) {
+    const slotKey = (SLOT_KEYS_BY_SLOT.get('dofus') || []).find((key) => !equipmentBySlot[key]);
+    if (!slotKey) throw new Error('Résultat incompatible avec l’Atelier : slot dofus en surnombre.');
     equipmentBySlot[slotKey] = item;
   }
 
