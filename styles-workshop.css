@@ -119,6 +119,7 @@
 .workshop-build-library [data-library-status][data-kind="ok"] { color: var(--workshop-muted); }
 
 .workshop-equipment-grid {
+  position: relative;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
@@ -137,6 +138,11 @@
   text-align: center;
   cursor: pointer;
   transition: border-color .12s ease, transform .12s ease;
+}
+.workshop-slot:hover,
+.workshop-slot:focus-visible,
+.workshop-slot:focus-within {
+  z-index: 50;
 }
 .workshop-slot:hover,
 .workshop-slot:focus-visible { border-color: var(--workshop-red); outline: none; transform: translateY(-1px); }
