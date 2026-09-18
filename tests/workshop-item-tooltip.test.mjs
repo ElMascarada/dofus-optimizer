@@ -1,0 +1,39 @@
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import test from 'node:test';
+
+import { renderWorkshopItemTooltip } from '../js/workshop/equipment-grid.js';
+
+test('Workshop item tooltip renders every non-zero numeric stat', () => {
+  const html = renderWorkshopItemTooltip({
+    id: 'tooltip-item',
+    name: 'Item Tooltip',
+    stats: {
+      fire: 120,
+      critDamage: 18,
+      rangedDamagePct: 6,
+      rangedResistancePct: -6,
+      mp: 0
+    }
+  }, 'tooltip-test');
+
+  assert.match(html, /id="tooltip-test"/);
+  assert.match(html, /role="tooltip"/);
+  assert.match(html, /Item Tooltip/);
+  assert.match(html, /Intelligence/);
+  assert.match(html, /\+120/);
+  assert.match(html, /Do Crit/);
+  assert.match(html, /\+18/);
+  assert.match(html, /% Do Distance/);
+  assert.match(html, /\+6%/);
+  assert.match(html, /-6%/);
+  assert.doesNotMatch(html, />PM</);
+});
+
+test('Workshop tooltip is revealed by pointer hover and keyboard focus', async () => {
+  const css = await readFile(new URL('../styles-workshop.css', import.meta.url), 'utf8');
+
+  assert.match(css, /\.workshop-slot:hover \.workshop-item-tooltip/);
+  assert.match(css, /\.workshop-slot:focus-within \.workshop-item-tooltip/);
+  assert.match(css, /\.workshop-item-tooltip-grid/);
+});
