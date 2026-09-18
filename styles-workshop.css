@@ -173,11 +173,15 @@
   top: 0;
   width: min(300px, calc(100vw - 32px));
   padding: 11px 12px;
-  border: 1px solid #4a4d4b;
-  background: #0b0c0c;
-  color: var(--workshop-paper);
+  border: 1px solid rgba(244, 234, 215, .18);
+  border-radius: 14px;
+  background: #34312d;
+  color: #f4ead7;
   text-align: left;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+  box-shadow:
+    0 18px 38px rgba(0, 0, 0, .34),
+    0 6px 16px rgba(0, 0, 0, .24),
+    0 0 0 1px rgba(255, 255, 255, .025) inset;
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -194,7 +198,7 @@
   display: block;
   margin-bottom: 8px;
   font-size: .8rem;
-  color: #fff;
+  color: #fff4df;
 }
 .workshop-item-tooltip-grid {
   display: grid;
@@ -206,21 +210,22 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding: 3px 0;
-  border-bottom: 1px solid #1f2221;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(244, 234, 215, .10);
 }
 .workshop-item-tooltip-stat small {
-  color: var(--workshop-muted);
+  color: #d8cdbb;
   font-size: .7rem;
 }
 .workshop-item-tooltip-stat b {
+  color: #f4ead7;
   font-size: .72rem;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .workshop-item-tooltip-empty {
   grid-column: 1 / -1;
-  color: var(--workshop-muted);
+  color: #d8cdbb;
   font-size: .72rem;
 }
 @media (hover: none) {
