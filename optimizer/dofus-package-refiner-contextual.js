@@ -29,6 +29,7 @@ const COMMON_KEYS = Object.freeze([
   'crit',
   'critDamage',
   'spellDamagePct',
+  'rangedDamagePct',
   'range'
 ]);
 const STATIC_CONDITION_STATS = new Set(['setBonus', 'level', 'ap', 'mp']);
@@ -65,7 +66,7 @@ function selectDofusPool({
   searchProfile = 'BALANCED'
 } = {}) {
   const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
-  const eligible = filterOptimizerEligibleItems(items)
+  const eligible = filterOptimizerEligibleItems(items, constraints)
     .filter((item) => item?.slot === 'dofus' && dofusAllowed(item, critMode));
 
   const prefilter = buildEquipmentCandidatePools({

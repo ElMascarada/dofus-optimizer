@@ -269,7 +269,7 @@ export function searchSetCoreFirstEquipment({
   if (!elementKey) return { applicable: false, results: [] };
 
   const profileId = ELEMENT_PROFILE[elementKey];
-  const eligibleItems = filterOptimizerEligibleItems(items);
+  const eligibleItems = filterOptimizerEligibleItems(items, constraints);
   const setsById = setsByIdFor(sets);
 
   const prefilter = buildEquipmentCandidatePools({
