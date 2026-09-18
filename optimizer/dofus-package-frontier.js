@@ -11,7 +11,8 @@ const ELEMENT_DAMAGE = Object.freeze({
 const ALWAYS_OFFENSE_KEYS = Object.freeze([
   'power',
   'damage',
-  'spellDamagePct'
+  'spellDamagePct',
+  'rangedDamagePct'
 ]);
 const CRIT_OFFENSE_KEYS = Object.freeze([
   'crit',

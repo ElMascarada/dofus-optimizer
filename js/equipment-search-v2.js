@@ -523,7 +523,7 @@ export function searchEquipmentArchitecturesV2({
   const diagnostic = diagnosticIds.length ? { ids: diagnosticIds, firstLoss: null } : null;
   const rawById = new Map((items || []).map((item) => [String(item.id), item]));
   const trophyEligibility = optimizerTrophyEligibilityCounts(items);
-  const eligibleItems = filterOptimizerEligibleItems(items);
+  const eligibleItems = filterOptimizerEligibleItems(items, constraints);
   const eligibleById = new Map(eligibleItems.map((item) => [String(item.id), item]));
 
   if (diagnostic) {

@@ -50,6 +50,34 @@ test('Pourpre removes the strictly dominated Robuste-only package in Auto', () =
   assert.ok(pourpreOnly, 'the dominating Pourpre package must survive the frontier');
 });
 
+test('ranged damage remains a canonical Dofus package frontier dimension', () => {
+  const pool = [
+    dofus('impetueux', 'Impétueux', { rangedDamagePct: 6 }),
+    dofus('power', 'Power', { power: 80 }),
+    dofus('fire', 'Fire', { fire: 100 }),
+    dofus('water', 'Water', { water: 100 }),
+    dofus('fire-flat', 'Fire Flat', { damageFire: 20 }),
+    dofus('water-flat', 'Water Flat', { damageWater: 20 }),
+    dofus('spell', 'Spell', { spellDamagePct: 6 })
+  ];
+
+  const frontier = buildDofusPackageFrontier(pool, {
+    syntheticOffense: {
+      elements: ['fire', 'water'],
+      profiles: ['large'],
+      critMode: 'auto'
+    }
+  });
+
+  assert.ok(frontier.dominanceKeys.includes('rangedDamagePct'));
+  assert.ok(
+    frontier.packages.some((pack) =>
+      pack.items.some((item) => item.id === 'impetueux')
+    ),
+    'Impétueux lane must survive package dominance'
+  );
+});
+
 test('Ocre and Vulbis resource signatures cannot be pruned by pure offense', () => {
   const pool = [
     dofus('ocre', 'Dofus Ocre', { ap: 1 }),

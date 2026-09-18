@@ -111,7 +111,7 @@ function resourceBucket(items, setsById, fmPolicy, constraints) {
 function specialistKeys(axes = []) {
   return [...new Set([
     ...axes.flatMap((element) => [element, ELEMENT_DAMAGE[element]]),
-    'power', 'damage', 'spellDamagePct', 'crit', 'critDamage', 'ap', 'mp', 'range'
+    'power', 'damage', 'spellDamagePct', 'rangedDamagePct', 'crit', 'critDamage', 'ap', 'mp', 'range'
   ])];
 }
 
@@ -735,7 +735,7 @@ export function searchCombinedSetCoreEquipment({
   if (!combinedSetCoreApplicable(syntheticOffense)) return { applicable: false, results: [] };
 
   const axes = requestedAxes(syntheticOffense);
-  const eligibleItems = filterOptimizerEligibleItems(items);
+  const eligibleItems = filterOptimizerEligibleItems(items, constraints);
   const setsById = setsByIdFor(sets);
   const prefilter = buildEquipmentCandidatePools({ items: eligibleItems, sets, constraints, fmPolicy, syntheticOffense, searchProfile });
   const context = { axes, policy: prefilter.policy, setsById, fmPolicy, constraints, specialistKeys: specialistKeys(axes) };

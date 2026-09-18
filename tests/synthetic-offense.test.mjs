@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   evaluateSyntheticOffense,
   compareSyntheticOffenseResults,
+  SYNTHETIC_COMMON_STAT_KEYS,
   SYNTHETIC_OFFENSE_PROFILES
 } from '../js/synthetic-offense.js';
 
@@ -92,6 +93,62 @@ test('canonical offensive stat vocabulary is applied continuously', () => {
   close(entry.normalFullProbeValue, 40 * 2.5 + 10, 'earth + power + flats');
   close(entry.criticalFullProbeValue, 50 * 2.5 + 10 + 8, 'critical branch');
   close(entry.expectedFullProbeValue, entry.normalFullProbeValue * 0.6 + entry.criticalFullProbeValue * 0.4, 'expected');
+});
+
+test('distance damage multiplies spell damage as an independent final factor', () => {
+  const baseline = probe(result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { earth: 100, spellDamagePct: 6 }
+  }), 'earth', 'large');
+
+  const ranged = probe(result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { earth: 100, spellDamagePct: 6, rangedDamagePct: 6 }
+  }), 'earth', 'large');
+
+  close(ranged.normalFullProbeValue, baseline.normalFullProbeValue * 1.06, 'distance multiplier');
+  close(
+    ranged.lines[0].spellMultiplier * ranged.lines[0].rangedMultiplier,
+    1.06 * 1.06,
+    'spell x distance'
+  );
+  assert.ok(SYNTHETIC_COMMON_STAT_KEYS.includes('rangedDamagePct'));
+});
+
+test('6% distance competes canonically with 80 power instead of being forced', () => {
+  const lowPower = result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { power: 80 }
+  });
+  const lowRanged = result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { rangedDamagePct: 6 }
+  });
+
+  assert.ok(
+    lowPower.minimumScore > lowRanged.minimumScore,
+    '80 power wins on a low-stat baseline'
+  );
+
+  const highPower = result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { earth: 1400, power: 80 }
+  });
+  const highRanged = result({
+    profiles: ['large'],
+    critMode: 'no_crit',
+    stats: { earth: 1400, rangedDamagePct: 6 }
+  });
+
+  assert.ok(
+    highRanged.minimumScore > highPower.minimumScore,
+    '6% distance wins when pre-final damage is high enough'
+  );
 });
 
 test('odd AP budget prorates the complete selected profile', () => {
