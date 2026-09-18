@@ -186,13 +186,14 @@
   visibility: hidden;
   pointer-events: none;
   transform: translate(-4px, 0);
-  transition: opacity .1s ease, transform .1s ease, visibility .1s ease;
+  transition: none;
 }
 .workshop-slot:hover .workshop-item-tooltip,
 .workshop-slot:focus-within .workshop-item-tooltip {
   opacity: 1;
   visibility: visible;
   transform: translate(0, 0);
+  transition: opacity .08s ease, transform .08s ease;
 }
 .workshop-item-tooltip > strong {
   display: block;
