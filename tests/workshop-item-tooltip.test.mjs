@@ -47,6 +47,8 @@ test('Workshop tooltip is revealed above sibling cells and is not clipped by the
   assert.match(css, /\.workshop-item-tooltip \{[\s\S]*?box-shadow:[\s\S]*?rgba\(0, 0, 0, \.34\)/);
   assert.match(css, /\.workshop-item-tooltip-stat small \{[\s\S]*?color:\s*#d8cdbb/);
   assert.match(css, /\.workshop-item-tooltip-stat b \{[\s\S]*?color:\s*#f4ead7/);
+  assert.match(css, /\.workshop-item-tooltip \{[\s\S]*?transition:\s*none/);
+  assert.match(css, /\.workshop-slot:hover \.workshop-item-tooltip,[\s\S]*?transition:\s*opacity \.08s ease, transform \.08s ease/);
   assert.match(css, /\.workshop-item-tooltip-grid/);
 
   assert.match(
