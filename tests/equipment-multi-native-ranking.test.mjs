@@ -164,7 +164,8 @@ test('multi-element request orchestration no longer seeds frozen mono winners', 
 test('native combined Dofus closure filters permanent AP/MP overshoot before the final beam', () => {
   const source = readFileSync(new URL('../optimizer/combined-set-core-search.js', import.meta.url), 'utf8');
   assert.match(source, /resourcesWithinPermanentCaps/);
-  assert.match(source, /pick === 5 && \(!resourcesMeet\(complete, context\) \|\| !resourcesWithinPermanentCaps\(complete, context\)\)/);
+  assert.match(source, /pick === remainingPicks - 1/);
+  assert.match(source, /!resourcesMeet\(complete, context\) \|\| !resourcesWithinPermanentCaps\(complete, context\)/);
   assert.match(source, /finalResourceCapsAppliedBeforeDofusBeamRetention: true/);
 });
 
