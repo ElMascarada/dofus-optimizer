@@ -40,6 +40,7 @@ test('Workshop tooltip is revealed above sibling cells and is not clipped by the
   assert.match(css, /\.workshop-slot:focus-within \.workshop-item-tooltip/);
   assert.match(css, /\.workshop-equipment-grid \{[\s\S]*?position:\s*relative/);
   assert.match(css, /\.workshop-slot:hover,[\s\S]*?\.workshop-slot:focus-within \{[\s\S]*?z-index:\s*50/);
+  assert.match(css, /\.workshop-item-tooltip \{[\s\S]*?left:\s*calc\(100% \+ 8px\)[\s\S]*?top:\s*0/);
   assert.match(css, /\.workshop-item-tooltip-grid/);
 
   assert.match(
