@@ -154,7 +154,7 @@
 
   #workshop-view .workshop-equipment-panel {
     position: relative;
-    overflow: hidden;
+    overflow: visible;
     background:
       radial-gradient(circle at 50% 34%, rgba(226, 162, 58, .10), transparent 18rem),
       linear-gradient(180deg, #fffdf9, #fbf6ee);
@@ -257,6 +257,12 @@
       linear-gradient(180deg, rgba(255, 253, 248, .99), rgba(250, 244, 235, .96));
     color: #292923;
     box-shadow: 0 7px 16px rgba(78, 55, 35, .045);
+  }
+
+  #workshop-view .workshop-slot:hover,
+  #workshop-view .workshop-slot:focus-visible,
+  #workshop-view .workshop-slot:focus-within {
+    z-index: 50;
   }
 
   #workshop-view .workshop-slot:hover,

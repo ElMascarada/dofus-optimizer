@@ -30,10 +30,25 @@ test('Workshop item tooltip renders every non-zero numeric stat', () => {
   assert.doesNotMatch(html, />PM</);
 });
 
-test('Workshop tooltip is revealed by pointer hover and keyboard focus', async () => {
-  const css = await readFile(new URL('../styles-workshop.css', import.meta.url), 'utf8');
+test('Workshop tooltip is revealed above sibling cells and is not clipped by the professional panel', async () => {
+  const [css, professional] = await Promise.all([
+    readFile(new URL('../styles-workshop.css', import.meta.url), 'utf8'),
+    readFile(new URL('../styles-product-professional.css', import.meta.url), 'utf8')
+  ]);
 
   assert.match(css, /\.workshop-slot:hover \.workshop-item-tooltip/);
   assert.match(css, /\.workshop-slot:focus-within \.workshop-item-tooltip/);
+  assert.match(css, /\.workshop-equipment-grid \{[\s\S]*?position:\s*relative/);
+  assert.match(css, /\.workshop-slot:hover,[\s\S]*?\.workshop-slot:focus-within \{[\s\S]*?z-index:\s*50/);
+  assert.match(css, /\.workshop-item-tooltip \{[\s\S]*?left:\s*calc\(100% \+ 8px\)[\s\S]*?top:\s*0/);
   assert.match(css, /\.workshop-item-tooltip-grid/);
+
+  assert.match(
+    professional,
+    /#workshop-view \.workshop-equipment-panel \{[\s\S]*?overflow:\s*visible/
+  );
+  assert.match(
+    professional,
+    /#workshop-view \.workshop-slot:hover,[\s\S]*?#workshop-view \.workshop-slot:focus-within \{[\s\S]*?z-index:\s*50/
+  );
 });
