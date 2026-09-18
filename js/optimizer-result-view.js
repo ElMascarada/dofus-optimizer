@@ -1,3 +1,5 @@
+import { orderDofusItems } from './dofus-order.js';
+
 const STAT_LABELS = Object.freeze({
   ap: 'PA',
   mp: 'PM',
@@ -163,9 +165,9 @@ function renderCharacterPortrait() {
   </div>`;
 }
 
-function renderLoadout(items = []) {
+function renderLoadout(items = [], result = {}) {
   const rings = itemsForSlot(items, 'ring');
-  const dofus = itemsForSlot(items, 'dofus');
+  const dofus = orderDofusItems(itemsForSlot(items, 'dofus'), result);
 
   const left = [
     ['amulet', 'Amulette', itemsForSlot(items, 'amulet')[0]],
@@ -313,7 +315,7 @@ export function renderOptimizerResult(result = {}, index = 0) {
       </aside>
 
       <div class="optimizer-build-equipment">
-        ${renderLoadout(items)}
+        ${renderLoadout(items, result)}
       </div>
 
       <aside class="optimizer-build-inspector">

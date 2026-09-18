@@ -15,6 +15,7 @@ import { addStats, effectiveStat, emptyStats } from '../js/stats.js';
 import { buildEquipmentCandidatePools } from './equipment-candidate-policy.js';
 import { filterOptimizerEligibleItems } from './item-eligibility.js';
 import { buildDofusPackageFrontier } from './dofus-package-frontier.js';
+import { dofusPackageMatchesCritMode } from './dofus-crit-policy.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
 const ELEMENT_DAMAGE = Object.freeze({
@@ -325,6 +326,10 @@ export function refineDofusPackagesForResults({
     syntheticOffense,
     constraints
   });
+  const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
+  const policyPackages = frontier.packages.filter((pack) =>
+    dofusPackageMatchesCritMode(pack?.items || [], critMode)
+  );
 
   const bases = [];
   const seenBases = new Set();
@@ -353,7 +358,7 @@ export function refineDofusPackagesForResults({
 
   for (const base of bases) {
     const compatible = [];
-    for (const pack of frontier.packages) {
+    for (const pack of policyPackages) {
       packageChecks++;
       if (!packageCanClosePermanentResources(pack, base.structuralStats, constraints)) continue;
       resourceCompatiblePackages++;
@@ -406,6 +411,7 @@ export function refineDofusPackagesForResults({
       combinations: frontier.combinations,
       legalCombinations: frontier.legalCombinations,
       frontierPackages: frontier.packages.length,
+      critPolicyPackages: policyPackages.length,
       baseContexts: bases.length,
       packageChecks,
       resourceCompatiblePackages,

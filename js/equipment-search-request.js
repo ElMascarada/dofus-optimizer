@@ -43,9 +43,13 @@ function itemName(result, pattern) {
   return (result?.items || []).some((item) => pattern.test(String(item?.name || '')));
 }
 
-function critModeAllows(result, critMode) {
-  if (critMode === 'crit' && itemName(result, /^Robuste(?: majeur)?$/i)) return false;
-  if (critMode === 'no_crit' && itemName(result, /^Dofus Turquoise$/i)) return false;
+export function critModeAllows(result, critMode) {
+  const hasTurquoise = itemName(result, /^Dofus Turquoise$/i);
+  if (critMode === 'crit') {
+    if (!hasTurquoise) return false;
+    if (itemName(result, /^Robuste(?: majeur)?$/i)) return false;
+  }
+  if (critMode === 'no_crit' && hasTurquoise) return false;
   return true;
 }
 

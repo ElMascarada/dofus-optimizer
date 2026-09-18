@@ -269,6 +269,12 @@ export function searchSetCoreFirstEquipment({
   if (!elementKey) return { applicable: false, results: [] };
 
   const profileId = ELEMENT_PROFILE[elementKey];
+  const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
+  const activeBranches = critMode === 'crit'
+    ? ['CRIT']
+    : critMode === 'no_crit'
+      ? ['NO_CRIT']
+      : ['CRIT', 'NO_CRIT'];
   const eligibleItems = filterOptimizerEligibleItems(items, constraints);
   const setsById = setsByIdFor(sets);
 
@@ -631,7 +637,7 @@ export function searchSetCoreFirstEquipment({
     {
       limit: FINAL_CONTEXT_LIMIT,
       reserve: PRIMARY_CLOSURE_RESERVE,
-      isClosable: (state) => ['CRIT', 'NO_CRIT']
+      isClosable: (state) => activeBranches
         .some((branch) => budget2Closure(state.items, branch).closes),
       bucketOf: (state) => {
         const stats = contextualBuildStats(state.items, setsById, fmPolicy);
@@ -690,7 +696,7 @@ export function searchSetCoreFirstEquipment({
   let contextsWithCompletions = 0;
 
   for (const context of primaryContexts) {
-    for (const branch of ['CRIT', 'NO_CRIT']) {
+    for (const branch of activeBranches) {
       const completions = canonicalCompletions(context.items, branch);
       if (completions.length) contextsWithCompletions++;
       const before = contextualBuildStats(context.items, setsById, fmPolicy);
@@ -741,7 +747,7 @@ export function searchSetCoreFirstEquipment({
     equipmentStatesRetained: equipmentStates.length,
     companionCandidates: companionRaw.length,
     primaryClosuresRetained: primaryContexts.filter((state) =>
-      ['CRIT', 'NO_CRIT'].some((branch) => budget2Closure(state.items, branch).closes)
+      activeBranches.some((branch) => budget2Closure(state.items, branch).closes)
     ).length,
     contextsWithCompletions,
     evaluated,

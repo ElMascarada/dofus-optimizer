@@ -13,6 +13,7 @@ import {
 } from '../js/complete-equipment-build-evaluator.js';
 import { buildEquipmentCandidatePools } from './equipment-candidate-policy.js';
 import { filterOptimizerEligibleItems } from './item-eligibility.js';
+import { dofusPackageMatchesCritMode } from './dofus-crit-policy.js';
 
 const ELEMENTS = Object.freeze(['earth', 'fire', 'water', 'air']);
 const ELEMENT_DAMAGE = Object.freeze({ earth: 'damageEarth', fire: 'damageFire', water: 'damageWater', air: 'damageAir' });
@@ -714,6 +715,7 @@ export function dofusPackages(baseItems, pool, context) {
   }
   return states
     .filter((state) => state.items.length === 6
+      && dofusPackageMatchesCritMode(state.items, context.critMode)
       && resourcesMeet([...baseItems, ...state.items], context)
       && resourcesWithinPermanentCaps([...baseItems, ...state.items], context))
     .sort(compareStatePriority);
@@ -738,7 +740,8 @@ export function searchCombinedSetCoreEquipment({
   const eligibleItems = filterOptimizerEligibleItems(items, constraints);
   const setsById = setsByIdFor(sets);
   const prefilter = buildEquipmentCandidatePools({ items: eligibleItems, sets, constraints, fmPolicy, syntheticOffense, searchProfile });
-  const context = { axes, policy: prefilter.policy, setsById, fmPolicy, constraints, specialistKeys: specialistKeys(axes) };
+  const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
+  const context = { axes, policy: prefilter.policy, setsById, fmPolicy, constraints, specialistKeys: specialistKeys(axes), critMode };
 
   const corePools = boundedCorePools(prefilter.policy, axes);
   const architectures = enumerateArchitectures(corePools, context);
@@ -747,7 +750,6 @@ export function searchCombinedSetCoreEquipment({
 
   const companionCandidates = slotPool('companion', eligibleItems, prefilter, context);
   const companionStates = completeCompanion(equipmentStates, companionCandidates, context);
-  const critMode = String(syntheticOffense?.critMode || 'auto').toLowerCase();
   const dofusCandidates = dofusPool(eligibleItems, prefilter, context, critMode);
 
   const results = [];
