@@ -160,6 +160,66 @@
 .workshop-slot-icon img { max-width: 58px; max-height: 58px; object-fit: contain; }
 .workshop-slot-placeholder { color: #555957; font-size: 2rem; font-weight: 200; }
 .workshop-slot strong { max-width: 100%; font-size: .78rem; line-height: 1.2; }
+.workshop-item-tooltip {
+  position: absolute;
+  z-index: 40;
+  left: 50%;
+  top: calc(100% + 8px);
+  width: min(300px, calc(100vw - 32px));
+  padding: 11px 12px;
+  border: 1px solid #4a4d4b;
+  background: #0b0c0c;
+  color: var(--workshop-paper);
+  text-align: left;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, .45);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translate(-50%, -4px);
+  transition: opacity .1s ease, transform .1s ease, visibility .1s ease;
+}
+.workshop-slot:hover .workshop-item-tooltip,
+.workshop-slot:focus-within .workshop-item-tooltip {
+  opacity: 1;
+  visibility: visible;
+  transform: translate(-50%, 0);
+}
+.workshop-item-tooltip > strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: .8rem;
+  color: #fff;
+}
+.workshop-item-tooltip-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 12px;
+}
+.workshop-item-tooltip-stat {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 0;
+  border-bottom: 1px solid #1f2221;
+}
+.workshop-item-tooltip-stat small {
+  color: var(--workshop-muted);
+  font-size: .7rem;
+}
+.workshop-item-tooltip-stat b {
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.workshop-item-tooltip-empty {
+  grid-column: 1 / -1;
+  color: var(--workshop-muted);
+  font-size: .72rem;
+}
+@media (hover: none) {
+  .workshop-item-tooltip { display: none; }
+}
 .workshop-slot-remove,
 .workshop-browser-close {
   border: 1px solid var(--workshop-line);
