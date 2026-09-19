@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 
 import { evaluateCompleteEquipmentBuild } from '../js/complete-equipment-build-evaluator.js';
 import { validateDofusSnapshot } from '../js/data-loader.js';
+import { searchEquipmentRequest } from '../js/equipment-search-request.js';
 import {
   createWorkshopBuildFromOptimizerResult,
   workshopBuildIsComplete
@@ -107,6 +108,37 @@ const exoMp = Number(best?.fm?.exoMp || 0);
 const offensiveFmAssignments = Number(best?.fm?.spellPctItems || 0) + Number(best?.fm?.critItems || 0);
 const minimum = Number(best?.syntheticOffense?.minimumScore ?? best?.score ?? NaN);
 const mean = Number(best?.syntheticOffense?.meanScore ?? NaN);
+
+const resistanceConstraints = {
+  ap: 12,
+  mp: 5,
+  resEarth: 40,
+  resFire: 40,
+  resWater: 40,
+  resAir: 40
+};
+const resistanceOutput = searchEquipmentRequest({
+  items: dataset.items,
+  sets: dataset.sets,
+  constraints: resistanceConstraints,
+  fmPolicy,
+  syntheticOffense,
+  requiredItemIds: [],
+  rejectedItemIds: [],
+  topN: 3,
+  searchProfile: 'BALANCED'
+});
+const resistanceBest = resistanceOutput?.results?.[0] || null;
+const resistanceStats = resistanceBest?.stats || {};
+const resistanceWitnessPass = Boolean(resistanceBest)
+  && Number(resistanceStats.ap || 0) <= 12
+  && Number(resistanceStats.mp || 0) <= 6
+  && Number(resistanceStats.ap || 0) >= 12
+  && Number(resistanceStats.mp || 0) >= 5
+  && Number(resistanceStats.resEarth || 0) >= 40
+  && Number(resistanceStats.resFire || 0) >= 40
+  && Number(resistanceStats.resWater || 0) >= 40
+  && Number(resistanceStats.resAir || 0) >= 40;
 const pass = !errorMessage
   && results.length > 0
   && equipmentCount === 16
@@ -122,7 +154,8 @@ const pass = !errorMessage
   && authoritativeLegal
   && sameAuthoritativeIdentity
   && workshopConversion === 'PASS'
-  && workshopComplete === 'PASS';
+  && workshopComplete === 'PASS'
+  && resistanceWitnessPass;
 
 console.log('PRODUCT_SMOKE');
 console.log('product=Equipment-Only');
@@ -154,6 +187,17 @@ console.log(`workshopComplete=${workshopComplete}`);
 console.log(`workshopReason=${workshopReason}`);
 console.log(`evaluated=${number(diagnostics.evaluated)}`);
 console.log(`valid=${number(diagnostics.valid)}`);
+console.log('');
+console.log('OWNER_RESISTANCE_SMOKE');
+console.log('scenario=Earth/LARGE/AUTO/12AP/5MP/FM_OUI/40_RES_ALL');
+console.log(`optimizerResults=${resistanceOutput?.results?.length || 0}`);
+console.log(`ap=${number(resistanceStats.ap)}`);
+console.log(`mp=${number(resistanceStats.mp)}`);
+console.log(`resEarth=${number(resistanceStats.resEarth)}`);
+console.log(`resFire=${number(resistanceStats.resFire)}`);
+console.log(`resWater=${number(resistanceStats.resWater)}`);
+console.log(`resAir=${number(resistanceStats.resAir)}`);
+console.log(`ownerResistanceWitness=${resistanceWitnessPass ? 'PASS' : 'FAIL'}`);
 console.log('');
 console.log(`RESULT=${pass ? 'PASS' : 'FAIL'}`);
 
