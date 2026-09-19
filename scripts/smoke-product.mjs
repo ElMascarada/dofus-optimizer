@@ -198,6 +198,7 @@ console.log(`resFire=${number(resistanceStats.resFire)}`);
 console.log(`resWater=${number(resistanceStats.resWater)}`);
 console.log(`resAir=${number(resistanceStats.resAir)}`);
 console.log(`ownerResistanceWitness=${resistanceWitnessPass ? 'PASS' : 'FAIL'}`);
+console.log(`ownerResistanceDiagnostics=${JSON.stringify(resistanceOutput?.diagnostics || null)}`);
 console.log('');
 console.log(`RESULT=${pass ? 'PASS' : 'FAIL'}`);
 
