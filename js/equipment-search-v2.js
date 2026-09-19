@@ -271,17 +271,22 @@ function preserveDofusParentChildDiversity(parentStates, states, retained, limit
   return output;
 }
 
-function diagnosticStaticValue(stats = {}, key, fmPolicy = {}) {
+function projectedPermanentResource(stats = {}, key, fmPolicy = {}) {
   const base = Number(BASE_CHARACTER.baseStats?.[key] || 0);
   const exo = key === 'ap' ? (Number(fmPolicy?.exoAp) === 1 ? 1 : 0)
     : key === 'mp' ? (Number(fmPolicy?.exoMp) === 1 ? 1 : 0) : 0;
   return base + exo + Number(effectiveStat(stats, key) || 0);
 }
 
+function projectedPermanentCapsAreValid(stats = {}, fmPolicy = {}) {
+  return projectedPermanentResource(stats, 'ap', fmPolicy) <= MAX_PERMANENT_AP
+    && projectedPermanentResource(stats, 'mp', fmPolicy) <= MAX_PERMANENT_MP;
+}
+
 function diagnosticDistribution(states = [], key, fmPolicy = {}) {
   const counts = new Map();
   for (const state of states) {
-    const value = diagnosticStaticValue(state?.stats || {}, key, fmPolicy);
+    const value = projectedPermanentResource(state?.stats || {}, key, fmPolicy);
     counts.set(value, Number(counts.get(value) || 0) + 1);
   }
   return Object.fromEntries([...counts.entries()].sort((a, b) => Number(a[0]) - Number(b[0])));
@@ -289,12 +294,12 @@ function diagnosticDistribution(states = [], key, fmPolicy = {}) {
 
 function printDiagnosticLossStats(witnessState, retainedStates, fmPolicy = {}) {
   if (!witnessState) return;
-  const witnessAp = diagnosticStaticValue(witnessState.stats, 'ap', fmPolicy);
-  const witnessMp = diagnosticStaticValue(witnessState.stats, 'mp', fmPolicy);
+  const witnessAp = projectedPermanentResource(witnessState.stats, 'ap', fmPolicy);
+  const witnessMp = projectedPermanentResource(witnessState.stats, 'mp', fmPolicy);
   const apCounts = diagnosticDistribution(retainedStates, 'ap', fmPolicy);
   const mpCounts = diagnosticDistribution(retainedStates, 'mp', fmPolicy);
-  const overAp = retainedStates.filter((state) => diagnosticStaticValue(state.stats, 'ap', fmPolicy) > MAX_PERMANENT_AP).length;
-  const overMp = retainedStates.filter((state) => diagnosticStaticValue(state.stats, 'mp', fmPolicy) > MAX_PERMANENT_MP).length;
+  const overAp = retainedStates.filter((state) => projectedPermanentResource(state.stats, 'ap', fmPolicy) > MAX_PERMANENT_AP).length;
+  const overMp = retainedStates.filter((state) => projectedPermanentResource(state.stats, 'mp', fmPolicy) > MAX_PERMANENT_MP).length;
   console.log(`TRACE_WITNESS_STATIC_AP=${witnessAp}`);
   console.log(`TRACE_WITNESS_STATIC_MP=${witnessMp}`);
   console.log(`TRACE_RETAINED_AP_COUNTS=${JSON.stringify(apCounts)}`);
@@ -663,6 +668,14 @@ export function searchEquipmentArchitecturesV2({
           continue;
         }
         const ranked = rankItems(nextItems, policy, setsById);
+        // A complete build that is already above the permanent AP/MP caps
+        // cannot be repaired by characteristics or offensive FM. Remove it
+        // before the final beam so illegal high-offense states cannot evict
+        // legal constrained builds.
+        if (fullShape(nextItems) && !projectedPermanentCapsAreValid(ranked.stats, fmPolicy)) {
+          safePruned++;
+          continue;
+        }
         const progress = constraintProgress(ranked.stats, constraints);
         next.push({
           items: nextItems,
